@@ -21,25 +21,30 @@ Before using these scripts, ensure you have the following:
 
 ### Single Line Usage
 
-To execute the single line call to navigate all scripts use:
-
-```bash
-bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)"
-```
-
 Requires:
 ```bash
 apt update
 apt install wget unzip
 ```
 
-![Single Line Command](.site/SingleLineCommand.png)
+To execute the single line call to navigate all scripts use:
+```bash
+bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)"
+```
+
+![Single Line Online Command](.site/SingleLineCommand.png)
 
 ### Installation
 
-To execute these scripts on your system, follow these steps:
+Requires git if you plan to download through cloning:
+```bash
+apt update
+apt install git wget unzip
+```
 
-1. Clone the repository to your Proxmox server or your local machine:
+To execute these scripts offline on your system, follow these steps:
+
+1. Clone the repository to your Proxmox server or your local machine and move the folder to your server:
     ```bash
     git clone https://github.com/coelacant1/ProxmoxScripts.git
     ```
@@ -51,10 +56,20 @@ To execute these scripts on your system, follow these steps:
 
 3. Make the scripts executable:
     ```bash
-    chmod +x *.sh
+    chmod +x MakeScriptsExecutable.sh
+    ./MakeScriptsExecutable.sh
     ```
 
-4. Execute a script by following the examples provided in comments within the scripts, adjusting parameters as needed for your environment.
+4. Execute a script by following the examples provided in comments within the scripts, adjusting parameters as needed for your environment. Or execute the text based GUI with:
+    ```bash
+    ./CCPVEOffline.sh
+    ```
+
+5. To update your repository automatically, call this:
+    ```bash
+    ./UpdateProxmoxScripts.sh
+    ```
+
 
 ## Usage
 

@@ -388,7 +388,7 @@ async function renderContent(path = '') {
   }
 
   // List of scripts to exclude
-  const excludedScripts = ['MakeScriptsExecutable.sh', 'UpdateProxmoxScripts.sh'];
+  const excludedScripts = ['MakeScriptsExecutable.sh', 'UpdateProxmoxScripts.sh', 'CCPVEOffline.sh'];
 
   // Populate folders/files
   for (const item of visibleItems) {

@@ -1,0 +1,29 @@
+name: Release on .sh changes
+
+on:
+  push:
+    paths:
+      - '**/*.sh'  # Triggers only if .sh files are changed/added
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      # Create a version tag "v1.<run_number>"
+      - name: Set up release tag
+        run: echo "TAG_NAME=v1.${{ github.run_number }}" >> $GITHUB_ENV
+
+      # Create the GitHub release
+      - name: Publish release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: ${{ env.TAG_NAME }}
+          body: |
+            **Commit Message**: ${{ github.event.head_commit.message }}
+            **Build Number**: ${{ github.run_number }}
