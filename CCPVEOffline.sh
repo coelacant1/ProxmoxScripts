@@ -47,7 +47,7 @@ show_ascii_art() {
     echo "    ╚═╝       ╚═══╝  ╚══════╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ╚══════╝    "
     echo "                                                                                         "
     echo "-----------------------------------------------------------------------------------------"
-    echo "   Offline Menu for Proxmox Scripts                                                      "
+    echo "   User Interface for ProxmoxScripts                                                     "
     echo "   Author: Coela Can't! (coelacant1)                                                     "
     echo "-----------------------------------------------------------------------------------------"
     echo
