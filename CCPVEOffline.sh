@@ -23,7 +23,7 @@ BASE_DIR="$(pwd)"          # We assume the script is run from the unzipped direc
 DISPLAY_PREFIX="cc_pve"    # How we display the "root" in the UI
 HELP_FLAG="--help"         # If your scripts support a help flag, we pass this
 LAST_SCRIPT=""             # The last script run
-LAST_OUTPUT=""             # Output of the last script
+LAST_OUTPUT=""             # Truncated output of the last script
 
 ###############################################################################
 # OPTIONAL ASCII ART HEADER
@@ -174,16 +174,38 @@ run_script() {
     echo "=== Running: $(display_path "$script_path") $param_line ==="
 
     IFS=' ' read -r -a param_array <<<"$param_line"
+
+    # Capture script output in an array, to truncate if needed
+    declare -a output_lines
     if [ -x "$script_path" ]; then
-        output=$("$script_path" "${param_array[@]}")
+        mapfile -t output_lines < <("$script_path" "${param_array[@]}")
     else
-        output=$(bash "$script_path" "${param_array[@]}")
+        mapfile -t output_lines < <(bash "$script_path" "${param_array[@]}")
     fi
 
     LAST_SCRIPT="$(display_path "$script_path")"
-    LAST_OUTPUT="$output"
 
-    echo "$output"
+    # Build truncated output: first 3 lines, then '...', then last 9 lines
+    local total_lines="${#output_lines[@]}"
+    if (( total_lines <= 12 )); then
+        # No need to truncate
+        LAST_OUTPUT="$(printf '%s\n' "${output_lines[@]}")"
+    else
+        # Show first 3 lines, then '...', then last 9 lines
+        local truncated_output=""
+        for (( i=0; i<3; i++ )); do
+            truncated_output+="${output_lines[$i]}\n"
+        done
+        truncated_output+="...\n"
+        local start_index=$(( total_lines - 9 ))
+        for (( i=start_index; i<total_lines; i++ )); do
+            truncated_output+="${output_lines[$i]}\n"
+        done
+        LAST_OUTPUT="$truncated_output"
+    fi
+
+    # Print the truncated output to the screen
+    echo -e "$LAST_OUTPUT"
     echo
     echo "Press Enter to continue."
     read -r
@@ -238,10 +260,10 @@ navigate() {
         echo
         echo "--------------------"
 
-        # Show the last script's output
+        # Show the last script's truncated output
         if [ -n "$LAST_OUTPUT" ]; then
             echo "Last Script Called: $LAST_SCRIPT"
-            echo "Output:"
+            echo "Output (truncated if large):"
             echo "$LAST_OUTPUT"
             echo
             echo "--------------------"

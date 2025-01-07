@@ -3,31 +3,78 @@
 # EnableFirewallSetup.sh
 #
 # This script enables the firewall on the Proxmox VE datacenter and all nodes, then configures:
-#   1. An IP set (proxmox-nodes) containing the cluster interface IPs of each node.
-#   2. Rules to allow internal node-to-node traffic, Ceph traffic (including msgr2 on port 3300),
-#      SSH (22), and Proxmox Web GUI (8006) from a specified management subnet.
-#   3. VXLAN traffic (UDP 4789 by default) within the node subnet.
-#   4. (Optional) Sets default inbound policy to DROP for the datacenter firewall (commented by default).
+#   1. An IP set ("proxmox-nodes") containing the cluster interface IPs of each node.
+#   2. Rules to allow:
+#       - internal node-to-node traffic,
+#       - Ceph traffic (including msgr2 on port 3300),
+#       - SSH (22) and Proxmox Web GUI (8006) from a specified management subnet,
+#       - VXLAN traffic (UDP 4789 by default) within the node subnet.
+#   3. (Optional) Sets default inbound policy to DROP for the datacenter firewall (commented by default).
 #
 # Usage:
 #   ./EnableFirewallSetup.sh <management_subnet/netmask>
-#     management_subnet - e.g. 192.168.1.0/24
-#
-# Example:
-#   ./EnableFirewallSetup.sh 10.0.0.0/24
+#   e.g., ./EnableFirewallSetup.sh 10.0.0.0/24
 #
 # Notes:
-# 1. This script expects passwordless SSH or valid credentials for root on each node.
-# 2. If your nodes have multiple network interfaces (e.g., 'vmbr0' for management, 'vmbr1' for storage),
-#    adjust the CLUSTER_INTERFACE variable.
-# 3. If you have a more complex network (multiple NICs, IPv6, custom VLANs, etc.), further customization
-#    may be required.
-# 4. Re-running the script should *not* duplicate existing rules or IP set entries, thanks to checks.
+#   - Requires passwordless SSH or valid credentials for root on each node (uses "ssh").
+#   - Adjust the CLUSTER_INTERFACE variable to match your environment (e.g., "vmbr0", "vmbr1").
+#   - Re-running the script should *not* duplicate existing rules or IP set entries, thanks to checks.
+#
+# Example:
+#   ./EnableFirewallSetup.sh 192.168.1.0/24
+#
+
+set -e
+
+# ----------------------------------------------------------------------------
+# @function find_utilities_script
+# @description
+#   Finds the root directory of the scripts folder by traversing upward until
+#   it finds a folder containing a Utilities subfolder.
+#   Returns the full path to Utilities/Utilities.sh if found, or exits with an
+#   error if not found within 15 levels.
+# ----------------------------------------------------------------------------
+find_utilities_script() {
+  # Check current directory first
+  if [[ -d "./Utilities" ]]; then
+    echo "./Utilities"
+    return 0
+  fi
+
+  local rel_path=""
+  for _ in {1..15}; do
+    cd ..
+    # If rel_path is empty, set it to '..' else prepend '../'
+    if [[ -z "$rel_path" ]]; then
+      rel_path=".."
+    else
+      rel_path="../$rel_path"
+    fi
+
+    if [[ -d "./Utilities" ]]; then
+      echo "$rel_path/Utilities"
+      return 0
+    fi
+  done
+
+  echo "Error: Could not find 'Utilities' folder within 15 levels." >&2
+  return 1
+}
+
+###############################################################################
+# Locate and source the Utilities script
+###############################################################################
+UTILITIES_DIR="$(find_utilities_script)"
+source "${UTILITIES_DIR}/Utilities.sh"
+
+###############################################################################
+# Prompt to remove newly installed packages at script exit
+###############################################################################
+trap prompt_keep_installed_packages EXIT
 
 ###############################################################################
 # CONFIGURATION
 ###############################################################################
-
 # Which interface holds the *cluster/storage* IP address on each node?
 # Adjust this to the actual interface in your environment (e.g., "vmbr1" or "eth1").
 CLUSTER_INTERFACE="vmbr0"
@@ -40,7 +87,7 @@ VXLAN_PORT="4789"
 ###############################################################################
 
 # Check if a given CIDR is already in the proxmox-nodes IP set
-function ipset_contains_cidr() {
+ipset_contains_cidr() {
   local cidr="$1"
   local existing
   # pvesh get /cluster/firewall/ipset/proxmox-nodes returns a JSON array
@@ -58,7 +105,7 @@ function ipset_contains_cidr() {
 }
 
 # Check if a firewall rule with a particular comment already exists
-function rule_exists_by_comment() {
+rule_exists_by_comment() {
   local comment="$1"
   # pvesh get /cluster/firewall/rules returns a JSON array of firewall rules
   # Each entry can have a "comment" field.
@@ -75,7 +122,7 @@ function rule_exists_by_comment() {
 }
 
 # Create a firewall rule only if it doesn't already exist (based on comment)
-function create_rule_once() {
+create_rule_once() {
   local comment="$1"
   shift
   if rule_exists_by_comment "$comment"; then
@@ -90,7 +137,17 @@ function create_rule_once() {
 # MAIN SCRIPT
 ###############################################################################
 
-# 1. Parse management subnet
+# 1. Ensure we are root on a Proxmox node
+check_proxmox_and_root
+
+# 2. Make sure we have the needed commands
+install_or_prompt "jq"
+install_or_prompt "ssh"
+
+# 3. Check that we're in a cluster
+check_cluster_membership
+
+# 4. Parse management subnet
 if [ -z "$1" ]; then
   echo "Usage: $0 <management_subnet>"
   echo "Example: $0 192.168.1.0/24"
@@ -103,29 +160,20 @@ echo "Management Subnet: $MANAGEMENT_SUBNET"
 echo "Cluster Interface: $CLUSTER_INTERFACE"
 echo
 
-# 2. Gather node names and IPs
+# 5. Gather node names and IPs
 #    We SSH into each node and get the IP address from the specified interface.
-NODES=$(pvecm nodes | awk 'NR>1 {print $2}')
-declare -a NODE_IPS=()
-
+# Get IP of the local node (first IPv4 address reported by hostname -I)
 echo "=== Collecting IPs for all nodes ==="
-for NODE in $NODES; do
-  # Adjust this command if you want to filter IPv4 only or prefer a different parsing
-  IP=$(ssh -o BatchMode=yes root@"$NODE" \
-       "ip -4 addr show dev $CLUSTER_INTERFACE scope global \
-        | awk '/inet / {print \$2}' \
-        | cut -d'/' -f1 \
-        | head -n1")
-  if [ -n "$IP" ]; then
-    NODE_IPS+=("$IP")
-    echo " - Node: $NODE => IP on $CLUSTER_INTERFACE: $IP"
-  else
-    echo "WARNING: Could not find an IP on interface '$CLUSTER_INTERFACE' for node '$NODE'"
-  fi
-done
+LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
+
+# Gather remote node IPs (excludes local)
+readarray -t REMOTE_NODE_IPS < <(get_remote_node_ips)
+
+# Combine local + remote
+NODE_IPS=("$LOCAL_NODE_IP" "${REMOTE_NODE_IPS[@]}")
 echo
 
-# 3. Create the proxmox-nodes IP set if it doesn’t exist
+# 6. Create the proxmox-nodes IP set if it doesn’t exist
 if ! pvesh get /cluster/firewall/ipset --output-format json 2>/dev/null | jq -r '.[].name' | grep -qx 'proxmox-nodes'; then
   echo "Creating IP set 'proxmox-nodes'..."
   pvesh create /cluster/firewall/ipset --name proxmox-nodes --comment "IP set for Proxmox nodes"
@@ -134,7 +182,7 @@ else
 fi
 echo
 
-# 4. Add each node IP to the proxmox-nodes set (if not already there)
+# 7. Add each node IP to the proxmox-nodes set (if not already there)
 echo "=== Adding Node IPs to IP set 'proxmox-nodes' ==="
 for IP in "${NODE_IPS[@]}"; do
   if ipset_contains_cidr "${IP}/32"; then
@@ -146,7 +194,7 @@ for IP in "${NODE_IPS[@]}"; do
 done
 echo
 
-# 5. Allow all traffic within the proxmox-nodes IP set
+# 8. Allow all traffic within the proxmox-nodes IP set
 create_rule_once \
   "Allow all traffic within Proxmox nodes IP set" \
   --action ACCEPT \
@@ -157,7 +205,7 @@ create_rule_once \
 
 echo
 
-# 6. Create a rule to allow SSH and Proxmox Web GUI from the management subnet
+# 9. Create rules to allow SSH and Proxmox Web GUI from the management subnet
 create_rule_once \
   "Allow SSH from $MANAGEMENT_SUBNET" \
   --action ACCEPT \
@@ -176,13 +224,12 @@ create_rule_once \
   --proto tcp \
   --enable 1
 
-# 7. (Optional) If you only want to allow VXLAN traffic (UDP 4789) within the node subnet
-#    We'll attempt to guess a common subnet from the first node IP. Or you can simply
-#    allow all traffic among nodes for VXLAN. This sample is more targeted.
+# 10. (Optional) Attempt to allow VXLAN traffic (UDP $VXLAN_PORT) within the node subnet
 echo
 if [ -n "${NODE_IPS[0]}" ]; then
-  # Attempt to derive a route containing that IP
   FIRST_NODE_IP="${NODE_IPS[0]}"
+  # Attempt to find a local route containing that IP (on this node).
+  # This is a best-effort approach for demonstration. You may need to hardcode your subnet if needed.
   NODE_SUBNET=$(ip route | grep "$FIRST_NODE_IP" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}\b' | head -n1)
   if [ -n "$NODE_SUBNET" ]; then
     create_rule_once \
@@ -200,8 +247,7 @@ if [ -n "${NODE_IPS[0]}" ]; then
 fi
 echo
 
-# 8. Allow Ceph communication among nodes
-#    This includes ports 6789 (mon, msgr1), 3300 (mon, msgr2), and 6800–7300 (OSDs).
+# 11. Allow Ceph communication among nodes (ports 3300, 6789, 6800–7300)
 echo "=== Creating Ceph rules among node IPs ==="
 for IP in "${NODE_IPS[@]}"; do
   create_rule_once \
@@ -233,16 +279,16 @@ for IP in "${NODE_IPS[@]}"; do
 done
 echo
 
-# 9. (Optional) Set default policy to DROP incoming and ACCEPT outgoing
-#    Commented by default – uncomment if you want a stricter default policy.
+# 12. (Optional) Set default inbound/outbound policies for the Datacenter firewall
+# By default we keep them as is. If you prefer a stricter default, uncomment below:
 # echo "Setting default policy to DROP incoming traffic..."
 # pvesh set /cluster/firewall/options --policy_in DROP --policy_out ACCEPT
 
-# 10. Enable firewall for datacenter
+# 13. Enable firewall for the Datacenter
 pvesh set /cluster/firewall/options --enable 1
 echo "Firewall enabled for datacenter."
 
-# 11. Enable firewall for all nodes
+# 14. Enable firewall for all nodes
 for NODE in $NODES; do
   pvesh set "/nodes/$NODE/firewall/options" --enable 1
   echo " - Firewall enabled for node: $NODE."
