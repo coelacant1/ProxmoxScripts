@@ -15,17 +15,68 @@
 
 set -e  # Exit on error
 
+# ---------------------------------------------------------------------------
+# @function find_utilities_script
+# @description
+#   Finds the root directory of the scripts folder by traversing upward until
+#   it finds a folder containing a Utilities subfolder.
+#   Returns the full path to Utilities/Utilities.sh if found, or exits with an
+#   error if not found within 15 levels.
+# ---------------------------------------------------------------------------
+find_utilities_script() {
+  # Check current directory first
+  if [[ -d "./Utilities" ]]; then
+    echo "./Utilities/Utilities.sh"
+    return 0
+  fi
+
+  local rel_path=""
+  for _ in {1..15}; do
+    cd ..
+    # If rel_path is empty, set it to '..' else prepend '../'
+    if [[ -z "$rel_path" ]]; then
+      rel_path=".."
+    else
+      rel_path="../$rel_path"
+    fi
+
+    if [[ -d "./Utilities" ]]; then
+      echo "$rel_path/Utilities/Utilities.sh"
+      return 0
+    fi
+  done
+
+  echo "Error: Could not find 'Utilities' folder within 15 levels." >&2
+  return 1
+}
+
+###############################################################################
+# Locate and source the Utilities script
+###############################################################################
+UTILITIES_DIR="$(find_utilities_script)"
+source "${UTILITIES_DIR}/Utilities.sh"
+
+###############################################################################
+# Preliminary Checks
+###############################################################################
+check_proxmox_and_root              # Ensure we're running as root on a Proxmox node
+
+###############################################################################
+# Main Script Logic
+###############################################################################
 echo "=== Proxmox Cluster Removal (Single-Node) ==="
 echo "This will remove Corosync/cluster configuration from this node."
-echo "Proceed? (y/N)"
-read -r CONFIRM
+read -r -p "Proceed? (y/N): " CONFIRM
 if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
   echo "Aborted."
   exit 1
 fi
 
 # 1) Check if node is truly alone in the cluster
-NODE_COUNT=$(pvecm nodes | grep -c "Online/Offline")
+# (We assume single-node cluster means only one node is present.)
+# Using pvecm nodes, we skip the first 2 lines ("Membership info" + header)
+# and count how many lines mention Online/Offline.
+NODE_COUNT="$(get_number_of_cluster_nodes)"
 if [[ "$NODE_COUNT" -gt 1 ]]; then
   echo "Error: This script is for a single-node cluster only."
   echo "Current cluster shows $NODE_COUNT nodes. Remove other nodes first, then re-run."
@@ -40,7 +91,7 @@ echo "Removing Corosync config from /etc/pve and /etc/corosync..."
 rm -f /etc/pve/corosync.conf 2>/dev/null || true
 rm -rf /etc/corosync/* 2>/dev/null || true
 
-# Optionally remove additional cluster-related config if needed (watch out!):
+# Optionally remove additional cluster-related config (caution!):
 # rm -f /etc/pve/cluster.conf 2>/dev/null || true
 
 echo "Restarting pve-cluster (it will now run standalone)..."

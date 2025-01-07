@@ -13,38 +13,110 @@
 #
 #   ./BulkSetMemory.sh 400 3 2048 1024
 #   Sets containers 400..402 to 2048 MB of RAM and 1024 MB of swap
+#
+# Notes:
+#   - Must be run as root on a Proxmox node.
+#   - 'pct' is required (part of the PVE/LXC utilities).
+#
 
-if [ $# -lt 3 ]; then
-  echo "Usage: $0 <start_ct_id> <num_cts> <memory_MB> [swap_MB]"
-  exit 1
-fi
+set -e
 
-START_CT_ID="$1"
-NUM_CTS="$2"
-MEMORY_MB="$3"
-SWAP_MB="${4:-0}"  # default 0 if not provided
-
-echo "=== Starting memory config update for $NUM_CTS container(s) ==="
-echo " - Starting container ID: $START_CT_ID"
-echo " - Memory (MB): $MEMORY_MB"
-echo " - Swap (MB): $SWAP_MB"
-
-for (( i=0; i<NUM_CTS; i++ )); do
-  CURRENT_CT_ID=$((START_CT_ID + i))
-
-  # Check if container exists
-  if pct config "$CURRENT_CT_ID" &>/dev/null; then
-    echo "Updating memory for container $CURRENT_CT_ID..."
-    pct set "$CURRENT_CT_ID" -memory "$MEMORY_MB" -swap "$SWAP_MB"
-
-    if [ $? -eq 0 ]; then
-      echo " - Successfully updated memory for CT $CURRENT_CT_ID."
-    else
-      echo " - Failed to update memory for CT $CURRENT_CT_ID."
-    fi
-  else
-    echo " - Container $CURRENT_CT_ID does not exist. Skipping."
+# -----------------------------------------------------------------------------
+# @function find_utilities_script
+# @description
+#   Finds the root directory of the scripts folder by traversing upward until
+#   it finds a folder containing a Utilities subfolder.
+#   Returns the full path to Utilities/Utilities.sh if found, or exits with an
+#   error if not found within 15 levels.
+# -----------------------------------------------------------------------------
+find_utilities_script() {
+  # Check current directory first
+  if [[ -d "./Utilities" ]]; then
+    echo "./Utilities/Utilities.sh"
+    return 0
   fi
-done
 
-echo "=== Bulk memory config change process complete! ==="
+  local rel_path=""
+  for _ in {1..15}; do
+    cd ..
+    # If rel_path is empty, set it to '..' else prepend '../'
+    if [[ -z "$rel_path" ]]; then
+      rel_path=".."
+    else
+      rel_path="../$rel_path"
+    fi
+
+    if [[ -d "./Utilities" ]]; then
+      echo "$rel_path/Utilities/Utilities.sh"
+      return 0
+    fi
+  done
+
+  echo "Error: Could not find 'Utilities' folder within 15 levels." >&2
+  return 1
+}
+
+###############################################################################
+# LOCATE AND SOURCE UTILITIES
+###############################################################################
+UTILITIES_DIR="$(find_utilities_script)"
+# shellcheck source=/dev/null
+source "${UTILITIES_DIR}/Utilities.sh"
+
+###############################################################################
+# MAIN
+###############################################################################
+main() {
+  # --- Parse arguments -------------------------------------------------------
+  if [[ $# -lt 3 ]]; then
+    echo "Usage: $0 <start_ct_id> <num_cts> <memory_MB> [swap_MB]"
+    echo "Example:"
+    echo "  $0 400 3 2048"
+    echo "    (Sets containers 400..402 to 2048 MB of RAM, no swap)"
+    echo "  $0 400 3 2048 1024"
+    echo "    (Sets containers 400..402 to 2048 MB of RAM and 1024 MB of swap)"
+    exit 1
+  fi
+
+  local start_ct_id="$1"
+  local num_cts="$2"
+  local memory_mb="$3"
+  local swap_mb="${4:-0}"  # default 0 if not provided
+
+  # --- Basic checks ----------------------------------------------------------
+  check_proxmox_and_root  # Must be root and on a Proxmox node
+
+  # If a cluster check is needed, uncomment the next line:
+  # check_cluster_membership
+
+  # --- Display summary -------------------------------------------------------
+  echo "=== Starting memory config update for $num_cts container(s) ==="
+  echo " - Starting container ID: $start_ct_id"
+  echo " - Memory (MB): $memory_mb"
+  echo " - Swap (MB): $swap_mb"
+
+  # --- Main Loop -------------------------------------------------------------
+  for (( i=0; i<num_cts; i++ )); do
+    local current_ct_id=$(( start_ct_id + i ))
+
+    # Check if container exists
+    if pct config "$current_ct_id" &>/dev/null; then
+      echo "Updating memory for container $current_ct_id..."
+      pct set "$current_ct_id" -memory "$memory_mb" -swap "$swap_mb"
+      if [[ $? -eq 0 ]]; then
+        echo " - Successfully updated memory for CT $current_ct_id."
+      else
+        echo " - Failed to update memory for CT $current_ct_id."
+      fi
+    else
+      echo " - Container $current_ct_id does not exist. Skipping."
+    fi
+  done
+
+  echo "=== Bulk memory config change process complete! ==="
+}
+
+# -----------------------------------------------------------------------------
+# Run the main function
+# -----------------------------------------------------------------------------
+main

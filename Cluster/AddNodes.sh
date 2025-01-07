@@ -31,17 +31,65 @@
 #
 # Requirements:
 #   - The 'expect' package must be installed on the cluster node you're running
-#     this script from (apt-get install expect).
+#     this script from (handled by install_or_prompt "expect" below).
+#
 
 set -e
 
-# --- Ensure we are root on the cluster node ---------------------------------
-if [[ $EUID -ne 0 ]]; then
-  echo "Error: This script must be run as root (sudo) on the cluster node."
-  exit 1
-fi
+# ---------------------------------------------------------------------------
+# @function find_utilities_script
+# @description
+#   Finds the root directory of the scripts folder by traversing upward until
+#   it finds a folder containing a Utilities subfolder.
+#   Returns the full path to Utilities/Utilities.sh if found, or exits with an
+#   error if not found within 15 levels.
+# ---------------------------------------------------------------------------
+find_utilities_script() {
+  # Check current directory first
+  if [[ -d "./Utilities" ]]; then
+    echo "./Utilities/Utilities.sh"
+    return 0
+  fi
 
-# --- Parse and validate arguments -------------------------------------------
+  local rel_path=""
+  for _ in {1..15}; do
+    cd ..
+    # If rel_path is empty, set it to '..' else prepend '../'
+    if [[ -z "$rel_path" ]]; then
+      rel_path=".."
+    else
+      rel_path="../$rel_path"
+    fi
+
+    if [[ -d "./Utilities" ]]; then
+      echo "$rel_path/Utilities/Utilities.sh"
+      return 0
+    fi
+  done
+
+  echo "Error: Could not find 'Utilities' folder within 15 levels." >&2
+  return 1
+}
+
+###############################################################################
+# Locate and source the Utilities script
+###############################################################################
+UTILITIES_DIR="$(find_utilities_script)"
+source "${UTILITIES_DIR}/Utilities.sh"
+
+###############################################################################
+# Preliminary Checks via Utilities
+###############################################################################
+check_proxmox_and_root         # Ensure we're root on a valid Proxmox node
+install_or_prompt "expect"     # Required for automated password entry
+check_cluster_membership       # Ensure this node is part of a cluster
+
+# Prompt at script exit to optionally remove any newly installed packages
+trap prompt_keep_installed_packages EXIT
+
+###############################################################################
+# Argument Parsing
+###############################################################################
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 <CLUSTER_IP> <NEW_NODE_1> [<NEW_NODE_2> ...] [--link1 <LINK1_1> <LINK1_2> ...]"
   exit 1
@@ -73,7 +121,7 @@ done
 if $USE_LINK1; then
   if [[ $# -lt ${#NODES[@]} ]]; then
     echo "Error: You specified --link1 but not enough link1 addresses for each node."
-    echo "You have ${#NODES[@]} new nodes, so you need at least ${#NODES[@]} link1 addresses."
+    echo "       You have ${#NODES[@]} new nodes, so you need at least ${#NODES[@]} link1 addresses."
     exit 1
   fi
   for ((i=0; i<${#NODES[@]}; i++)); do
@@ -82,79 +130,58 @@ if $USE_LINK1; then
   done
 fi
 
-# --- Prompt once for the new nodes' root password ---------------------------
+###############################################################################
+# Prompt for New Nodes' Root Password
+###############################################################################
 # This password is used to SSH into each new node and run 'pvecm add'.
 echo -n "Enter the 'root' SSH password for the NEW node(s): "
-# -s => silent, -r => raw input (no escape sequences processed)
 read -s NODE_PASSWORD
 echo
 
-# --- Preliminary Checks on cluster side -------------------------------------
-if ! command -v pvecm >/dev/null 2>&1; then
-  echo "Error: 'pvecm' not found on this cluster node. Are you sure this is a Proxmox cluster node?"
-  exit 2
-fi
-
-if ! command -v expect >/dev/null 2>&1; then
-  echo "Error: 'expect' is required to supply passwords automatically. Please install it:"
-  echo "       apt-get update && apt-get install -y expect"
-  exit 3
-fi
-
-# --- Add each node to the cluster -------------------------------------------
+###############################################################################
+# Main Logic
+###############################################################################
 COUNTER=0
 for NODE_IP in "${NODES[@]}"; do
-  echo "------------------------------------------------------------"
+  echo "-----------------------------------------------------------------"
   echo "Adding new node: $NODE_IP"
-  
-  # Build the 'pvecm add' command to run on the NEW node
-  #    pvecm add <CLUSTER_IP> --link0 <NODE_IP> [--link1 <LINK1_IP>]
-  CMD="pvecm add $CLUSTER_IP --link0 $NODE_IP"
+
+  # Build the 'pvecm add' command to run on the NEW node:
+  #   pvecm add <CLUSTER_IP> --link0 <NODE_IP> [--link1 <LINK1_IP>]
+  CMD="pvecm add ${CLUSTER_IP} --link0 ${NODE_IP}"
   if $USE_LINK1; then
     CMD+=" --link1 ${LINK1[$COUNTER]}"
     echo "  Using link1: ${LINK1[$COUNTER]}"
   fi
 
-  # Use an inline expect script to SSH and run the command on the new node.
-  # This will prompt for the 'root' password of the new node, which we supply.
   echo "  SSHing into $NODE_IP and executing: $CMD"
   
   /usr/bin/expect <<EOF
     set timeout -1
-    # Do not echo expect commands to screen
     log_user 0
 
     spawn ssh -o StrictHostKeyChecking=no root@${NODE_IP} "$CMD"
-    
-    # If first connection, we might see "Are you sure you want to continue connecting?"
+
     expect {
       -re ".*continue connecting.*" {
         send "yes\r"
         exp_continue
       }
-      # Now expect password prompt
       -re ".*assword:.*" {
         send "${NODE_PASSWORD}\r"
       }
     }
 
-    # Once we send the password, let's allow the command to fully run
-    # until we see either an EOF or a pvecm success message
     expect {
       eof
     }
 EOF
 
-  # Increment the node count
   ((COUNTER++))
-
-  echo "Node $NODE_IP add procedure completed (check for any errors above)."
+  echo "Node $NODE_IP add procedure completed."
   echo
 done
 
-echo "=== All nodes processed. ==="
-echo "You can verify cluster status for each node by logging into it and running:"
-echo "  pvecm status"
-echo "Or from this cluster node, you can check:
-  pvecm status
-"
+echo "=== All new nodes have been processed. ==="
+echo "You can verify cluster status on each node by running: pvecm status"
+echo "Or from this cluster node, check: pvecm status"
