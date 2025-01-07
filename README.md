@@ -32,6 +32,11 @@ To execute the single line call to navigate all scripts use:
 bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)"
 ```
 
+Or an even shorter single line call:
+```bash
+bash <(curl -L pve.coela.sh)
+```
+
 ![Single Line Online Command](.site/SingleLineCommand.png)
 
 ### Installation
