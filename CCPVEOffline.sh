@@ -178,9 +178,20 @@ run_script() {
     # Capture script output in an array, to truncate if needed
     declare -a output_lines
     if [ -x "$script_path" ]; then
-        mapfile -t output_lines < <("$script_path" "${param_array[@]}")
+        mapfile -t output_lines < <(
+            bash -c "
+                source \"./Utilities/Utilities.sh\"
+                exec \"${script_path}\" \"${param_array[@]}\"
+            "
+        )
+
     else
-        mapfile -t output_lines < <(bash "$script_path" "${param_array[@]}")
+        mapfile -t output_lines < <(
+            bash -c "
+                source \"./Utilities/Utilities.sh\"
+                exec bash \"${script_path}\" \"${param_array[@]}\"
+            "
+        )
     fi
 
     LAST_SCRIPT="$(display_path "$script_path")"
