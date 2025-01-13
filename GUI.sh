@@ -1,15 +1,17 @@
 #!/bin/bash
 #
-# CCPVEOffline.sh
+# GUI.sh
 #
 # A menu-driven Bash script to navigate and run .sh files in the current folder (and subfolders).
 # This version assumes everything is already extracted/unzipped in this directory—no download or unzip needed.
+#
+# ./GUI.sh [-nh]
 #
 # Usage:
 #   1) cd into the directory containing your .sh files (and this script).
 #   2) chmod +x MakeScriptsExecutable.sh
 #   3) ./MakeScriptsExecutable.sh
-#   4) ./CCPVEOffline.sh
+#   4) ./GUI.sh
 #
 # Author: Coela Can't! (coelacant1)
 # Repo: https://github.com/coelacant1/ProxmoxScripts
@@ -26,6 +28,7 @@ DISPLAY_PREFIX="cc_pve" # How we display the "root" in the UI
 HELP_FLAG="--help"      # If your scripts support a help flag, we pass this
 LAST_SCRIPT=""          # The last script run
 LAST_OUTPUT=""          # Truncated output of the last script
+SHOW_HEADER="true"
 
 ###############################################################################
 # IMPORT UTILITY FUNCTIONS FOR SCRIPTS AND COLOR GRADIENT LIBRARY
@@ -33,6 +36,23 @@ LAST_OUTPUT=""          # Truncated output of the last script
 
 source "./Utilities/Utilities.sh"
 source "./Utilities/Colors.sh"
+
+###############################################################################
+# HEADER MANAGEMENT
+###############################################################################
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -nh)
+            SHOW_HEADER="false"
+            shift
+            ;;
+        *)
+            echo "Error: Unknown argument '$1'"
+            exit 1
+            ;;
+    esac
+done
 
 ###############################################################################
 # ASCII ART HEADER
@@ -82,12 +102,23 @@ EOF
 )
 SMALL_LENGTH=44
 
+BASIC_ASCII=$(cat <<'EOF'
+----------------------------------------
+ █▀▀ █▀▀ █▀█ █ █ █▀▀                    
+ █   █   █▀▀ ▀▄▀ █▀▀                    
+ ▀▀▀ ▀▀▀ ▀    ▀  ▀▀▀                    
+----------------------------------------
+EOF
+)
+
 show_ascii_art() {
     local width
     width=$(tput cols)
 
     # We'll pick a gradient from purple (128,0,128) to cyan (0,255,255)
-    if ((LARGE_LENGTH <= width)); then
+    if [ "$SHOW_HEADER" != "true" ]; then
+        echo "$BASIC_ASCII"
+    elif ((LARGE_LENGTH <= width)); then
         gradient_print "$LARGE_ASCII" 128 0 128 0 255 255 "█"
     else
         gradient_print "$SMALL_ASCII" 128 0 128 0 255 255
@@ -297,7 +328,7 @@ navigate() {
         echo
         echo "----------------------------------------"
         echo
-        echo "Type 'h<number>' to show top comments for a script."
+        echo "Type 'h<number>' to show script comments."
         echo "Type 'b' to go up one directory."
         echo "Type 'e' to exit."
         echo
@@ -377,6 +408,5 @@ navigate() {
 # MAIN
 ###############################################################################
 
-apt update || true
 ./MakeScriptsExecutable.sh
 navigate "$BASE_DIR"

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# Requires Shellcheck: https://github.com/koalaman/shellcheck#user-content-installing
+
 import os
 import sys
 import subprocess
@@ -23,7 +25,7 @@ def run_shellcheck(file_path):
     Returns stdout, stderr, and the process return code.
     """
     result = subprocess.run(
-        ["shellcheck", file_path],
+        ["shellcheck", "-e", "SC1090", file_path],
         capture_output=True,
         text=True
     )
@@ -74,7 +76,7 @@ def main():
 
     # For each .sh file, either use ShellCheck or fallback checks
     for sh_file in sh_files:
-        print(f"\n=== Checking file: {sh_file} ===")
+        print(f"=== Checking file: {sh_file} ===")
 
         if shellcheck_installed:
             # Run ShellCheck
@@ -95,8 +97,6 @@ def main():
                 print("Naive check found potential issues:")
                 for err in errors:
                     print(f"  - {err}")
-            else:
-                print("Naive check: no issues found.")
 
 if __name__ == "__main__":
     main()

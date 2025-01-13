@@ -55,8 +55,6 @@ declare -a NODES=()
 USE_LINK1=false
 declare -a LINK1=()
 
-echo $NODES
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --link1)

@@ -6,7 +6,7 @@
 # in the repository executable and finally call CCPVEOffline.sh.
 #
 # Usage:
-#   ./CCPVE.sh
+#   ./CCPVE.sh [-nh]
 #
 # This script requires 'unzip' and 'wget'. If not installed, it will prompt to install them.
 #
@@ -15,6 +15,23 @@
 #
 
 set -e
+
+apt update || true
+
+SHOW_HEADER="true"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -nh)
+            SHOW_HEADER="false"
+            shift
+            ;;
+        *)
+            echo "Error: Unknown argument '$1'"
+            exit 1
+            ;;
+    esac
+done
 
 # --- Check Dependencies -----------------------------------------------------
 if ! command -v unzip &>/dev/null; then
@@ -77,12 +94,16 @@ else
     echo "Warning: MakeScriptsExecutable.sh not found. Skipping."
 fi
 
-# --- Call CCPVEOffline.sh --------------------------------------------------
-if [ -f "./CCPVEOffline.sh" ]; then
-    echo "Calling CCPVEOffline.sh..."
-    bash "./CCPVEOffline.sh"
+# --- Call GUI.sh --------------------------------------------------
+if [ -f "./GUI.sh" ]; then
+    echo "Calling GUI.sh..."
+    if [ "$SHOW_HEADER" != "true" ]; then
+        bash "./GUI.sh -nh"
+    else
+        bash "./GUI.sh"
+    fi
 else
-    echo "Warning: CCPVEOffline.sh not found. Skipping."
+    echo "Warning: GUI.sh not found. Skipping."
 fi
 
 echo "Done."
