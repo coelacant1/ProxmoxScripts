@@ -3,3 +3,6 @@
 
 # Python files LF
 *.py text eol=lf
+
+# CSV files LF
+*.csv text eol=lf

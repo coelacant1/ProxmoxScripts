@@ -1,0 +1,20 @@
+Debian 12.9.0,https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.9.0-amd64-standard.iso
+Kali 2025 W03,https://cdimage.kali.org/kali-weekly/kali-linux-2025-W03-installer-amd64.iso
+Ubuntu Desktop 24.04.1,https://releases.ubuntu.com/24.04.1/ubuntu-24.04.1-desktop-amd64.iso
+Finnix 126,https://www.finnix.org/releases/126/finnix-126.iso
+Arch Linux 2025.01.01,https://ziply.mm.fcix.net/archlinux/iso/2025.01.01/archlinux-2025.01.01-x86_64.iso
+Proxmox VE 8.3.1,https://enterprise.proxmox.com/iso/proxmox-ve_8.3-1.iso
+Proxmox Backup Server 3.3,https://enterprise.proxmox.com/iso/proxmox-backup-server_3.3-1.iso
+Proxmox Mail Gateway 8.1,https://enterprise.proxmox.com/iso/proxmox-mail-gateway_8.1-1.iso
+OPNSense 24.7,https://mirror.wdc1.us.leaseweb.net/opnsense/releases/24.7/OPNsense-24.7-dvd-amd64.iso.bz2
+Windows Server 2016,https://software-static.download.prss.microsoft.com/sg/download/888969d5-f34g-4e03-ac9d-1f9786c66749/SERVER_EVAL_x64FRE_en-us.iso
+Windows Server 2019,https://software-download.microsoft.com/download/pr/17763.737.190906-2324.rs5_release_svc_refresh_SERVER_EVAL_x64FRE_en-us_1.iso
+Windows Server 2022,https://software-download.microsoft.com/download/pr/Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO
+Turnkey GitLab 18.1,https://www.turnkeylinux.org/download?file=turnkey-gitlab-18.1-bookworm-amd64.iso
+Turnkey File Server 18.0,https://www.turnkeylinux.org/download?file=turnkey-fileserver-18.0-bookworm-amd64.iso
+Turnkey OpenVPN 18.1,https://www.turnkeylinux.org/download?file=turnkey-openvpn-18.1-bookworm-amd64.iso
+Turnkey Domain Controller 18.1,https://www.turnkeylinux.org/download?file=turnkey-domain-controller-18.1-bookworm-amd64.iso
+Turnkey OpenLDAP 18.1,https://www.turnkeylinux.org/download?file=turnkey-openldap-18.1-bookworm-amd64.iso
+Turnkey Jenkins 18.1,https://www.turnkeylinux.org/download?file=turnkey-jenkins-18.1-bookworm-amd64.iso
+Turnkey Ansible 18.0,https://www.turnkeylinux.org/download?file=turnkey-ansible-18.0-bookworm-amd64.iso
+Turnkey WireGuard 18.2,https://www.turnkeylinux.org/download?file=turnkey-wireguard-18.2-bookworm-amd64.iso
