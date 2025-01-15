@@ -499,6 +499,18 @@ info() {
 }
 
 ###############################################################################
+# UPDATE SPINNER TEXT
+###############################################################################
+# @function update_spin_text
+# @description Updates the text that appears in the same line as the spinner
+#              without stopping the spinner.
+# @usage
+#   update_spin_text "New message here"
+update_spin_text() {
+  echo -ne "\r\033[2C\033[K$1"
+}
+
+###############################################################################
 # SUCCESS MESSAGE (Stops Spinner)
 ###############################################################################
 # @function ok
