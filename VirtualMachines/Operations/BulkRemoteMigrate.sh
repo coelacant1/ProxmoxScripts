@@ -13,6 +13,7 @@
 #   target_storage - The storage identifier on the target node where VMs will be stored.
 #   vm_offset - An integer value to offset the VM IDs to avoid conflicts.
 #   target_network - The network bridge on the target server to connect the VMs.
+#
 
 # Assigning input arguments
 TARGET_HOST="$1"

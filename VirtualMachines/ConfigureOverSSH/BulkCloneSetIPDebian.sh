@@ -18,34 +18,10 @@
 source "$UTILITIES"
 
 ###############################################################################
-# Function Definitions
-###############################################################################
-function wait_for_ssh {
-  local host="$1"
-  local maxAttempts=20
-  local delay=3
-
-  for attempt in $(seq 1 "$maxAttempts"); do
-    if sshpass -p "$sshPassword" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
-       "$sshUsername@$host" exit 2>/dev/null; then
-      echo "SSH is up on \"$host\""
-      return
-    fi
-    echo "Attempt $attempt/$maxAttempts: SSH not ready on \"$host\", waiting $delay s..."
-    sleep "$delay"
-  done
-
-  echo "Error: Could not connect to SSH on \"$host\" after $maxAttempts attempts."
-  exit 1
-}
-
-###############################################################################
 # Environment Checks
 ###############################################################################
 check_root
 check_proxmox
-install_or_prompt "sshpass"
-prompt_keep_installed_packages
 
 ###############################################################################
 # Argument Parsing
@@ -81,7 +57,7 @@ for ((i=0; i<instanceCount; i++)); do
   qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}"
   qm start "$currentVmId"
 
-  wait_for_ssh "$templateIpAddr"
+  wait_for_ssh "$templateIpAddr" "$sshUsername" "$sshPassword"
 
   sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" bash -s <<EOF
 sed -i '/\bgateway\b/d' /etc/network/interfaces
@@ -93,8 +69,8 @@ EOF
 
   sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" \
     "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
-
-  wait_for_ssh "$currentIp"
+  
+  wait_for_ssh "$currentIp" "$sshUsername" "$sshPassword"
   ipInt=$((ipInt + 1))
 done
 

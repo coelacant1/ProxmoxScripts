@@ -16,6 +16,10 @@
 #   # Recompile the CRUSH map
 #   ./CephEditCrushmap.sh compile
 #
+# Function Index:
+#   - decompileCrushMap
+#   - recompileCrushMap
+#
 source "$UTILITIES"
 
 ###############################################################################

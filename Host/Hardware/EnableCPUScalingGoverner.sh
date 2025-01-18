@@ -33,6 +33,13 @@
 # Dependencies:
 #   - cpupower (recommended) or sysfs-based access to CPU freq scaling.
 #
+# Function Index:
+#   - usage
+#   - set_governor
+#   - do_install
+#   - do_remove
+#   - do_configure
+#
 
 source "$UTILITIES"
 

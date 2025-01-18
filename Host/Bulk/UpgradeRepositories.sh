@@ -45,6 +45,11 @@
 #   - Always confirm your environment supports upgrading to the new major release, and
 #     review official Proxmox documentation for recommended upgrade paths and caveats.
 #
+# Function Index:
+#   - display_help
+#   - get_latest_proxmox_codename
+#   - ensure_latest_repo
+#
 
 source "$UTILITIES"
 

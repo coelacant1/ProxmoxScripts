@@ -11,6 +11,7 @@
 #
 # Example:
 #   ./BulkStart.sh 400 430
+#
 
 # Check if the required parameters are provided
 if [ "$#" -ne 2 ]; then

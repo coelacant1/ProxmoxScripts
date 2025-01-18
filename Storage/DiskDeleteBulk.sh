@@ -14,6 +14,9 @@
 # Example:
 #   ./DiskDeleteBulk.sh vm_pool 1 100 1
 #
+# Function Index:
+#   - delete_disk
+#
 
 source "$UTILITIES"
 

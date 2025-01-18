@@ -14,6 +14,7 @@
 #
 # Usage:
 #   ./UpdateVMNotesWithIP.sh
+#
 
 # Loop through all QEMU VMs in the cluster
 VM_IDS=$(qm list | awk 'NR>1 {print $1}')

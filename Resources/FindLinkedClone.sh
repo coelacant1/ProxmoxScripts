@@ -112,8 +112,6 @@ for confFile in "${CONF_FILE_LIST[@]}"; do
   fi
 done
 
-stop_spin
-
 ###############################################################################
 # Report results
 ###############################################################################
@@ -122,9 +120,9 @@ if [ "${#CHILDREN[@]}" -eq 0 ]; then
   exit 0
 fi
 
-echo "Child ${VM_TYPE^^}s derived from base ID \"${BASE_VMID}\":"
+ok "Child ${VM_TYPE^^}s derived from base ID \"${BASE_VMID}\":"
 for childId in "${CHILDREN[@]}"; do
   echo "\"${childId}\""
 done
 
-ok "Scan complete. Found ${#CHILDREN[@]} child ${VM_TYPE^^}(s)."
+echo "Scan complete. Found ${#CHILDREN[@]} child ${VM_TYPE^^}(s)."

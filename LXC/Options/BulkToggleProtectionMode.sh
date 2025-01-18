@@ -19,6 +19,9 @@
 #   # with IDs from 200 to 209 (10 containers total).
 #   ./BulkToggleProtectionMode.sh disable 200 10
 #
+# Function Index:
+#   - set_protection
+#
 
 source "$UTILITIES"
 

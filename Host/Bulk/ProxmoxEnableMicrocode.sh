@@ -15,6 +15,9 @@
 #   2. Installs microcode packages on each node (remote + local).
 #   3. Prompts to keep or remove installed packages afterward.
 #
+# Function Index:
+#   - enable_microcode
+#
 
 source "$UTILITIES"
 

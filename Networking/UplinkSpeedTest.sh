@@ -23,6 +23,11 @@
 #   - 'ssh' access to remote nodes (root@<IP>)
 #   - A Proxmox environment (pvecm, etc.) if using cluster features
 #
+# Function Index:
+#   - usage
+#   - run_speedtest_on_node
+#   - resolve_node_argument_to_ip
+#
 
 source "$UTILITIES"
 

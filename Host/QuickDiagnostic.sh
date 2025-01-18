@@ -18,6 +18,13 @@
 #   - It also checks memory, CPU, network, and system logs for critical errors or warnings.
 #   - The script uses standard Linux tools (dmesg, free, ps, top, journalctl) to gather info.
 #
+# Function Index:
+#   - check_storage_errors
+#   - check_memory_errors
+#   - check_cpu_errors
+#   - check_network_errors
+#   - check_system_log_errors
+#
 
 source "$UTILITIES"
 

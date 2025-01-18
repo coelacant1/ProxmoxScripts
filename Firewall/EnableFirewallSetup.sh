@@ -18,6 +18,11 @@
 #   # Allow SSH/Web GUI from 192.168.1.0/24
 #   ./EnableFirewallSetup.sh 192.168.1.0/24
 #
+# Function Index:
+#   - ipset_contains_cidr
+#   - rule_exists_by_comment
+#   - create_rule_once
+#
 
 source "$UTILITIES"
 

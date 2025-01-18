@@ -21,6 +21,11 @@
 # Example:
 #   ./BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 192.168.1.1 PoolName
 #   ./BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 # Without specifying a gateway or pool
+#
+# Function Index:
+#   - ip_to_int
+#   - int_to_ip
+#
 
 # Check if the minimum required parameters are provided
 if [ "$#" -lt 6 ]; then

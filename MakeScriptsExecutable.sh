@@ -4,6 +4,7 @@
 #
 # Usage:
 # ./MakeScriptsExecutable.sh
+#
 
 # Find all files with a .sh extension in the current directory and subdirectories
 # and add execute permissions to them.

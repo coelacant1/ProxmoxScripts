@@ -23,6 +23,9 @@
 #   bond_base - The base name of the network bond (e.g., "bond0")
 #   vlan_id   - The VLAN ID to configure with the bond
 #
+# Function Index:
+#   - insert_sorted_config
+#
 
 source "$UTILITIES"
 

@@ -17,6 +17,9 @@
 #   # Exports both LXC containers and VMs
 #   ./ExportProxmoxResources.sh both
 #
+# Function Index:
+#   - parse_config_files
+#
 
 source "$UTILITIES"
 

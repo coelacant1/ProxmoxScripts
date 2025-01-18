@@ -13,6 +13,7 @@
 # Example:
 #   ./ToggleProtectionMode.sh 400 430 enable
 #   ./ToggleProtectionMode.sh 400 430 disable
+#
 
 # Check if the required parameters are provided
 if [ "$#" -ne 3 ]; then

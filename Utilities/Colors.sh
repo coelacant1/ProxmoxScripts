@@ -3,7 +3,18 @@
 # Colors.sh
 #
 # Provides 24-bit gradient printing and asynchronous "blink" simulation.
+#
+# Function Index:
+#   - _int_lerp
+#   - gradient_print
+#   - line_gradient
+#   - line_rgb
+#   - simulate_blink_async
+#
 
+###############################################################################
+# GLOBALS
+###############################################################################
 # Just for completeness, define a RESET to revert terminal colors.
 RESET="\033[0m"
 

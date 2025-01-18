@@ -24,6 +24,9 @@
 # Note: Use responsibly and only with explicit permission.
 #       Unauthorized port scanning may be illegal.
 #
+# Function Index:
+#   - usage_info
+#
 
 source "$UTILITIES"
 

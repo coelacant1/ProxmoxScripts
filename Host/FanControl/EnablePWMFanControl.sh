@@ -25,6 +25,11 @@
 # Make sure to run this script on a Proxmox node that has direct access to PWM
 # fan control (e.g., /sys/class/hwmon/).
 #
+# Function Index:
+#   - show_usage
+#   - install_fancontrol
+#   - uninstall_fancontrol
+#
 
 source "$UTILITIES"
 

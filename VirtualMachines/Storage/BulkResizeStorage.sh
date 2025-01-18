@@ -13,6 +13,7 @@
 #
 # Example:
 #   ./ResizeStorage.sh 400 430 scsi0 +10G
+#
 
 # Check if the required parameters are provided
 if [ "$#" -ne 4 ]; then

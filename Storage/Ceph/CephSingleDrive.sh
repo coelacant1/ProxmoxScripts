@@ -17,6 +17,10 @@
 #   ./CephSingleDrive.sh create_osd
 #   ./CephSingleDrive.sh clear_local_lvm
 #
+# Function Index:
+#   - clear_local_lvm
+#   - create_osd
+#
 
 source "$UTILITIES"
 

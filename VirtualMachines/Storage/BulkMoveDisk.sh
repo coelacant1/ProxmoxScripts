@@ -9,8 +9,13 @@
 #   start_vmid - The starting VM ID from which disk migration begins.
 #   stop_vmid - The ending VM ID up to which disk migration is performed.
 #   target_storage - The identifier of the target storage where disks will be moved.
+#
 # Example:
 #   ./VMMoveDisk.sh 101 105 local-lvm
+#
+# Function Index:
+#   - move_disk
+#
 
 # Usage Information
 if [ "$#" -lt 3 ]; then

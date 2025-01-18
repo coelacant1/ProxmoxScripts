@@ -21,6 +21,10 @@
 #   it will prompt whether to keep or remove any packages installed during this
 #   session (if any).
 #
+# Function Index:
+#   - setup_repositories
+#   - disable_subscription_nag
+#
 
 source "$UTILITIES"
 

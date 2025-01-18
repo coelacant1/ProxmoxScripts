@@ -27,6 +27,18 @@
 #   1) Disables automatic scrubbing on <pool_name> by setting long intervals.
 #   2) Sets up or removes a systemd service/timer that periodically deep-scrubs the pool.
 #
+# Function Index:
+#   - usage
+#   - derive_oncalendar_expression
+#   - local_disable_scrubbing
+#   - local_revert_scrubbing
+#   - local_create_scrub_script
+#   - local_create_systemd_units
+#   - local_enable_and_start_timer
+#   - local_remove_systemd_units
+#   - remote_install
+#   - remote_uninstall
+#
 source "$UTILITIES"
 
 ###############################################################################

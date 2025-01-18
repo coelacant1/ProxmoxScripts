@@ -31,6 +31,12 @@
 #   Ensure the script has execute permissions:
 #     chmod +x BulkMoveCloudInit.sh
 #   Execute the script as shown in the usage examples.
+# Function Index:
+#   - usage
+#   - check_storage_exists
+#   - get_current_storage
+#   - migrate_cloud_init_disk
+#
 
 # Exit immediately if a command exits with a non-zero status
 set -e

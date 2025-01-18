@@ -18,6 +18,9 @@
 #   # Force removal, ignoring the presence of VMs/LXCs:
 #   ./RemoveClusterNode.sh --force node3
 #
+# Function Index:
+#   - usage
+#
 
 source "$UTILITIES"
 
@@ -99,37 +102,40 @@ if ! pvecm delnode "${NODE_NAME}"; then
   echo "Continuing with SSH cleanup..."
 fi
 
+info "Deleting node..."
 node_count="$(get_number_of_cluster_nodes)"
 if  [ "$node_count" -le 2 ]; then
-  wait_spin 15
+  sleep 15
 
-  echo "Restarting Corosync to ensure updated config is reloaded..."
+  update "Restarting Corosync to ensure updated config is reloaded..."
   systemctl restart corosync
   sleep 2
-  echo "Setting expected nodes to 1..."
+  update "Setting expected nodes to 1..."
   pvecm expected 1
   sleep 2
-  echo "Attempting delete on ${NODE_NAME}, will run until completed, use CTRL+C to cancel..."
+  udpate "Attempting delete on ${NODE_NAME}, will run until completed, use CTRL+C to cancel..."
   while ! pvecm delnode "${NODE_NAME}"; do
-    echo "pvecm delnode failed. Retrying in 5 seconds..."
+    update "pvecm delnode failed. Retrying in 5 seconds..."
     sleep 5
   done
 fi
+ok "${NODE_NAME} removed from cluster"
 
 # 2) Clean SSH references on remaining cluster nodes
 ONLINE_NODES=$(pvecm nodes | awk '!/Name/ {print $3}')
-echo "Cleaning SSH references on other cluster nodes..."
+info "Cleaning SSH references on other cluster nodes..."
 for host in ${ONLINE_NODES}; do
   # Skip if it's the removed node or blank
   [[ "${host}" == "${NODE_NAME}" ]] && continue
   [[ -z "${host}" ]] && continue
 
-  echo ">>> On node \"${host}\"..."
+  update ">>> On node \"${host}\"..."
   ssh "root@${host}" "ssh-keygen -R '${NODE_NAME}' >/dev/null 2>&1 || true"
   ssh "root@${host}" "ssh-keygen -R '${NODE_NAME}.local' >/dev/null 2>&1 || true"
   ssh "root@${host}" "sed -i '/${NODE_NAME}/d' /etc/ssh/ssh_known_hosts 2>/dev/null || true"
   ssh "root@${host}" "rm -rf /etc/pve/nodes/${NODE_NAME} 2>/dev/null || true"
 done
+ok "Cluster host SSH references updated."
 
 echo
 echo "=== Done ==="

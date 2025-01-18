@@ -19,6 +19,19 @@
 #
 # This script requires IPMI utilities, which will be installed if missing.
 #
+# Function Index:
+#   - prompt_user_config
+#   - create_run_script
+#   - enable_fan_control
+#   - set_fan_speed
+#   - get_temperatures
+#   - calculate_fan_speed
+#   - main_loop
+#   - create_systemd_service
+#   - enable_and_start_service
+#   - remove_service_and_files
+#   - show_usage
+#
 
 source "$UTILITIES"
 

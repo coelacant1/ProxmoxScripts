@@ -22,6 +22,9 @@
 # Note: This script performs a non-exhaustive scan and should be used
 # only with explicit permission. Pentesting without permission is illegal.
 #
+# Function Index:
+#   - usage
+#
 source "$UTILITIES"
 
 ###############################################################################

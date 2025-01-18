@@ -16,6 +16,9 @@
 #   # Deletes the disk 'my-disk' in the 'mypool' pool if only the __base__ snapshot exists:
 #   ./DiskDeleteWithSnapshot.sh mypool my-disk
 #
+# Function Index:
+#   - deleteSnapshot
+#
 
 source "$UTILITIES"
 

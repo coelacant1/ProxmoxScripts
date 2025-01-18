@@ -12,8 +12,10 @@
 #   hostname - The hostname of the Proxmox node where the VMs are configured.
 #   current_storage - The current identifier of the storage used in the VMs' configuration.
 #   new_storage - The new identifier of the storage to replace the current one.
+#
 # Example:
 #   ./BulkChangeStorage.sh 100 200 pve-node1 local-lvm local-zfs
+#
 
 # Check if required inputs are provided
 if [ $# -lt 5 ]; then

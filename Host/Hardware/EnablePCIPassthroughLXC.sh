@@ -23,6 +23,9 @@
 #   4. Only "privileged" LXC containers can easily use PCI passthrough. By default, this script will set the container(s) to privileged.
 #   5. After making changes, stop and start each container for them to take effect (pct stop <CTID> && pct start <CTID>).
 #
+# Function Index:
+#   - enablePciPassthroughInContainerConfig
+#
 
 source "$UTILITIES"
 

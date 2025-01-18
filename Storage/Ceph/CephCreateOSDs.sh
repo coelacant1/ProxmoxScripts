@@ -14,6 +14,9 @@
 #   3. Each node has Ceph installed and configured sufficiently to run 'ceph-volume'.
 #   4. Devices that need to be skipped are either already mounted or in pvs.
 #
+# Function Index:
+#   - create_osds
+#
 source "$UTILITIES"
 
 check_root

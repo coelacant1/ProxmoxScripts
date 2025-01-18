@@ -4,13 +4,15 @@
 # It takes a range of VM IDs and performs three actions: unprotects, stops, and destroys each VM in the range.
 # This script is useful for cleaning up VMs in a controlled manner, ensuring that all VMs within the specified
 # range are properly shut down and removed from the system. Caution is advised, as this will permanently delete VMs.
-
+#
 # Usage:
 # ./BulkDelete.sh start_vmid stop_vmid
 #   start_vmid - The starting VM ID from which the batch operation begins.
 #   stop_vmid - The ending VM ID up to which the batch operation is performed.
+#
 # Example:
 #   ./BulkDelete.sh 600 650
+#
 
 # Check if input arguments are provided
 if [ "$#" -lt 2 ]; then

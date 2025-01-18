@@ -28,6 +28,11 @@
 #   # Attempts to run TRIM on every node in the cluster.
 #   ./FilesystemTrimAll.sh all
 #
+# Function Index:
+#   - trim_qemu_vm
+#   - trim_lxc_ct
+#   - trim_on_node
+#
 source "$UTILITIES"
 
 ###############################################################################

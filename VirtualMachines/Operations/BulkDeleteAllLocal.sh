@@ -1,8 +1,12 @@
 #!/bin/bash
 #
-# This script deletes all virtual machines (VMs) currently listed on the Proxmox VE environment.
+# This script deletes all virtual machines (VMs) currently listed on this Proxmox machine.
 # It performs three actions for each VM: unprotects, stops, and destroys them.
 # WARNING: This script will permanently delete all VMs on the Proxmox machine.
+#
+# Usage:
+# ./BulkDeleteAllLocal.sh
+#
 
 # Fetch the list of all VM IDs
 VM_IDS=$(qm list | awk 'NR>1 {print $1}')
