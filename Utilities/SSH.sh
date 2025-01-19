@@ -9,28 +9,30 @@
 #   source SSH.sh
 #
 # Function Index:
-#   - wait_for_ssh
+#   - __wait_for_ssh__
 #
 
-install_or_prompt "sshpass"
+source "${UTILITYPATH}/Prompts.sh"
+
+__install_or_prompt__ "sshpass"
 
 ###############################################################################
 # SSH Functions
 ###############################################################################
 
-# @function wait_for_ssh
+# @function __wait_for_ssh__
 # @description Repeatedly attempts to connect via SSH to a specified host using
 #   a given username and password until SSH is reachable or until the maximum
 #   number of attempts is exhausted.
 # @usage
-#   wait_for_ssh <host> <sshUsername> <sshPassword>
+#   __wait_for_ssh__ <host> <sshUsername> <sshPassword>
 # @param 1 The SSH host (IP or domain).
 # @param 2 The SSH username.
 # @param 3 The SSH password.
 # @return
 #   Returns 0 if a connection is established within the max attempts,
 #   otherwise exits with code 1.
-wait_for_ssh() {
+__wait_for_ssh__() {
   local host="$1"
   local sshUsername="$2"
   local sshPassword="$3"

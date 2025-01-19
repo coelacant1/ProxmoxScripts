@@ -17,13 +17,13 @@
 #   ./PassthroughStorageToLXC.sh /mnt/logs ro 101 102 103
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Pre-Execution Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Parse Arguments

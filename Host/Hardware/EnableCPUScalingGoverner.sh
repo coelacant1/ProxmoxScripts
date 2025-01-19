@@ -41,7 +41,7 @@
 #   - do_configure
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Globals / Defaults
@@ -63,9 +63,9 @@ SYSTEM_DEFAULT="${BALANCED_FALLBACK}"
 # Check Requirements
 ###############################################################################
 # We assume this script is used primarily on Proxmox. If run outside Proxmox, 
-# remove or comment out check_proxmox as needed.
-check_root
-check_proxmox
+# remove or comment out __check_proxmox__ as needed.
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Usage Function
@@ -144,7 +144,7 @@ do_install() {
   local maxFreq="$3"
 
   echo "Installing 'linux-cpupower' if not already installed..."
-  install_or_prompt "linux-cpupower"
+  __install_or_prompt__ "linux-cpupower"
 
   echo "Copying script to '${TARGET_PATH}'..."
   cp -f "$0" "${TARGET_PATH}"
@@ -160,14 +160,14 @@ do_install() {
     echo "No governor specified; skipping governor configuration."
   fi
 
-  prompt_keep_installed_packages
+  __prompt_keep_installed_packages__
   echo "Install complete."
   exit 0
 }
 
 do_remove() {
   echo "Attempting to remove 'linux-cpupower' if it was installed by this script..."
-  # We rely on prompt_keep_installed_packages having been called in do_install to decide.
+  # We rely on __prompt_keep_installed_packages__ having been called in do_install to decide.
   # If the package remains installed, we attempt to remove it here anyway.
   if command -v cpupower &>/dev/null; then
     apt-get -y remove linux-cpupower || echo "Warning: Could not remove linux-cpupower automatically."

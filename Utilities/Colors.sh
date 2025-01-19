@@ -5,11 +5,11 @@
 # Provides 24-bit gradient printing and asynchronous "blink" simulation.
 #
 # Function Index:
-#   - _int_lerp
-#   - gradient_print
-#   - line_gradient
-#   - line_rgb
-#   - simulate_blink_async
+#   - __int_lerp__
+#   - __gradient_print__
+#   - __line_gradient__
+#   - __line_rgb__
+#   - __simulate_blink_async__
 #
 
 ###############################################################################
@@ -19,10 +19,10 @@
 RESET="\033[0m"
 
 ###############################################################################
-# Function: _int_lerp
+# Function: __int_lerp__
 #   Integer linear interpolation between START and END, using FRACTION (0..100).
 ###############################################################################
-_int_lerp() {
+__int_lerp__() {
     local start=$1
     local end=$2
     local fraction=$3
@@ -32,14 +32,14 @@ _int_lerp() {
 }
 
 ###############################################################################
-# Function: gradient_print
-# Usage:    gradient_print "multi-line text" R1 G1 B1 R2 G2 B2
-# Example:  gradient_print "$ASCII_ART" 128 0 128 0 255 255
+# Function: __gradient_print__
+# Usage:    __gradient_print__ "multi-line text" R1 G1 B1 R2 G2 B2
+# Example:  __gradient_print__ "$ASCII_ART" 128 0 128 0 255 255
 #
 # Interpolates from (R1,G1,B1) -> (R2,G2,B2) line-by-line.
 # If there's only 1 line, prints in the end color.
 ###############################################################################
-gradient_print() {
+__gradient_print__() {
     local text="$1"
     local R1="$2"
     local G1="$3"
@@ -79,9 +79,9 @@ gradient_print() {
         local fraction=$(( i * 100 / (total_lines - 1) ))
         
         # Interpolate color
-        local R=$(_int_lerp "$R1" "$R2" "$fraction")
-        local G=$(_int_lerp "$G1" "$G2" "$fraction")
-        local B=$(_int_lerp "$B1" "$B2" "$fraction")
+        local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+        local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+        local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
         # Color codes for the line
         local lineColorPrefix="\033[38;2;${R};${G};${B}m"
@@ -106,10 +106,10 @@ gradient_print() {
 
 
 ###############################################################################
-# single_line_gradient (Left to Right)
+# single___line_gradient__ (Left to Right)
 #    Interpolates each character from (R1,G1,B1) -> (R2,G2,B2).
 ###############################################################################
-line_gradient() {
+__line_gradient__() {
   local text="$1"
   local R1="$2"
   local G1="$3"
@@ -128,9 +128,9 @@ line_gradient() {
 
   for (( i=0; i<length; i++ )); do
     local fraction=$(( i * 100 / (length - 1) ))
-    local R=$(_int_lerp "$R1" "$R2" "$fraction")
-    local G=$(_int_lerp "$G1" "$G2" "$fraction")
-    local B=$(_int_lerp "$B1" "$B2" "$fraction")
+    local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+    local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+    local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
     # Extract single character
     local c="${text:$i:1}"
@@ -144,7 +144,7 @@ line_gradient() {
 ###############################################################################
 # single_line_solid (One line in a single color)
 ###############################################################################
-line_rgb() {
+__line_rgb__() {
   local text="$1"
   local R="$2"
   local G="$3"
@@ -154,13 +154,13 @@ line_rgb() {
 }
 
 ###############################################################################
-# Function: simulate_blink_async
-# Usage:    simulate_blink_async "text to blink" <times=5> <delay=0.3>
+# Function: __simulate_blink_async__
+# Usage:    __simulate_blink_async__ "text to blink" <times=5> <delay=0.3>
 #
 # Toggles between bright and dim states in a background subshell,
 # allowing the main script to continue without blocking.
 ###############################################################################
-simulate_blink_async() {
+__simulate_blink_async__() {
     local text="$1"
     local times="${2:-5}"
     local delay="${3:-0.3}"

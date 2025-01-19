@@ -19,13 +19,13 @@
 #   5. Prompt whether to keep or remove any newly installed packages.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [[ $# -lt 3 ]]; then
   echo "Usage: $0 <server_host> <client_host> <port>"
@@ -42,7 +42,7 @@ port="$3"
 ###############################################################################
 # Iperf Installation Check
 ###############################################################################
-install_or_prompt "iperf3"
+__install_or_prompt__ "iperf3"
 
 ###############################################################################
 # Start Iperf Server on Server Host
@@ -71,4 +71,4 @@ echo "Iperf test completed successfully."
 ###############################################################################
 # Prompt to Keep or Remove Packages
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

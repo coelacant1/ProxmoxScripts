@@ -15,13 +15,14 @@
 #   ./BulkCloneSetIPDebian.sh 172.20.83.22 172.20.83.100/24 172.20.83.1 5 100 200 root pass123 CLOUD-
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/SSH.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument Parsing
@@ -43,21 +44,21 @@ sshPassword="$8"
 vmNamePrefix="$9"
 
 IFS='/' read -r startIpAddrOnly startMask <<<"$startIpCidr"
-ipInt="$(ip_to_int "$startIpAddrOnly")"
+ipInt="$(__ip_to_int__ "$startIpAddrOnly")"
 
 ###############################################################################
 # Main Logic
 ###############################################################################
 for ((i=0; i<instanceCount; i++)); do
   currentVmId=$((baseVmId + i))
-  currentIp="$(int_to_ip "$ipInt")"
+  currentIp="$(__int_to_ip__ "$ipInt")"
   currentIpCidr="$currentIp/$startMask"
 
   echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
   qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}"
   qm start "$currentVmId"
 
-  wait_for_ssh "$templateIpAddr" "$sshUsername" "$sshPassword"
+  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
 
   sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" bash -s <<EOF
 sed -i '/\bgateway\b/d' /etc/network/interfaces
@@ -70,7 +71,7 @@ EOF
   sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" \
     "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
   
-  wait_for_ssh "$currentIp" "$sshUsername" "$sshPassword"
+  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
   ipInt=$((ipInt + 1))
 done
 

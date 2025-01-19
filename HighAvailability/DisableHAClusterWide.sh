@@ -19,20 +19,21 @@
 #     resource definitions will remain.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
 ###############################################################################
 
 # 0. Basic checks
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 # 1. Ensure required commands are installed
 # 'jq' is not installed by default on Proxmox 8
-install_or_prompt "jq"
+__install_or_prompt__ "jq"
 
 echo "=== Disabling HA on the entire cluster ==="
 
@@ -60,7 +61,7 @@ fi
 
 # 3. Stop and disable HA services on every node in the cluster using IPs
 echo "=== Disabling HA services (CRM, LRM) on all nodes ==="
-readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
+readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
 
 for NODE_IP in "${REMOTE_NODE_IPS[@]}"; do
   echo " - Processing node with IP: ${NODE_IP}"
@@ -78,4 +79,4 @@ echo "=== HA has been disabled on all nodes in the cluster. ==="
 echo "No HA resources remain, and HA services are stopped & disabled cluster-wide."
 
 # 4. Prompt to remove any packages installed during this session
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

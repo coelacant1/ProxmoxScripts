@@ -21,13 +21,13 @@
 #   - parse_config_files
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Parse Arguments

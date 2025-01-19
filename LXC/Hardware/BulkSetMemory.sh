@@ -19,7 +19,7 @@
 #   - 'pct' is included by default on Proxmox 8.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # MAIN
@@ -41,8 +41,8 @@ END_CT_ID="$2"
 MEMORY_MB="$3"
 SWAP_MB="${4:-0}"
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 echo "=== Starting memory config update for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
 echo " - Memory (MB): \"$MEMORY_MB\""

@@ -19,10 +19,10 @@
 # - Make sure you specify the correct disk. This operation is destructive!
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Validate arguments
@@ -42,9 +42,9 @@ fi
 ###############################################################################
 # Check and/or install required commands
 ###############################################################################
-install_or_prompt "parted"
-install_or_prompt "util-linux"  # Provides wipefs
-install_or_prompt "coreutils"
+__install_or_prompt__ "parted"
+__install_or_prompt__ "util-linux"  # Provides wipefs
+__install_or_prompt__ "coreutils"
 
 ###############################################################################
 # Confirmation
@@ -71,7 +71,7 @@ parted -s "$DISK" mklabel gpt
 ###############################################################################
 read -r -p "Would you like to overwrite the disk with zeroes? (y/N): " overwrite
 if [[ "$overwrite" == "y" || "$overwrite" == "Y" ]]; then
-  install_or_prompt "coreutils"
+  __install_or_prompt__ "coreutils"
   echo "Overwriting \"$DISK\" with zeroes. This may take a while..."
   dd if=/dev/zero of="$DISK" bs=1M status=progress || {
     echo "Error: Failed to overwrite disk with zeroes."
@@ -86,4 +86,4 @@ fi
 ###############################################################################
 # Prompt to keep newly installed packages
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

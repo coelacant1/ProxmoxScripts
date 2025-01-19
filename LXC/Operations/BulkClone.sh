@@ -30,13 +30,14 @@
 #   ./BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Conversion.sh"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument Parsing
@@ -60,7 +61,7 @@ POOL_NAME="${8:-}"
 # Main
 ###############################################################################
 IFS='/' read -r startIp subnetMask <<< "${START_IP_CIDR}"
-startIpInt="$( ip_to_int "${startIp}" )"
+startIpInt="$( __ip_to_int__ "${startIp}" )"
 
 for (( i=0; i<NUM_CTS; i++ )); do
   targetCtId=$((START_CT_ID + i))
@@ -68,7 +69,7 @@ for (( i=0; i<NUM_CTS; i++ )); do
   ctName="${BASE_CT_NAME}${nameIndex}"
 
   currentIpInt=$((startIpInt + i))
-  newIp="$( int_to_ip "${currentIpInt}" )"
+  newIp="$( __int_to_ip__ "${currentIpInt}" )"
 
   pct clone "${SOURCE_CT_ID}" "${targetCtId}" --hostname "${ctName}"
   pct set "${targetCtId}" -net0 "name=eth0,bridge=${BRIDGE},ip=${newIp}/${subnetMask},gw=${GATEWAY}"

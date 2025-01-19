@@ -27,13 +27,13 @@
 #   - enablePciPassthroughInContainerConfig
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 <PCI_DEVICE_ID> <CTID_1> [<CTID_2> ... <CTID_n>]"

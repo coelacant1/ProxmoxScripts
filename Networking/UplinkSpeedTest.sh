@@ -29,13 +29,14 @@
 #   - resolve_node_argument_to_ip
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Global Variables
 ###############################################################################
 LOCAL_NODE_NAME="$(hostname)"    # OS-level hostname
-LOCAL_NODE_IP=""                 # Populated after init_node_mappings
+LOCAL_NODE_IP=""                 # Populated after __init_node_mappings__
 
 ###############################################################################
 # Usage Display
@@ -58,7 +59,7 @@ usage() {
 ###############################################################################
 # Verify 'speedtest' is Installed (Prompt to Install if Missing)
 ###############################################################################
-install_or_prompt "speedtest-cli"
+__install_or_prompt__ "speedtest-cli"
 
 ###############################################################################
 # Run Speedtest on Single Node (Local or Remote)
@@ -81,7 +82,7 @@ run_speedtest_on_node() {
 ###############################################################################
 # Resolve a Node Argument to an IP
 # - If the argument is already an IP, return it
-# - Otherwise, attempt to resolve via get_ip_from_name
+# - Otherwise, attempt to resolve via __get_ip_from_name__
 ###############################################################################
 resolve_node_argument_to_ip() {
   local arg="$1"
@@ -91,15 +92,15 @@ resolve_node_argument_to_ip() {
     echo "$arg"
   else
     # Attempt to resolve name -> IP
-    get_ip_from_name "$arg"
+    __get_ip_from_name__ "$arg"
   fi
 }
 
 ###############################################################################
 # Main Script Logic
 ###############################################################################
-check_root          # Ensure running as root
-check_proxmox       # Ensure running on a Proxmox node
+__check_root__          # Ensure running as root
+__check_proxmox__       # Ensure running on a Proxmox node
 
 # Make sure speedtest is installed locally (remote nodes also need it)
 verify_speedtest_installed
@@ -112,8 +113,8 @@ fi
 # If no arguments, test speed on local node only
 if [[ $# -eq 0 ]]; then
   # Initialize node mappings to find local node IP
-  init_node_mappings
-  LOCAL_NODE_IP="$(get_ip_from_name "$LOCAL_NODE_NAME")" || {
+  __init_node_mappings__
+  LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
     echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
     exit 1
   }
@@ -123,11 +124,11 @@ fi
 
 # If "all" was specified, we run on local + remote cluster nodes
 if [[ "$1" == "all" ]]; then
-  check_cluster_membership
-  init_node_mappings
+  __check_cluster_membership__
+  __init_node_mappings__
 
   # Get local IP from name
-  LOCAL_NODE_IP="$(get_ip_from_name "$LOCAL_NODE_NAME")" || {
+  LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
     echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
     exit 1
   }
@@ -139,7 +140,7 @@ if [[ "$1" == "all" ]]; then
 
   # Then run on remote nodes
   echo "Gathering remote node IPs..."
-  readarray -t REMOTE_NODES < <( get_remote_node_ips )
+  readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
   for nodeIp in "${REMOTE_NODES[@]}"; do
     run_speedtest_on_node "$nodeIp"
     echo "-----------------------------------------------------"
@@ -148,8 +149,8 @@ if [[ "$1" == "all" ]]; then
 fi
 
 # Otherwise, treat each argument as a node name or IP
-init_node_mappings
-LOCAL_NODE_IP="$(get_ip_from_name "$LOCAL_NODE_NAME")" || {
+__init_node_mappings__
+LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
   echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
   exit 1
 }
@@ -163,4 +164,4 @@ for arg in "$@"; do
   echo "-----------------------------------------------------"
 done
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

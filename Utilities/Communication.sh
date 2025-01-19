@@ -13,7 +13,7 @@
 #   source "./Communication.sh"
 #   info "Performing tasks..."
 #   # ... do work ...
-#   ok "Tasks completed successfully!"
+#   __ok__ "Tasks completed successfully!"
 #
 
 ###############################################################################
@@ -52,7 +52,7 @@ RAINBOW_COLORS=(
 # @usage
 #   spin &
 #   SPINNER_PID=$!
-spin() {
+__spin__() {
   local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
   local spin_i=0
   local color_i=0
@@ -76,7 +76,7 @@ spin() {
 # @description Kills the spinner background process, if any, and restores the cursor.
 # @usage
 #   stop_spin
-stop_spin() {
+__stop_spin__() {
   if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
     kill "$SPINNER_PID" &>/dev/null
     wait "$SPINNER_PID" 2>/dev/null || true
@@ -92,10 +92,10 @@ stop_spin() {
 # @description Prints a message in bold yellow, then starts the rainbow spinner.
 # @usage
 #   info "Doing something..."
-info() {
+__info__() {
   local msg="$1"
   echo -ne "  ${YELLOW}${BOLD}${msg}${RESET} "
-  spin &
+  __spin__ &
   SPINNER_PID=$!
 }
 
@@ -107,7 +107,7 @@ info() {
 #              without stopping the spinner.
 # @usage
 #   update_spin_text "New message here"
-update() {
+__update__() {
   echo -ne "\r\033[2C\033[K$1"
 }
 
@@ -117,9 +117,9 @@ update() {
 # @function ok
 # @description Kills spinner, prints success message in green.
 # @usage
-#   ok "Everything done!"
-ok() {
-  stop_spin
+#   __ok__ "Everything done!"
+__ok__() {
+  __stop_spin__
   echo -ne "\r\033[K"   # Clear the line first
   local msg="$1"
   echo -e "${GREEN}${BOLD}${msg}${RESET}"
@@ -131,9 +131,9 @@ ok() {
 # @function err
 # @description Kills spinner, prints error message in red.
 # @usage
-#   err "Something went wrong!"
-err() {
-  stop_spin
+#   __err__ "Something went wrong!"
+__err__() {
+  __stop_spin__
   echo -ne "\r\033[K"   # Clear the line first
   local msg="$1"
   echo -e "${RED}${BOLD}${msg}${RESET}"
@@ -145,14 +145,14 @@ err() {
 # @function handle_err
 # @description Error handler to show line number, exit code, and failing command.
 # @usage
-#   trap 'handle_err $LINENO "$BASH_COMMAND"' ERR
-handle_err() {
+#   trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+__handle_err__() {
   local line_number="$1"
   local command="$2"
   local exit_code="$?"
-  stop_spin
+  __stop_spin__
   echo -ne "\r\033[K"   # Clear the line first
   echo -e "${RED}[ERROR]${RESET} line ${RED}${line_number}${RESET}, exit code ${RED}${exit_code}${RESET} while executing: ${YELLOW}${command}${RESET}"
 }
 
-trap 'handle_err $LINENO "$BASH_COMMAND"' ERR
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR

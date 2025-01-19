@@ -22,13 +22,13 @@
 #   - parseFioOutput
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment and Privilege Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Global Variables
@@ -52,8 +52,8 @@ fi
 # Prepare Environment
 ###############################################################################
 
-install_or_prompt "jq"
-install_or_prompt "fio"
+__install_or_prompt__ "jq"
+__install_or_prompt__ "fio"
 
 mkdir -p "$TEST_DIR"
 
@@ -172,7 +172,7 @@ fi
 ###############################################################################
 # Clean Up and Prompt to Keep Installed Packages
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 echo
 echo "Disk benchmark process complete."

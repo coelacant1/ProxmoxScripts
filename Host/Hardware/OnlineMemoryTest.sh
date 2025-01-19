@@ -21,13 +21,13 @@
 #   - This script MUST be run as root and on a Proxmox host.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [[ $# -lt 1 ]]; then
   echo "Error: Missing <size-in-GB> argument."
@@ -47,7 +47,7 @@ TEST_SIZE_MB=$(( TEST_SIZE_GB * 1024 ))
 ###############################################################################
 # Check for and Possibly Install 'memtester'
 ###############################################################################
-install_or_prompt "memtester"
+__install_or_prompt__ "memtester"
 
 ###############################################################################
 # Main Script Logic
@@ -59,6 +59,6 @@ echo "Memory test completed. Check output above for any errors or failures."
 ###############################################################################
 # Prompt to Keep or Remove Installed Packages
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 exit 0

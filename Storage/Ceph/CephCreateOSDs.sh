@@ -17,11 +17,12 @@
 # Function Index:
 #   - create_osds
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # FUNCTION: create_osds
@@ -57,7 +58,7 @@ create_osds() {
 ###############################################################################
 echo "=== Starting OSD creation on all nodes ==="
 
-readarray -t REMOTE_NODES < <( get_remote_node_ips )
+readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 if [ "${#REMOTE_NODES[@]}" -eq 0 ]; then
   echo "Error: No remote nodes found in the cluster."
   exit 1

@@ -22,10 +22,10 @@
 #   - create_osd
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Functions

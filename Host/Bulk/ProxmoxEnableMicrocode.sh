@@ -19,14 +19,15 @@
 #   - enable_microcode
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Function to enable microcode updates
@@ -42,7 +43,7 @@ enable_microcode() {
 # Main Script Logic
 ###############################################################################
 echo "Gathering remote node IPs..."
-readarray -t REMOTE_NODES < <( get_remote_node_ips )
+readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 
 if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
     echo " - No remote nodes detected; this might be a single-node cluster."
@@ -61,7 +62,7 @@ echo "Microcode updates enabled on the local node."
 ###############################################################################
 # Cleanup Prompt
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 echo "Microcode updates have been enabled on all nodes!"
 

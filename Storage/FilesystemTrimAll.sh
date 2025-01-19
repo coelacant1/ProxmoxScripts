@@ -33,13 +33,14 @@
 #   - trim_lxc_ct
 #   - trim_on_node
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Function Definitions
@@ -73,7 +74,7 @@ trim_on_node() {
 
   echo "---- [Node: \"$nodeName\"] Gathering QEMU VMs... ----"
   local vmIds=()
-  readarray -t vmIds < <( get_server_vms "$nodeName" )
+  readarray -t vmIds < <( __get_server_vms__ "$nodeName" )
 
   if [[ -z "${vmIds[*]}" ]]; then
     echo "[Node: \"$nodeName\"] No QEMU VMs found."
@@ -85,7 +86,7 @@ trim_on_node() {
 
   echo "---- [Node: \"$nodeName\"] Gathering LXC containers... ----"
   local ctIds=()
-  readarray -t ctIds < <( get_server_lxc "$nodeName" )
+  readarray -t ctIds < <( __get_server_lxc__ "$nodeName" )
 
   if [[ -z "${ctIds[*]}" ]]; then
     echo "[Node: \"$nodeName\"] No LXC containers found."
@@ -111,7 +112,7 @@ case "$MODE" in
 
     echo "---- [Node: \"$localNode\"] Gathering QEMU VMs... ----"
     declare vmIds=()
-    readarray -t vmIds < <( get_server_vms "$localNode" )
+    readarray -t vmIds < <( __get_server_vms__ "$localNode" )
 
     if [[ -z "${vmIds[*]}" ]]; then
       echo "[Node: \"$localNode\"] No QEMU VMs found."
@@ -129,7 +130,7 @@ case "$MODE" in
 
     echo "---- [Node: \"$localNode\"] Gathering LXC containers... ----"
     declare ctIds=()
-    readarray -t ctIds < <( get_server_lxc "$localNode" )
+    readarray -t ctIds < <( __get_server_lxc__ "$localNode" )
 
     if [[ -z "${ctIds[*]}" ]]; then
       echo "[Node: \"$localNode\"] No LXC containers found."

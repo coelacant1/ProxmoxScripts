@@ -28,13 +28,14 @@
 #   - usage_info
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Usage Information
@@ -64,11 +65,11 @@ if [[ $# -lt 1 ]]; then
   usage_info
 fi
 
-install_or_prompt "nmap"
+__install_or_prompt__ "nmap"
 
 if [[ "$1" == "all" ]]; then
-  check_cluster_membership
-  readarray -t discoveredHosts < <( get_remote_node_ips )
+  __check_cluster_membership__
+  readarray -t discoveredHosts < <( __get_remote_node_ips__ )
   
   if [[ ${#discoveredHosts[@]} -eq 0 ]]; then
     echo "Error: No hosts discovered in the cluster. Exiting."
@@ -97,4 +98,4 @@ for host in "${targets[@]}"; do
   echo
 done
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

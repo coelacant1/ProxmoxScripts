@@ -12,19 +12,20 @@
 #   This will remove ALL LXC containers on this node. Use with caution!
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Main Logic
 ###############################################################################
 echo "=== Listing all containers on this node ==="
-readarray -t CONTAINER_IDS < <( get_server_lxc "local" )
+readarray -t CONTAINER_IDS < <( __get_server_lxc__ "local" )
 
 if [ -z "${CONTAINER_IDS[*]}" ]; then
   echo "No LXC containers found on this node."

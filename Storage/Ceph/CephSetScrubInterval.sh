@@ -39,13 +39,14 @@
 #   - remote_install
 #   - remote_uninstall
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # ENVIRONMENT CHECKS
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # INSTALL REQUIRED PACKAGES (IF NEEDED)
@@ -55,10 +56,10 @@ ACTION="$2"
 
 # Decide which utilities to ensure based on mode
 if [[ "$SCRIPT_MODE" == "local" ]]; then
-  install_or_prompt "jq"
+  __install_or_prompt__ "jq"
 elif [[ "$SCRIPT_MODE" == "remote" ]]; then
-  install_or_prompt "jq"
-  install_or_prompt "sshpass"
+  __install_or_prompt__ "jq"
+  __install_or_prompt__ "sshpass"
 fi
 
 ###############################################################################
@@ -359,8 +360,8 @@ case "$SCRIPT_MODE" in
         SCHEDULE_TIME="$8"
 
         # Convert node name to IP using Proxmox cluster info
-        readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
-        VM_HOST="$(get_ip_from_name "${REMOTE_NODE_NAME}")"
+        readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
+        VM_HOST="$(__get_ip_from_name__ "${REMOTE_NODE_NAME}")"
 
         # Verify that the IP is recognized in the cluster
         if [[ ! " ${REMOTE_NODE_IPS[@]} " =~ " ${VM_HOST} " ]]; then
@@ -380,8 +381,8 @@ case "$SCRIPT_MODE" in
         VM_PASS="$5"
         POOL_NAME="$6"
 
-        readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
-        VM_HOST="$(get_ip_from_name "${REMOTE_NODE_NAME}")"
+        readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
+        VM_HOST="$(__get_ip_from_name__ "${REMOTE_NODE_NAME}")"
 
         if [[ ! " ${REMOTE_NODE_IPS[@]} " =~ " ${VM_HOST} " ]]; then
           echo "Error: Node '${REMOTE_NODE_NAME}' does not correspond to a valid IP in this cluster."
@@ -400,4 +401,4 @@ case "$SCRIPT_MODE" in
     ;;
 esac
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

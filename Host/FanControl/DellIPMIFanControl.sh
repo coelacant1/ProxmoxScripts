@@ -33,7 +33,7 @@
 #   - show_usage
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Global Variables
@@ -276,18 +276,18 @@ show_usage() {
 ###############################################################################
 case "$1" in
     install)
-        check_root          # Ensure script is run as root
-        check_proxmox       # Ensure we are on a Proxmox node
-        install_or_prompt "ipmitool"
+        __check_root__          # Ensure script is run as root
+        __check_proxmox__       # Ensure we are on a Proxmox node
+        __install_or_prompt__ "ipmitool"
         prompt_user_config
         create_run_script
         create_systemd_service
         enable_and_start_service
-        prompt_keep_installed_packages
+        __prompt_keep_installed_packages__
         ;;
     remove)
-        check_root
-        check_proxmox
+        __check_root__
+        __check_proxmox__
         remove_service_and_files
         ;;
     *)

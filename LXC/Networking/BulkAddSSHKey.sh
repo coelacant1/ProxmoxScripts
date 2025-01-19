@@ -17,7 +17,7 @@
 #   - This script must be run as root on a Proxmox node.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # MAIN
@@ -36,8 +36,8 @@ endCtId="$2"
 sshKey="$3"
 
 # Basic checks
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 echo "=== Starting SSH key addition for containers from \"$startCtId\" to \"$endCtId\" ==="
 echo " - SSH key to append: \"$sshKey\""

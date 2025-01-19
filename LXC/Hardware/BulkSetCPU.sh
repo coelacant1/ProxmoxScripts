@@ -19,7 +19,8 @@
 #   - 'pct' is required (part of the PVE/LXC utilities).
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
@@ -42,9 +43,9 @@ CORE_COUNT="$4"
 SOCKETS="${5:-1}"  # Default to 1 socket if not provided
 
 # --- Basic checks ----------------------------------------------------------
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 # --- Display summary -------------------------------------------------------
 echo "=== Starting CPU config update for containers from $START_CT_ID to $END_CT_ID ==="

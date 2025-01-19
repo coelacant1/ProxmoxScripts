@@ -18,28 +18,30 @@
 # directory (/etc/pve/nodes/*/qemu-server/ or /etc/pve/nodes/*/lxc/).
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Communication.sh"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Check prerequisites
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Validate input
 ###############################################################################
 BASE_VMID="$1"
 if [ -z "$BASE_VMID" ]; then
-  err "Error: No base VM ID provided. Usage: $0 <BASE_VMID>"
+  __err__ "Error: No base VM ID provided. Usage: $0 <BASE_VMID>"
   exit 1
 fi
 
 ###############################################################################
 # Determine if BASE_VMID is a QEMU VM or LXC
 ###############################################################################
-info "Checking if \"${BASE_VMID}\" is a QEMU VM or an LXC container..."
+__info__ "Checking if \"${BASE_VMID}\" is a QEMU VM or an LXC container..."
 
 # We'll search for .conf files matching BASE_VMID in qemu-server and lxc
 shopt -s nullglob
@@ -53,11 +55,11 @@ if [ ${#qemuConfigFiles[@]} -gt 0 ]; then
 elif [ ${#lxcConfigFiles[@]} -gt 0 ]; then
   VM_TYPE="lxc"
 else
-  err "Error: Could not find VM or LXC with ID \"${BASE_VMID}\" in the cluster."
+  __err__ "Error: Could not find VM or LXC with ID \"${BASE_VMID}\" in the cluster."
   exit 1
 fi
 
-ok "Detected base ${VM_TYPE^^} with ID \"${BASE_VMID}\"."
+__ok__ "Detected base ${VM_TYPE^^} with ID \"${BASE_VMID}\"."
 
 case "${VM_TYPE}" in
   "qemu") CFG_DIR="qemu-server" ;;
@@ -70,24 +72,24 @@ esac
 shopt -s nullglob
 declare -a CONF_FILE_LIST=()
 NODES=( /etc/pve/nodes/* )
-info "Scanning for config files of type \"${VM_TYPE}\" on all nodes..."
+__info__ "Scanning for config files of type \"${VM_TYPE}\" on all nodes..."
 
 for nodePath in "${NODES[@]}"; do
   [ -d "${nodePath}/${CFG_DIR}" ] || continue
   for confFile in "${nodePath}/${CFG_DIR}"/*.conf; do
     [ -e "$confFile" ] || continue
-    update "Found config file: \"${confFile}\""
+    __update__ "Found config file: \"${confFile}\""
     CONF_FILE_LIST+=( "$confFile" )
   done
 done
 shopt -u nullglob
 
-ok "Done scanning for config files."
+__ok__ "Done scanning for config files."
 
 ###############################################################################
 # Scan for child VMs or CTs
 ###############################################################################
-info "Scanning for child instances from base ID \"${BASE_VMID}\"..."
+__info__ "Scanning for child instances from base ID \"${BASE_VMID}\"..."
 
 declare -a CHILDREN=()
 currentIndex=0
@@ -98,7 +100,7 @@ for confFile in "${CONF_FILE_LIST[@]}"; do
   vmId="$(basename "$confFile" .conf)"
   nodeName="$(basename "$(dirname "$confFile")")"
 
-  update "Scanning ${VM_TYPE^^} ${currentIndex} of ${totalConfigs} \
+  __update__ "Scanning ${VM_TYPE^^} ${currentIndex} of ${totalConfigs} \
 (on \"${nodeName}\", ID: \"${vmId}\")"
 
   # Skip if this instance is the same as the base
@@ -116,11 +118,11 @@ done
 # Report results
 ###############################################################################
 if [ "${#CHILDREN[@]}" -eq 0 ]; then
-  err "No child ${VM_TYPE^^}s found for base ID \"${BASE_VMID}\"."
+  __err__ "No child ${VM_TYPE^^}s found for base ID \"${BASE_VMID}\"."
   exit 0
 fi
 
-ok "Child ${VM_TYPE^^}s derived from base ID \"${BASE_VMID}\":"
+__ok__ "Child ${VM_TYPE^^}s derived from base ID \"${BASE_VMID}\":"
 for childId in "${CHILDREN[@]}"; do
   echo "\"${childId}\""
 done

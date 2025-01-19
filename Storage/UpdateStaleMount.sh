@@ -18,11 +18,12 @@
 # Example:
 #   ./UpdateStaleMount.sh ISO_Storage /mnt/pve/ISO
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Parse and validate arguments
@@ -49,7 +50,7 @@ fi
 # Step 2: Gather cluster node IPs
 ###############################################################################
 echo "Retrieving remote node IPs..."
-readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
+readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
 if [ ${#REMOTE_NODE_IPS[@]} -eq 0 ]; then
   echo "Error: No remote node IPs found. Ensure this node is part of a cluster."
   exit 1

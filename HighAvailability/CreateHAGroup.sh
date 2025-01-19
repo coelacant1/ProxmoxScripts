@@ -18,15 +18,16 @@
 #   - The script relies on utility functions that must be sourced elsewhere.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
 ###############################################################################
 
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 if [[ "$#" -lt 2 ]]; then
     echo "Usage: ${0} <group_name> <node_name_1> [<node_name_2> ... <node_name_n>]"

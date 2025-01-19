@@ -13,21 +13,23 @@
 #   ./SetTimeServer.sh "Europe/Berlin"
 #
 # This script will:
-#   1. Check if running as root (check_root).
-#   2. Check if on a valid Proxmox node (check_proxmox).
-#   3. Verify the node is part of a cluster (check_cluster_membership).
-#   4. Gather remote node IPs from get_remote_node_ips.
+#   1. Check if running as root (__check_root__).
+#   2. Check if on a valid Proxmox node (__check_proxmox__).
+#   3. Verify the node is part of a cluster (__check_cluster_membership__).
+#   4. Gather remote node IPs from __get_remote_node_ips__.
 #   5. Set the specified timezone on each remote node and then on the local node.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Communication.sh"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Pre-flight checks
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Main
@@ -36,24 +38,24 @@ TIMEZONE="${1:-America/New_York}"
 echo "Selected timezone: \"${TIMEZONE}\""
 
 # Gather IP addresses of all remote nodes
-readarray -t REMOTE_NODES < <( get_remote_node_ips )
+readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 
 # Set timezone on each remote node
 for nodeIp in "${REMOTE_NODES[@]}"; do
-    info "Setting timezone to \"${TIMEZONE}\" on node: \"${nodeIp}\""
+    __info__ "Setting timezone to \"${TIMEZONE}\" on node: \"${nodeIp}\""
     if ssh "root@${nodeIp}" "timedatectl set-timezone \"${TIMEZONE}\""; then
-        ok " - Timezone set successfully on node: \"${nodeIp}\""
+        __ok__ " - Timezone set successfully on node: \"${nodeIp}\""
     else
-        err " - Failed to set timezone on node: \"${nodeIp}\""
+        __err__ " - Failed to set timezone on node: \"${nodeIp}\""
     fi
 done
 
 # Finally, set the timezone on the local node
-info "Setting timezone to \"${TIMEZONE}\" on local node..."
+__info__ "Setting timezone to \"${TIMEZONE}\" on local node..."
 if timedatectl set-timezone "${TIMEZONE}"; then
-    ok " - Timezone set successfully on local node"
+    __ok__ " - Timezone set successfully on local node"
 else
-    err " - Failed to set timezone on local node"
+    __err__ " - Failed to set timezone on local node"
 fi
 
 echo "Timezone setup completed for all nodes!"

@@ -21,13 +21,13 @@
 #   ./BulkChangeStorageLXC.sh 100 200 pve-node1 local-lvm local-zfs
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Check environment and parse arguments
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ $# -lt 5 ]; then
     echo "Error: Missing arguments."

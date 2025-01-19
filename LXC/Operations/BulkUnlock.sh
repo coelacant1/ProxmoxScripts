@@ -16,7 +16,7 @@
 #   - 'pct' is required (part of the PVE/LXC utilities).
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # MAIN
@@ -34,8 +34,8 @@ START_CT_ID="$1"
 END_CT_ID="$2"
 
 # --- Basic checks ----------------------------------------------------------
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # --- Display summary -------------------------------------------------------
 echo "=== Starting unlock process for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
@@ -57,4 +57,4 @@ done
 echo "=== Bulk unlock process complete! ==="
 
 # --- Prompt to remove installed packages if any were installed in this session
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

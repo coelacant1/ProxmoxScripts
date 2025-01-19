@@ -34,8 +34,8 @@ SHOW_HEADER="true"
 # IMPORT UTILITY FUNCTIONS FOR SCRIPTS AND COLOR GRADIENT LIBRARY
 ###############################################################################
 
-source "./Utilities/Utilities.sh"
-source "./Utilities/Colors.sh"
+UTILITYPATH="./Utilities"
+source "${UTILITYPATH}/Colors.sh"
 
 ###############################################################################
 # HEADER MANAGEMENT
@@ -119,9 +119,9 @@ show_ascii_art() {
     if [ "$SHOW_HEADER" != "true" ]; then
         echo "$BASIC_ASCII"
     elif ((LARGE_LENGTH <= width)); then
-        gradient_print "$LARGE_ASCII" 128 0 128 0 255 255 "█"
+        __gradient_print__ "$LARGE_ASCII" 128 0 128 0 255 255 "█"
     else
-        gradient_print "$SMALL_ASCII" 128 0 128 0 255 255
+        __gradient_print__ "$SMALL_ASCII" 128 0 128 0 255 255
     fi
 
     echo
@@ -140,7 +140,7 @@ show_top_comments() {
     clear
     show_ascii_art
 
-    line_rgb "=== Top Comments for: $(display_path "$script_path") ===" 200 200 0
+    __line_rgb__ "=== Top Comments for: $(display_path "$script_path") ===" 200 200 0
     echo
 
     local printing=false
@@ -152,7 +152,7 @@ show_top_comments() {
             continue
         fi
         if [[ "$line" =~ ^# ]]; then
-            line_rgb "$line" 0 200 0
+            __line_rgb__ "$line" 0 200 0
             printing=true
         else
             if [ "$printing" = true ]; then
@@ -162,7 +162,7 @@ show_top_comments() {
     done <"$script_path"
 
     echo
-    line_rgb "Press Enter to continue." 0 255 255
+    __line_rgb__ "Press Enter to continue." 0 255 255
     read -r
 }
 
@@ -188,14 +188,14 @@ extract_dot_slash_help_line() {
 # If the script is executable with a '--help' usage, we can try to show that.
 show_script_usage() {
     local script_path="$1"
-    line_rgb "=== Showing usage for: $(display_path "$script_path") ===" 2000 200 0
+    __line_rgb__ "=== Showing usage for: $(display_path "$script_path") ===" 2000 200 0
     if [ -x "$script_path" ]; then
         "$script_path" "$HELP_FLAG" 2>&1 || true
     else
         bash "$script_path" "$HELP_FLAG" 2>&1 || true
     fi
     echo
-    line_rgb "Press Enter to continue." 0 255 255
+    __line_rgb__ "Press Enter to continue." 0 255 255
     read -r
 }
 
@@ -223,15 +223,15 @@ run_script() {
     clear
     show_ascii_art
     if [ -n "$ds_line" ]; then
-        line_rgb "Example usage (from script comments):" 0 200 0
+        __line_rgb__ "Example usage (from script comments):" 0 200 0
         echo "  $ds_line"
         echo
     else
-        line_rgb show_top_comments "$script_path" 0 200 0
+        __line_rgb__ show_top_comments "$script_path" 0 200 0
         echo
     fi
 
-    line_rgb "=== Enter parameters for $(display_path "$script_path") (type 'c' to cancel or leave empty to run no-args):" 200 200 0
+    __line_rgb__ "=== Enter parameters for $(display_path "$script_path") (type 'c' to cancel or leave empty to run no-args):" 200 200 0
     read -r param_line
 
     if [ "$param_line" = "c" ]; then
@@ -239,7 +239,7 @@ run_script() {
     fi
 
     echo
-    line_rgb "=== Running: $(display_path "$script_path") $param_line ===" 200 200 0
+    __line_rgb__ "=== Running: $(display_path "$script_path") $param_line ===" 200 200 0
 
     IFS=' ' read -r -a param_array <<<"$param_line"
     param_line=$(echo "$param_line" | tr -d '\r')
@@ -247,7 +247,7 @@ run_script() {
     mkdir -p .log
     touch .log/out.log
 
-    export UTILITIES="$(realpath ./Utilities/Utilities.sh)"
+    export UTILITYPATH="$(realpath ./Utilities)"
 
     escaped_args=()
     for arg in "${param_array[@]}"; do
@@ -283,7 +283,7 @@ run_script() {
     fi
 
     echo
-    line_rgb "Press Enter to continue." 0 255 0
+    __line_rgb__ "Press Enter to continue." 0 255 0
     read -r
 }
 
@@ -297,7 +297,7 @@ navigate() {
         clear
         show_ascii_art
         echo -n "CURRENT DIRECTORY: "
-        line_rgb "./$(display_path "$current_dir")" 0 255 0
+        __line_rgb__ "./$(display_path "$current_dir")" 0 255 0
         echo
         echo "Folders and scripts:"
         echo "----------------------------------------"
@@ -311,7 +311,7 @@ navigate() {
         # List directories
         for d in "${dirs[@]}"; do
             local dname="$(basename "$d")"
-            line_rgb "$index) $dname/" 0 200 200
+            __line_rgb__ "$index) $dname/" 0 200 200
             menu_map[$index]="$d"
             ((index++))
         done
@@ -320,7 +320,7 @@ navigate() {
         for s in "${scripts[@]}"; do
             local sname
             sname="$(basename "$s")"
-            line_rgb "$index) $sname" 100 200 100
+            __line_rgb__ "$index) $sname" 100 200 100
             menu_map[$index]="$s"
             ((index++))
         done
@@ -350,7 +350,7 @@ navigate() {
         # 'b' => go up
         if [[ "$choice" == "b" ]]; then
             if [ "$current_dir" = "$BASE_DIR" ]; then
-                line_rgb "Exiting..." 255 0 0
+                __line_rgb__ "Exiting..." 255 0 0
                 exit 0
             else
                 echo "Going up..."
@@ -360,7 +360,7 @@ navigate() {
 
         # 'e' => exit
         if [[ "$choice" == "e" ]]; then
-            line_rgb "Exiting..." 255 0 0
+            __line_rgb__ "Exiting..." 255 0 0
             exit 0
         fi
 

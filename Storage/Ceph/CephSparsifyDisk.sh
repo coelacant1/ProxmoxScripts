@@ -23,13 +23,13 @@
 # 3. Verify you have the necessary permissions to run 'rbd sparsify' on the target pool/image.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Check prerequisites
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Validate arguments

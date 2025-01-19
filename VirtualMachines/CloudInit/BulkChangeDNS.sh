@@ -12,10 +12,10 @@
 #   ./BulkChangeDNS.sh 400 430 8.8.8.8 example.com
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument Checking

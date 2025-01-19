@@ -15,13 +15,13 @@
 #   This command sets containers with IDs from 400 to 429 to start at boot.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Dependencies and environment checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument validation

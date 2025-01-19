@@ -31,14 +31,15 @@
 
 set +e
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root              # Ensure we're running as root
-check_proxmox           # Ensure we're on a valid Proxmox node
-check_cluster_membership     # Ensure this node is part of a cluster
+__check_root__              # Ensure we're running as root
+__check_proxmox__           # Ensure we're on a valid Proxmox node
+__check_cluster_membership__     # Ensure this node is part of a cluster
 
 ###############################################################################
 # Argument Parsing
@@ -111,7 +112,6 @@ done
 echo "=== All new nodes have been processed. ==="
 echo "You can verify cluster status on each node by running: pvecm status"
 echo "Or from this cluster node, check: pvecm status"
-
 
 ###############################################################################
 # Testing status

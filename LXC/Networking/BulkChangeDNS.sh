@@ -18,7 +18,8 @@
 #   - Must be run as root on a Proxmox node.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
@@ -37,10 +38,10 @@ DNS_SERVERS="$*"
 echo "DNS servers to set: \"$DNS_SERVERS\""
 echo "=== Starting DNS update for containers in range ${START_CT_ID}..${END_CT_ID} ==="
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 # If a cluster check is required, uncomment:
-# check_cluster_membership
+# __check_cluster_membership__
 
 for (( CT_ID=START_CT_ID; CT_ID<=END_CT_ID; CT_ID++ )); do
   if pct config "$CT_ID" &>/dev/null; then

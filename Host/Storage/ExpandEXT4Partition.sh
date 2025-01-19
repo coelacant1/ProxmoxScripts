@@ -20,21 +20,21 @@
 #   ./ExpandEXT4Partition.sh /dev/sdb
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Ensure script runs as root on a Proxmox system; install needed packages.
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
-install_or_prompt "gdisk"           # Provides sgdisk
-install_or_prompt "parted"
-install_or_prompt "util-linux"      # Ensures sfdisk, partprobe, etc. are present
-install_or_prompt "e2fsprogs"       # Ensures e2fsck and resize2fs are present
-install_or_prompt "uuid-runtime"    # Ensures uuidgen is present
+__install_or_prompt__ "gdisk"           # Provides sgdisk
+__install_or_prompt__ "parted"
+__install_or_prompt__ "util-linux"      # Ensures sfdisk, partprobe, etc. are present
+__install_or_prompt__ "e2fsprogs"       # Ensures e2fsck and resize2fs are present
+__install_or_prompt__ "uuid-runtime"    # Ensures uuidgen is present
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 set -euo pipefail
 

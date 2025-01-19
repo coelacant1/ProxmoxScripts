@@ -16,15 +16,16 @@
 # The script uses 'pvesh' to fetch JSON data and parses it with 'jq'.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Pre-flight checks
 ###############################################################################
-check_root
-check_proxmox
-install_or_prompt "jq"
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__install_or_prompt__ "jq"
+__check_cluster_membership__
 
 ###############################################################################
 # Main Logic

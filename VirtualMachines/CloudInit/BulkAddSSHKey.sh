@@ -14,13 +14,13 @@
 #   ./BulkAddSSHKey.sh 400 430 "ssh-rsa AAAAB3Nza... user@host"
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Validate environment and arguments
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ "$#" -ne 3 ]; then
   echo "Error: Wrong number of arguments." >&2

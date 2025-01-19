@@ -17,13 +17,14 @@
 #     DNS servers and search domain.
 #   - Also applies the same changes to the local node.
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Check environment and validate arguments
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <dns_server_1> <dns_server_2> <search_domain>"
@@ -37,7 +38,7 @@ SEARCH_DOMAIN="$3"
 ###############################################################################
 # Get remote node IPs
 ###############################################################################
-readarray -t REMOTE_NODES < <( get_remote_node_ips )
+readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 
 ###############################################################################
 # Update DNS on each remote node

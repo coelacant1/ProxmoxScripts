@@ -20,15 +20,16 @@
 #   - The script relies on utility functions that must be sourced elsewhere.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
 ###############################################################################
 
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 if [[ "$#" -lt 2 ]]; then
     echo "Usage: \"$0\" <group_name> <resource_id_1> [<resource_id_2> ... <resource_id_n>]"
@@ -47,8 +48,8 @@ if [[ "$GROUP_NAME" =~ ^[0-9]+$ ]]; then
 fi
 
 # Gather all LXC and VM IDs across the entire cluster
-readarray -t ALL_CLUSTER_LXC < <( get_cluster_lxc )
-readarray -t ALL_CLUSTER_VMS < <( get_cluster_vms )
+readarray -t ALL_CLUSTER_LXC < <( __get_cluster_lxc__ )
+readarray -t ALL_CLUSTER_VMS < <( __get_cluster_vms__ )
 
 for resourceId in "${RESOURCE_IDS[@]}"; do
     # Determine if this resource ID belongs to an LXC or a VM

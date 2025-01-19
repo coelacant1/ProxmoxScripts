@@ -35,7 +35,7 @@
 # Dependencies beyond default Proxmox 8: None (curl is included by default).
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # pick_largest_storage_for_content: returns the storage ID with the most free space
@@ -313,8 +313,8 @@ function pick_iso_local_or_remote {
 ###############################################################################
 # Main
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # Parse optional arguments for non-interactive:
 #   -n / -N  => VM_NAME

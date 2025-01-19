@@ -14,14 +14,14 @@
 # Function Index:
 #   - updateInterfaceNames
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # PRE-CHECKS
 ###############################################################################
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # CONFIG / CONSTANTS

@@ -24,6 +24,8 @@
 #   - create_rule_once
 #
 
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 source "$UTILITIES"
 
 ###############################################################################
@@ -81,14 +83,14 @@ create_rule_once() {
 ###############################################################################
 
 # 1. Ensure we have the necessary privileges and environment
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # 2. Make sure we have the needed commands (jq is not installed by default on Proxmox)
-install_or_prompt "jq"
+__install_or_prompt__ "jq"
 
 # 3. Verify we are in a cluster
-check_cluster_membership
+__check_cluster_membership__
 
 # 4. Parse management subnet
 if [ -z "$1" ]; then
@@ -104,7 +106,7 @@ echo
 
 # 5. Gather node IPs (local + remote)
 LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
-readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
+readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
 NODE_IPS=("${LOCAL_NODE_IP}" "${REMOTE_NODE_IPS[@]}")
 
 ###############################################################################
@@ -230,7 +232,7 @@ echo "Firewall enabled for datacenter."
 
 echo "Enabling firewall for each node:"
 for ipAddr in "${NODE_IPS[@]}"; do
-  nodeName=$(get_name_from_ip "${ipAddr}")
+  nodeName=$(__get_name_from_ip__ "${ipAddr}")
   pvesh set "/nodes/${nodeName}/firewall/options" --enable 1
   echo " - Firewall enabled for node: \"${nodeName}\"."
 done

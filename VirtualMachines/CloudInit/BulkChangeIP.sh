@@ -16,10 +16,10 @@
 #   # Without specifying a gateway
 #   ./BulkChangeIP.sh 400 430 192.168.1.50/24 vmbr0
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument Parsing
@@ -40,11 +40,11 @@ IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
 ###############################################################################
 # Main Logic
 ###############################################################################
-START_IP_INT=$(ip_to_int "$START_IP")
+START_IP_INT=$(__ip_to_int__ "$START_IP")
 
 for (( VMID=START_VM_ID; VMID<=END_VM_ID; VMID++ )); do
   currentIpInt=$(( START_IP_INT + VMID - START_VM_ID ))
-  newIp="$(int_to_ip "$currentIpInt")"
+  newIp="$(__int_to_ip__ "$currentIpInt")"
 
   if qm status "$VMID" &>/dev/null; then
     echo "Updating VM ID: ${VMID} with IP: ${newIp}"

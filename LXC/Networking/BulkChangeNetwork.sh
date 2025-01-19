@@ -21,13 +21,13 @@
 #   and sets 'net0' with the new configuration if the container exists.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Ensure script is run as root and on a Proxmox node
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Argument Parsing

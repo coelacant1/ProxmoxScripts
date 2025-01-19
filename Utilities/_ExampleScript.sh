@@ -11,13 +11,13 @@
 # This script simulates a process, updates its status, and then shows success and error messages.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Initial Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Parse Arguments
@@ -31,12 +31,12 @@ fi
 ###############################################################################
 # MAIN
 ###############################################################################
-info "Simulating an error scenario..."
+__info__ "Simulating an error scenario..."
 sleep 2
-err "A simulated error has occurred!"
+__err__ "A simulated error has occurred!"
 
-info "Starting a simulated process..."
+__info__ "Starting a simulated process..."
 sleep 2
-update "Process is halfway..."
+__update__ "Process is halfway..."
 sleep 2
-ok "Process completed successfully."
+__ok__ "Process completed successfully."

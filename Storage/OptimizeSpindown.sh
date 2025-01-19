@@ -20,7 +20,7 @@
 #   ./OptimizeSpindown.sh uninstall
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Global Variables
@@ -31,7 +31,7 @@ SERVICE_FILE="/etc/systemd/system/spindown.service"
 ###############################################################################
 # Main
 ###############################################################################
-check_root  # Ensure the script is run as root
+__check_root__  # Ensure the script is run as root
 
 ###############################################################################
 # Uninstall Mode
@@ -90,13 +90,13 @@ if ! [[ "$SPINDOWN_MINUTES" =~ ^[0-9]+$ ]]; then
 fi
 
 # Install hdparm if missing
-install_or_prompt "hdparm" || {
+__install_or_prompt__ "hdparm" || {
   echo "Error: 'hdparm' is required but cannot be installed."
   exit 4
 }
 
 # Prompt whether to keep newly installed packages at the end
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Convert Minutes to hdparm -S Value

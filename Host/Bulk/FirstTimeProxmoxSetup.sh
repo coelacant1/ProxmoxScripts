@@ -26,14 +26,15 @@
 #   - disable_subscription_nag
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ceph_version="ceph-squid"
 
@@ -102,7 +103,7 @@ disable_subscription_nag() {
 # Main Script Logic
 ###############################################################################
 echo "Gathering remote node IPs..."
-readarray -t REMOTE_NODES < <( get_remote_node_ips )
+readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 
 if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
     echo " - No remote nodes detected; this might be a single-node setup."
@@ -127,7 +128,7 @@ echo "Proxmox first-time setup completed for all reachable nodes!"
 ###############################################################################
 # Prompt to keep or remove packages installed during this session
 ###############################################################################
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Testing status

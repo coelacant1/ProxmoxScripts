@@ -12,23 +12,24 @@
 #   ./UpdateAll.sh
 #
 # Description:
-#   1. Checks if this script is run as root (check_root).
-#   2. Verifies this node is a Proxmox node (check_proxmox).
-#   3. Installs 'ssh' if missing (install_or_prompt "ssh").
-#   4. Ensures the node is part of a Proxmox cluster (check_cluster_membership).
+#   1. Checks if this script is run as root (__check_root__).
+#   2. Verifies this node is a Proxmox node (__check_proxmox__).
+#   3. Installs 'ssh' if missing (__install_or_prompt__ "ssh").
+#   4. Ensures the node is part of a Proxmox cluster (__check_cluster_membership__).
 #   5. Finds the local node IP and remote node IPs.
 #   6. Iterates over all nodes (local + remote), enumerates their LXC containers,
 #      and applies package updates inside each container.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks via Utilities
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Gather Node IP Addresses
@@ -36,7 +37,7 @@ check_cluster_membership
 LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
 
 # Gather remote node IPs (excludes the local node)
-readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
+readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
 
 # Combine local + remote IPs
 ALL_NODE_IPS=("$LOCAL_NODE_IP" "${REMOTE_NODE_IPS[@]}")

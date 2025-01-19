@@ -13,13 +13,13 @@
 #   This will delete CTs 200, 201, 202, 203, 204
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Input Validation

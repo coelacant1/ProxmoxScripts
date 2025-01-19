@@ -23,8 +23,8 @@
 #   ./BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 # Without specifying a gateway or pool
 #
 # Function Index:
-#   - ip_to_int
-#   - int_to_ip
+#   - __ip_to_int__
+#   - __int_to_ip__
 #
 
 # Check if the minimum required parameters are provided
@@ -47,21 +47,21 @@ POOL_NAME=${8:-}  # Optional pool name, default to an empty string if not provid
 IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
 
 # Convert IP address to an integer
-ip_to_int() {
+__ip_to_int__() {
     local a b c d
     IFS=. read -r a b c d <<< "$1"
     echo "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
 }
 
 # Convert integer to IP address
-int_to_ip() {
+__int_to_ip__() {
     local ip
     ip=$(printf "%d.%d.%d.%d" "$((($1 >> 24) & 255))" "$((($1 >> 16) & 255))" "$((($1 >> 8) & 255))" "$((($1 & 255))")
     echo "$ip"
 }
 
 # Get the starting IP as an integer
-START_IP_INT=$(ip_to_int "$START_IP")
+START_IP_INT=$(__ip_to_int__ "$START_IP")
 
 # Loop to create clones
 for (( i=0; i<$NUM_VMS; i++ )); do
@@ -71,7 +71,7 @@ for (( i=0; i<$NUM_VMS; i++ )); do
 
     # Increment the IP address
     CURRENT_IP_INT=$((START_IP_INT + i))
-    NEW_IP=$(int_to_ip "$CURRENT_IP_INT")
+    NEW_IP=$(__int_to_ip__ "$CURRENT_IP_INT")
 
     # Clone the VM and set the constructed name
     qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME

@@ -1,44 +1,48 @@
 #!/bin/bash
 #
-# Prompts.sh
+# Queries.sh
 #
 # This script provides functions for prompting users, querying node/cluster
 # information, and other utility tasks on Proxmox or Debian systems.
 #
 # Usage:
-#   source "./Prompts.sh"
+#   source "./Queries.sh"
 #
 # Generally, this script is meant to be sourced by other scripts rather than
 # run directly. For example:
-#   source ./Prompts.sh
-#   readarray -t REMOTE_NODES < <( get_remote_node_ips )
+#   source ./Queries.sh
+#   readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 #
 # Function Index:
-#   - get_remote_node_ips
-#   - check_cluster_membership
-#   - get_number_of_cluster_nodes
-#   - init_node_mappings
-#   - get_ip_from_name
-#   - get_name_from_ip
-#   - get_cluster_lxc
-#   - get_server_lxc
-#   - get_cluster_vms
-#   - get_server_vms
+#   - __get_remote_node_ips__
+#   - __check_cluster_membership__
+#   - __get_number_of_cluster_nodes__
+#   - __init_node_mappings__
+#   - __get_ip_from_name__
+#   - __get_name_from_ip__
+#   - __get_cluster_lxc__
+#   - __get_server_lxc__
+#   - __get_cluster_vms__
+#   - __get_server_vms__
 #
+
+source "${UTILITYPATH}/Prompts.sh"
+
+__install_or_prompt__ "sshpass"
 
 ###############################################################################
 # Cluster/Node Functions
 ###############################################################################
 
 # --- Get Remote Node IPs ---------------------------------------------------
-# @function get_remote_node_ips
+# @function __get_remote_node_ips__
 # @description Gathers IPs for all cluster nodes (excluding local) from 'pvecm status'.
 #   Outputs each IP on a new line, which can be captured into an array with readarray.
 # @usage
-#   readarray -t REMOTE_NODES < <( get_remote_node_ips )
+#   readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 # @return
 #   Prints each remote node IP on a separate line to stdout.
-get_remote_node_ips() {
+__get_remote_node_ips__() {
     local -a remote_nodes=()
     while IFS= read -r ip; do
         remote_nodes+=("$ip")
@@ -50,14 +54,14 @@ get_remote_node_ips() {
 }
 
 # --- Check Cluster Membership ----------------------------------------------
-# @function check_cluster_membership
+# @function __check_cluster_membership__
 # @description Checks if the node is recognized as part of a cluster by examining
 #   'pvecm status'. If no cluster name is found, it exits with an error.
 # @usage
-#   check_cluster_membership
+#   __check_cluster_membership__
 # @return
 #   Exits 3 if the node is not in a cluster (according to pvecm).
-check_cluster_membership() {
+__check_cluster_membership__() {
     local cluster_name
     cluster_name=$(pvecm status 2>/dev/null | awk -F': ' '/^Name:/ {print $2}' | xargs)
 
@@ -70,14 +74,14 @@ check_cluster_membership() {
 }
 
 # --- Get Number of Cluster Nodes -------------------------------------------
-# @function get_number_of_cluster_nodes
+# @function __get_number_of_cluster_nodes__
 # @description Returns the total number of nodes in the cluster by counting
 #   lines matching a numeric ID from `pvecm nodes`.
 # @usage
-#   local num_nodes=$(get_number_of_cluster_nodes)
+#   local num_nodes=$(__get_number_of_cluster_nodes__)
 # @return
 #   Prints the count of cluster nodes to stdout.
-get_number_of_cluster_nodes() {
+__get_number_of_cluster_nodes__() {
     echo "$(pvecm nodes | awk '/^[[:space:]]*[0-9]/ {count++} END {print count}')"
 }
 
@@ -93,7 +97,7 @@ declare -A IP_TO_NAME=()
 MAPPINGS_INITIALIZED=0
 
 # --- Initialize Node Mappings ----------------------------------------------
-# @function init_node_mappings
+# @function __init_node_mappings__
 # @description Parses `pvecm status` and `pvecm nodes` to build internal maps:
 #   NODEID_TO_IP[nodeid]   -> IP
 #   NODEID_TO_NAME[nodeid] -> Name
@@ -101,10 +105,10 @@ MAPPINGS_INITIALIZED=0
 #   NAME_TO_IP[name]       -> IP
 #   IP_TO_NAME[ip]         -> name
 # @usage
-#   init_node_mappings
+#   __init_node_mappings__
 # @return
 #   Populates the associative arrays above with node info.
-init_node_mappings() {
+__init_node_mappings__() {
     NODEID_TO_IP=()
     NODEID_TO_NAME=()
     NAME_TO_IP=()
@@ -142,23 +146,23 @@ init_node_mappings() {
 }
 
 # --- Get IP from Node Name -------------------------------------------------
-# @function get_ip_from_name
+# @function __get_ip_from_name__
 # @description Given a node’s name (e.g., "IHK01"), prints its link0 IP address.
 #   Exits if not found.
 # @usage
-#   get_ip_from_name "IHK03"
+#   __get_ip_from_name__ "IHK03"
 # @param 1 The node name
 # @return
 #   Prints the IP to stdout or exits 1 if not found.
-get_ip_from_name() {
+__get_ip_from_name__() {
     local node_name="$1"
     if [[ -z "$node_name" ]]; then
-        echo "Error: get_ip_from_name requires a node name argument." >&2
+        echo "Error: __get_ip_from_name__ requires a node name argument." >&2
         return 1
     fi
 
     if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
-        init_node_mappings
+        __init_node_mappings__
     fi
 
     local ip="${NAME_TO_IP[$node_name]}"
@@ -171,23 +175,23 @@ get_ip_from_name() {
 }
 
 # --- Get Name from Node IP -------------------------------------------------
-# @function get_name_from_ip
+# @function __get_name_from_ip__
 # @description Given a node’s link0 IP (e.g., "172.20.83.23"), prints its name.
 #   Exits if not found.
 # @usage
-#   get_name_from_ip "172.20.83.23"
+#   __get_name_from_ip__ "172.20.83.23"
 # @param 1 The node IP
 # @return
 #   Prints the node name to stdout or exits 1 if not found.
-get_name_from_ip() {
+__get_name_from_ip__() {
     local node_ip="$1"
     if [[ -z "$node_ip" ]]; then
-        echo "Error: get_name_from_ip requires an IP argument." >&2
+        echo "Error: __get_name_from_ip__ requires an IP argument." >&2
         return 1
     fi
 
     if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
-        init_node_mappings
+        __init_node_mappings__
     fi
 
     local name="${IP_TO_NAME[$node_ip]}"
@@ -204,36 +208,36 @@ get_name_from_ip() {
 ###############################################################################
 
 # --- Get All LXC Containers in Cluster --------------------------------------
-# @function get_cluster_lxc
+# @function __get_cluster_lxc__
 # @description Retrieves the VMIDs for all LXC containers across the entire cluster.
 #   Outputs each LXC VMID on its own line.
 # @usage
-#   readarray -t ALL_CLUSTER_LXC < <( get_cluster_lxc )
+#   readarray -t ALL_CLUSTER_LXC < <( __get_cluster_lxc__ )
 # @return
 #   Prints each LXC VMID on a separate line.
-get_cluster_lxc() {
-    install_or_prompt "jq"
+__get_cluster_lxc__() {
+    __install_or_prompt__ "jq"
     pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r '.[] | select(.type=="lxc") | .vmid'
 }
 
 # --- Get All LXC Containers on a Server ------------------------------------
-# @function get_server_lxc
+# @function __get_server_lxc__
 # @description Retrieves the VMIDs for all LXC containers on a specific server.
 #   The server can be specified by hostname, IP address, or "local".
 # @usage
-#   readarray -t NODE_LXC < <( get_server_lxc "local" )
+#   readarray -t NODE_LXC < <( __get_server_lxc__ "local" )
 # @param 1 Hostname/IP/"local" specifying the server.
 # @return
 #   Prints each LXC VMID on its own line.
-get_server_lxc() {
+__get_server_lxc__() {
     local nodeSpec="$1"
     local nodeName
 
     if [[ "$nodeSpec" == "local" ]]; then
         nodeName="$(hostname -s)"
     elif [[ "$nodeSpec" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        nodeName="$(get_name_from_ip "$nodeSpec")"
+        nodeName="$(__get_name_from_ip__ "$nodeSpec")"
     else
         nodeName="$nodeSpec"
     fi
@@ -249,36 +253,36 @@ get_server_lxc() {
 }
 
 # --- Get All VMs in Cluster ------------------------------------------------
-# @function get_cluster_vms
+# @function __get_cluster_vms__
 # @description Retrieves the VMIDs for all VMs (QEMU) across the entire cluster.
 #   Outputs each VM ID on its own line.
 # @usage
-#   readarray -t ALL_CLUSTER_VMS < <( get_cluster_vms )
+#   readarray -t ALL_CLUSTER_VMS < <( __get_cluster_vms__ )
 # @return
 #   Prints each QEMU VMID on a separate line.
-get_cluster_vms() {
-    install_or_prompt "jq"
+__get_cluster_vms__() {
+    __install_or_prompt__ "jq"
     pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r '.[] | select(.type=="qemu") | .vmid'
 }
 
 # --- Get All VMs on a Server -----------------------------------------------
-# @function get_server_vms
+# @function __get_server_vms__
 # @description Retrieves the VMIDs for all VMs (QEMU) on a specific server.
 #   The server can be specified by hostname, IP address, or "local".
 # @usage
-#   readarray -t NODE_VMS < <( get_server_vms "local" )
+#   readarray -t NODE_VMS < <( __get_server_vms__ "local" )
 # @param 1 Hostname/IP/"local" specifying the server.
 # @return
 #   Prints each QEMU VMID on its own line.
-get_server_vms() {
+__get_server_vms__() {
     local nodeSpec="$1"
     local nodeName
 
     if [[ "$nodeSpec" == "local" ]]; then
         nodeName="$(hostname -s)"
     elif [[ "$nodeSpec" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        nodeName="$(get_name_from_ip "$nodeSpec")"
+        nodeName="$(__get_name_from_ip__ "$nodeSpec")"
     else
         nodeName="$nodeSpec"
     fi

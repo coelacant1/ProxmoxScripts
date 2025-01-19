@@ -6,3 +6,6 @@
 
 # CSV files LF
 *.csv text eol=lf
+
+# MD files LF
+*.md text eol=lf

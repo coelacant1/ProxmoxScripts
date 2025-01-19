@@ -14,13 +14,13 @@
 #   - This process is DESTRUCTIVE and will remove cluster configuration.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root        # Ensure script is run as root
-check_proxmox     # Ensure this is a Proxmox node
+__check_root__        # Ensure script is run as root
+__check_proxmox__     # Ensure this is a Proxmox node
 
 ###############################################################################
 # Main Script Logic
@@ -33,7 +33,7 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
   exit 1
 fi
 
-nodeCount="$(get_number_of_cluster_nodes)"
+nodeCount="$(__get_number_of_cluster_nodes__)"
 if [[ "$nodeCount" -gt 1 ]]; then
   echo "Error: This script is for a single-node cluster only."
   echo "Current cluster shows \"$nodeCount\" nodes. Remove other nodes first, then re-run."

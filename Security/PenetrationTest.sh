@@ -25,13 +25,14 @@
 # Function Index:
 #   - usage
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Usage
@@ -50,7 +51,7 @@ usage() {
 ###############################################################################
 # Main Script Logic
 ###############################################################################
-install_or_prompt "nmap"
+__install_or_prompt__ "nmap"
 
 if [[ $# -lt 1 ]]; then
   usage
@@ -58,7 +59,7 @@ fi
 
 if [[ "$1" == "all" ]]; then
   echo "[*] Discovering all remote nodes in the Proxmox cluster..."
-  readarray -t REMOTE_NODES < <( get_remote_node_ips )
+  readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
   if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
     echo "Error: No remote nodes discovered. Are you sure this node is part of a cluster?"
     exit 2
@@ -79,7 +80,7 @@ for host in "${TARGETS[@]}"; do
   echo
 done
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Testing status

@@ -19,7 +19,8 @@
 #   - You must run this script as root on a Proxmox node that is part of the same cluster as <node_name>.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # MAIN
@@ -35,19 +36,19 @@ fi
 targetNodeName="$1"
 
 # 2. Basic checks
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 # 3. Ensure 'jq' is installed (not included by default in Proxmox 8)
-install_or_prompt "jq"
+__install_or_prompt__ "jq"
 
 echo "=== Disabling HA on node: \"$targetNodeName\" ==="
 
 # 4. Convert node name to IP for SSH calls
 echo "=== Resolving IP address for node \"$targetNodeName\" ==="
 declare nodeIp
-if ! nodeIp="$(get_ip_from_name "$targetNodeName")"; then
+if ! nodeIp="$(__get_ip_from_name__ "$targetNodeName")"; then
   echo "Error: Could not resolve node name \"$targetNodeName\" to an IP."
   exit 1
 fi
@@ -93,4 +94,4 @@ echo "You can verify via: ssh root@${nodeIp} 'systemctl status pve-ha-crm pve-ha
 echo
 
 # 7. Prompt to remove any packages installed during this session
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

@@ -56,7 +56,7 @@ def naive_sh_check(file_path):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python check_sh.py <folder>")
+        print("Usage: python ShellCheck.py <folder>")
         sys.exit(1)
 
     base_dir = sys.argv[1]

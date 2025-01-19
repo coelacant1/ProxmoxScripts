@@ -22,13 +22,13 @@
 #   ./BulkResizeStorage.sh 100 105 rootfs +5G
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Usage Check

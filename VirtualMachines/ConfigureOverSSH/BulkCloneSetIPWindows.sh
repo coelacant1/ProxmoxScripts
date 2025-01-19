@@ -43,13 +43,14 @@
 #   ./BulkCloneSetIPWindows.sh 192.168.10.50 192.168.10.100/24 192.168.10.1 3 800 810
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Conversion.sh"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Check prerequisites and parse arguments
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ $# -lt 6 ]; then
   echo "Error: Missing arguments."
@@ -68,14 +69,14 @@ BASE_VM_ID="$6"
 IFS='/' read -r startIpAddrOnly startMask <<< "$START_IP_CIDR"
 
 # Convert the starting IP to an integer for incrementing
-ipInt="$( ip_to_int "$startIpAddrOnly" )"
+ipInt="$( __ip_to_int__ "$startIpAddrOnly" )"
 
 ###############################################################################
 # Main logic
 ###############################################################################
 for (( i=0; i<INSTANCE_COUNT; i++ )); do
   currentVmId=$(( BASE_VM_ID + i ))
-  currentIp="$( int_to_ip "$ipInt" )"
+  currentIp="$( __int_to_ip__ "$ipInt" )"
   currentIpCidr="$currentIp/$startMask"
 
   echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."

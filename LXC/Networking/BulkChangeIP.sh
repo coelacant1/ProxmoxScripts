@@ -19,10 +19,11 @@
 # Notes:
 #   - Must be run as root on a Proxmox node.
 #   - 'pct' is part of the standard Proxmox LXC utilities.
-#   - IP increment logic uses the ip_to_int and int_to_ip functions from the sourced Utilities.
+#   - IP increment logic uses the __ip_to_int__ and __int_to_ip__ functions from the sourced Utilities.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Conversion.sh"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # MAIN
@@ -43,8 +44,8 @@ BRIDGE="$4"
 GATEWAY="${5:-}"
 
 # Ensure we are root and on a Proxmox node
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # Split IP and subnet
 IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
@@ -54,7 +55,7 @@ if [[ -z "$START_IP" || -z "$SUBNET_MASK" ]]; then
 fi
 
 # Convert start IP to integer
-START_IP_INT="$(ip_to_int "$START_IP")"
+START_IP_INT="$(__ip_to_int__ "$START_IP")"
 
 # Summary
 echo "=== Starting IP update for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
@@ -69,7 +70,7 @@ fi
 for (( ctId=START_CT_ID; ctId<=END_CT_ID; ctId++ )); do
   offset=$(( ctId - START_CT_ID ))
   currentIpInt=$(( START_IP_INT + offset ))
-  newIp="$(int_to_ip "$currentIpInt")"
+  newIp="$(__int_to_ip__ "$currentIpInt")"
 
   if pct config "$ctId" &>/dev/null; then
     echo "Updating IP for container \"$ctId\" to \"$newIp/$SUBNET_MASK\" on \"$BRIDGE\"..."

@@ -18,13 +18,13 @@
 #   ./BulkMoveDisk.sh 100 105 rootfs local-zfs
 #   This will move the 'rootfs' volume of LXCs 100..105 to 'local-zfs'.
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Initial Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Parse Arguments

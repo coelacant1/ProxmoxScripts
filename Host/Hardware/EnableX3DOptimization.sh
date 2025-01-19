@@ -23,7 +23,7 @@
 #       instructions to make those changes manually.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 
 ###############################################################################
@@ -31,7 +31,7 @@ source "$UTILITIES"
 ###############################################################################
 
 # Check if script is run as root
-check_root
+__check_root__
 
 # Gentle check for Proxmox environment (do not exit if not found)
 if ! command -v pveversion &>/dev/null; then

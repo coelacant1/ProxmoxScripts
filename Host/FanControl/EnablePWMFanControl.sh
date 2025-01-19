@@ -31,13 +31,13 @@
 #   - uninstall_fancontrol
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Helper Functions
@@ -59,7 +59,7 @@ install_fancontrol() {
   local minPwm="$3"
   local maxPwm="$4"
 
-  install_or_prompt "fancontrol"
+  __install_or_prompt__ "fancontrol"
 
   local hwmonDevice
   hwmonDevice="$(ls /sys/class/hwmon/ | head -n1)"
@@ -100,7 +100,7 @@ EOF
   systemctl restart fancontrol
 
   echo "fancontrol installation and configuration complete."
-  prompt_keep_installed_packages
+  __prompt_keep_installed_packages__
 }
 
 uninstall_fancontrol() {

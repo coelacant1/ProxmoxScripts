@@ -21,14 +21,14 @@
 #   A reboot of the Proxmox host might be required in some cases.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
-install_or_prompt "lscpu"
+__check_root__
+__check_proxmox__
+__install_or_prompt__ "lscpu"
 
 CPU_VENDOR="$(lscpu | awk -F: '/Vendor ID:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')"
 if [[ -z "${CPU_VENDOR}" ]]; then
@@ -88,4 +88,4 @@ fi
 echo "Done. If nested virtualization is still not working, please reboot the node."
 echo "Also, ensure your VMs' CPU type is set to 'host' for nested guests."
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

@@ -22,15 +22,15 @@
 #     specific PCI device IDs as needed.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
-install_or_prompt "update-grub"  # Provided by grub-common
-install_or_prompt "update-initramfs"  # Provided by initramfs-tools
+__check_root__
+__check_proxmox__
+__install_or_prompt__ "update-grub"  # Provided by grub-common
+__install_or_prompt__ "update-initramfs"  # Provided by initramfs-tools
 
 ###############################################################################
 # Detect CPU Vendor
@@ -96,4 +96,4 @@ echo "If you chose to blacklist nouveau, that change has been applied."
 echo "Please reboot the system for changes to take effect."
 echo "-----------------------------------------------------------------------"
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

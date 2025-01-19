@@ -12,10 +12,10 @@
 #   # To fix dpkg locks on the local Proxmox node
 #   ./FixDpkgLock.sh
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
-check_root          # Ensure script is run as root
-check_proxmox       # Ensure we're on a Proxmox node
+__check_root__          # Ensure script is run as root
+__check_proxmox__       # Ensure we're on a Proxmox node
 
 ###############################################################################
 # Remove stale locks

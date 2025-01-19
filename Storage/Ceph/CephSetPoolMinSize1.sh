@@ -12,13 +12,13 @@
 #   # Sets the min_size to 1 for the 'mypool' storage pool
 #   ./CephSetPoolMinSize1.sh mypool
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Main
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ -z "$1" ]; then
   echo "Error: No pool name provided."

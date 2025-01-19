@@ -29,19 +29,19 @@
 #   # to occupy the freed space.
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # MAIN
 ###############################################################################
-check_root         # Ensure script is run as root
-check_proxmox      # Ensure environment is a Proxmox node
+__check_root__         # Ensure script is run as root
+__check_proxmox__      # Ensure environment is a Proxmox node
 
 # Ensure required commands are installed (if not, user is prompted to install)
-install_or_prompt "lvremove"
-install_or_prompt "lvextend"
-install_or_prompt "e2fsprogs"
-install_or_prompt "xfsprogs"
+__install_or_prompt__ "lvremove"
+__install_or_prompt__ "lvextend"
+__install_or_prompt__ "e2fsprogs"
+__install_or_prompt__ "xfsprogs"
 
 echo "WARNING: This script will remove 'local-lvm' (pve/data) and all data on it."
 echo "Ensure you have backups for any VM/container volumes stored on 'local-lvm'."
@@ -66,7 +66,7 @@ if lvdisplay /dev/pve/root &>/dev/null; then
   echo " - 'pve/root' has been extended."
 else
   echo "Warning: 'pve/root' not found. Make sure your system uses the expected LVM layout."
-  prompt_keep_installed_packages
+  __prompt_keep_installed_packages__
   exit 0
 fi
 
@@ -91,7 +91,7 @@ echo "The 'local-lvm' entry may still appear under Datacenter -> Storage, but it
 echo "Verify by running:  vgs ; lvs ; df -h"
 echo
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Testing status

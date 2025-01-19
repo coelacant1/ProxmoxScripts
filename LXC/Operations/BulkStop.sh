@@ -13,13 +13,13 @@
 #   This will stop containers 200, 201, and 202
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Initialization
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [ "$#" -ne 2 ]; then
   echo "Usage: $0 <START_ID> <END_ID>"

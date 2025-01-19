@@ -17,13 +17,13 @@
 #   pvecm add <mon-ip-of-this-node>
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Checks and Setup
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 if [[ $# -lt 2 ]]; then
   echo "Error: Missing arguments."

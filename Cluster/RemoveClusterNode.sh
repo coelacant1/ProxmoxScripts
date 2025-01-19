@@ -22,19 +22,21 @@
 #   - usage
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Communication.sh"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # 'jq' is not installed by default on Proxmox 8; prompt user to install if missing.
-install_or_prompt "jq"
+__install_or_prompt__ "jq"
 
 # Verify this node is part of a cluster.
-check_cluster_membership
+__check_cluster_membership__
 
 ###############################################################################
 # Usage Function
@@ -85,7 +87,7 @@ fi
 ###############################################################################
 echo "=== Removing node \"${NODE_NAME}\" from the cluster ==="
 
-HOST=$(get_ip_from_name ${NODE_NAME}) || true
+HOST=$(__get_ip_from_name__ ${NODE_NAME}) || true
 
 (ssh -t -o StrictHostKeyChecking=no root@${HOST} \
 "systemctl stop pve-cluster corosync \
@@ -102,40 +104,40 @@ if ! pvecm delnode "${NODE_NAME}"; then
   echo "Continuing with SSH cleanup..."
 fi
 
-info "Deleting node..."
-node_count="$(get_number_of_cluster_nodes)"
+__info__ "Deleting node..."
+node_count="$(__get_number_of_cluster_nodes__)"
 if  [ "$node_count" -le 2 ]; then
   sleep 15
 
-  update "Restarting Corosync to ensure updated config is reloaded..."
+  __update__ "Restarting Corosync to ensure updated config is reloaded..."
   systemctl restart corosync
   sleep 2
-  update "Setting expected nodes to 1..."
+  __update__ "Setting expected nodes to 1..."
   pvecm expected 1
   sleep 2
   udpate "Attempting delete on ${NODE_NAME}, will run until completed, use CTRL+C to cancel..."
   while ! pvecm delnode "${NODE_NAME}"; do
-    update "pvecm delnode failed. Retrying in 5 seconds..."
+    __update__ "pvecm delnode failed. Retrying in 5 seconds..."
     sleep 5
   done
 fi
-ok "${NODE_NAME} removed from cluster"
+__ok__ "${NODE_NAME} removed from cluster"
 
 # 2) Clean SSH references on remaining cluster nodes
 ONLINE_NODES=$(pvecm nodes | awk '!/Name/ {print $3}')
-info "Cleaning SSH references on other cluster nodes..."
+__info__ "Cleaning SSH references on other cluster nodes..."
 for host in ${ONLINE_NODES}; do
   # Skip if it's the removed node or blank
   [[ "${host}" == "${NODE_NAME}" ]] && continue
   [[ -z "${host}" ]] && continue
 
-  update ">>> On node \"${host}\"..."
+  __update__ ">>> On node \"${host}\"..."
   ssh "root@${host}" "ssh-keygen -R '${NODE_NAME}' >/dev/null 2>&1 || true"
   ssh "root@${host}" "ssh-keygen -R '${NODE_NAME}.local' >/dev/null 2>&1 || true"
   ssh "root@${host}" "sed -i '/${NODE_NAME}/d' /etc/ssh/ssh_known_hosts 2>/dev/null || true"
   ssh "root@${host}" "rm -rf /etc/pve/nodes/${NODE_NAME} 2>/dev/null || true"
 done
-ok "Cluster host SSH references updated."
+__ok__ "Cluster host SSH references updated."
 
 echo
 echo "=== Done ==="
@@ -146,7 +148,7 @@ echo "You may now safely re-add a new server with the same name (\"${NODE_NAME}\
 
 
 # At script exit, optionally remove newly installed packages.
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Testing status

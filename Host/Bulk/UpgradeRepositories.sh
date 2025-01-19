@@ -51,15 +51,16 @@
 #   - ensure_latest_repo
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks via Utilities
 ###############################################################################
-check_root
-check_proxmox
-install_or_prompt "curl"
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__install_or_prompt__ "curl"
+__check_cluster_membership__
 
 ###############################################################################
 # Argument Parsing
@@ -191,4 +192,4 @@ fi
 echo "Repository check, upgrade, and potential distribution switch are complete."
 echo "Script finished successfully."
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

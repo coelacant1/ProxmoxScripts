@@ -26,7 +26,7 @@
 #   - check_system_log_errors
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # FUNCTIONS
@@ -183,13 +183,13 @@ check_system_log_errors() {
 echo "Starting system error check..."
 
 # Ensure this is a Proxmox node, ensure script is run as root
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 # Prompt to install packages not in a default Proxmox 8 install
 # If user declines, relevant checks will be skipped
-install_or_prompt "zfsutils-linux"
-install_or_prompt "lvm2"
+__install_or_prompt__ "zfsutils-linux"
+__install_or_prompt__ "lvm2"
 
 # Run checks
 check_storage_errors
@@ -201,7 +201,7 @@ check_system_log_errors
 echo "System error check completed!"
 
 # Prompt to remove installed packages if any were installed during this session
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__
 
 ###############################################################################
 # Testing status

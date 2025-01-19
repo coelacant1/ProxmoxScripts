@@ -13,7 +13,7 @@
 #   1. Checks root privileges and confirms this is a Proxmox node.
 #   2. Prompts to install 'ssh' if not already installed (though it's usually present on Proxmox).
 #   3. Ensures the node is part of a cluster.
-#   4. Gathers remote cluster node IPs using get_remote_node_ips (from our utility functions).
+#   4. Gathers remote cluster node IPs using __get_remote_node_ips__ (from our utility functions).
 #   5. Updates the local node and all remote nodes in the cluster.
 #   6. Prompts whether to keep or remove any newly installed packages.
 #
@@ -21,20 +21,22 @@
 #   ./UpgradeAllServers.sh
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Communication.sh"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Preliminary Checks
 ###############################################################################
-check_root
-check_proxmox
-check_cluster_membership
+__check_root__
+__check_proxmox__
+__check_cluster_membership__
 
 ###############################################################################
 # Gather Node Information
 ###############################################################################
 LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
-readarray -t REMOTE_NODE_IPS < <( get_remote_node_ips )
+readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
 ALL_NODE_IPS=("$LOCAL_NODE_IP" "${REMOTE_NODE_IPS[@]}")
 
 ###############################################################################
@@ -44,16 +46,16 @@ echo "Updating all servers in the Proxmox cluster..."
 
 for nodeIp in "${ALL_NODE_IPS[@]}"; do
   echo "------------------------------------------------"
-  info "Updating node at IP: \"${nodeIp}\""
+  __info__ "Updating node at IP: \"${nodeIp}\""
 
   if [[ "${nodeIp}" == "${LOCAL_NODE_IP}" ]]; then
     apt-get update && apt-get -y upgrade
-    ok "Local node update completed."
+    __ok__ "Local node update completed."
   else
     if ssh "root@${nodeIp}" "apt-get update && apt-get -y upgrade"; then
-      ok "Remote node \"${nodeIp}\" update completed."
+      __ok__ "Remote node \"${nodeIp}\" update completed."
     else
-      err "Failed to update node \"${nodeIp}\"."
+      __err__ "Failed to update node \"${nodeIp}\"."
     fi
   fi
 done

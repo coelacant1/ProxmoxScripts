@@ -17,13 +17,13 @@
 #   # Update VMs 400 through 430 with a new password only, preserving the existing username
 #   ./BulkChangeUserPass.sh 400 430 myNewPassword
 #
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Validate environment
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Assigning input arguments

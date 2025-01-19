@@ -16,6 +16,12 @@
 #   ./UpdateVMNotesWithIP.sh
 #
 
+source "${UTILITYPATH}/Prompts.sh"
+
+__check_root__
+__check_proxmox__
+__install_or_prompt__ "arp-scan"
+
 # Loop through all QEMU VMs in the cluster
 VM_IDS=$(qm list | awk 'NR>1 {print $1}')
 
@@ -78,7 +84,9 @@ for VMID in $VM_IDS; do
     else
         # Append the new line
         # Use '\n' to add a new line in the notes
-        UPDATED_NOTES="${EXISTING_NOTES}\nIP Address: $IP_ADDRESS"
+        UPDATED_NOTES="${EXISTING_NOTES}
+        
+IP Address: $IP_ADDRESS"
     fi
 
     # Update the VM notes

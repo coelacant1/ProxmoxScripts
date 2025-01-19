@@ -27,18 +27,18 @@
 #   - insert_sorted_config
 #
 
-source "$UTILITIES"
+source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
-check_root
-check_proxmox
+__check_root__
+__check_proxmox__
 
 ###############################################################################
 # Dependency Checks (if needed for bonding)
 ###############################################################################
-install_or_prompt "ifenslave"
+__install_or_prompt__ "ifenslave"
 
 ###############################################################################
 # Usage Check
@@ -114,4 +114,4 @@ insert_sorted_config "$VMBR_NAME" "$vmbrConfig" "vmbr"
 echo "Configuration potentially added to \"$CONFIG_FILE\". Please review for accuracy."
 echo "Manually restart networking or the interfaces to apply changes."
 
-prompt_keep_installed_packages
+__prompt_keep_installed_packages__

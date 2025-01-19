@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 #
-# TestColorScript.sh
+# _TestColors.sh
+#
+# Usage:
+# ./_TestColors.sh
 #
 # Demo script to test Colors.sh functions
+#
 
-# Source our color library
-source "./Colors.sh"
+if [ -z "${UTILITYPATH}" ]; then
+  # UTILITYPATH is unset or empty
+  export UTILITYPATH="$(pwd)"
+fi
 
-# 1) Test gradient_print
+source "${UTILITYPATH}/Colors.sh"
+
+# 1) Test __gradient_print__
 echo "===== Gradient Print Test ====="
 SMALL_ASCII=$(cat <<'EOF'
 --------------------------------------------
@@ -26,10 +34,10 @@ EOF
 )
 
 # Gradient from Purple(128,0,128) to Cyan(0,255,255)
-gradient_print "$SMALL_ASCII" 38 2 128 0 255 255
+__gradient_print__ "$SMALL_ASCII" 38 2 128 0 255 255
 
 
-# 2) Test exclude gradient_print
+# 2) Test exclude __gradient_print__
 LARGE_ASCII=$(cat <<'EOF'
 -----------------------------------------------------------------------------------------
                                                                                          
@@ -54,17 +62,17 @@ LARGE_ASCII=$(cat <<'EOF'
 EOF
 )
 
-gradient_print "$LARGE_ASCII" 38 2 128 0 255 255 "█"
+__gradient_print__ "$LARGE_ASCII" 38 2 128 0 255 255 "█"
 
 echo "=== Testing single_line_solid ==="
-line_rgb "Hello from a solid color line" 255 128 0   # orange
+__line_rgb__ "Hello from a solid color line" 255 128 0   # orange
 
 echo
-echo "=== Testing single_line_gradient (left to right) ==="
-line_gradient "Left-to-right gradient" 255 0 0 0 255 0  # red => green
+echo "=== Testing single___line_gradient__ (left to right) ==="
+__line_gradient__ "Left-to-right gradient" 255 0 0 0 255 0  # red => green
 
 echo
-echo "=== Testing gradient_print (multiline, top to bottom) ==="
+echo "=== Testing __gradient_print__ (multiline, top to bottom) ==="
 ASCII_ART=$(cat <<'EOF'
 Line 1
 Line 2
@@ -73,7 +81,7 @@ EOF
 )
 
 # Purple => Teal
-gradient_print "$ASCII_ART" 128 0 128 0 255 255
+__gradient_print__ "$ASCII_ART" 128 0 128 0 255 255
 
 echo
 echo "Done. Press Enter to exit."
