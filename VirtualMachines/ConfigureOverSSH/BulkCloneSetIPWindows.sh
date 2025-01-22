@@ -4,100 +4,108 @@
 #
 # Clones a Windows VM multiple times on a Proxmox server, updates each clone's
 # IPv4 address (including CIDR notation), sets a new default gateway, and
-# restarts networking on the Windows VM via PowerShell commands over OpenSSH.
-#
-# The script:
-#   1) Clones the template VM a specified number of times using qm clone.
-#   2) Starts each cloned VM.
-#   3) SSHs into the template VM (assumes the same template IP for each iteration).
-#   4) Detects which network interface is assigned the template IP.
-#   5) Removes the old IP from that interface.
-#   6) Sets the new IP, prefix length, and default gateway.
-#
-# Requirements/Assumptions:
-#   1) Proxmox 8 environment.
-#   2) Script is run as root on Proxmox.
-#   3) The template Windows VM has OpenSSH server installed and running.
-#   4) The Windows VM has PowerShell available (default on modern Windows).
-#   5) The user can SSH in as 'Administrator' (or equivalent) without prompting
-#      for an interactive password (e.g., via key-based auth).
+# configures DNS. The script accomplishes this by uploading a ChangeIP.bat file
+# to the Windows VM, then starting it in the background via "start /b".
 #
 # Usage:
-#   ./BulkCloneSetIPWindows.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId>
-#
-# Arguments:
-#   templateIp    : The current (template) Windows VM’s IP address (e.g. 192.168.1.50).
-#   startIpCIDR   : The first clone’s new IP in CIDR format (e.g. 192.168.1.10/24).
-#   newGateway    : The default gateway for the cloned VMs (e.g. 192.168.1.1).
-#   count         : Number of clones to create.
-#   templateId    : The template VM ID to clone from.
-#   baseVmId      : The first new VM ID to assign; subsequent clones increment this.
+#   ./BulkCloneSetIPWindows.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix> <interfaceName> <dns1> <dns2>
 #
 # Example:
-#   # Clones VM ID 9000 five times, starting at VM ID 9010.
-#   # The template IP is 192.168.1.50, the first cloned IP is 192.168.1.10/24,
-#   # the gateway is 192.168.1.1, and subsequent clones increment the final octet by 1.
-#   ./BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010
-#
-# Another Example:
-#   ./BulkCloneSetIPWindows.sh 192.168.10.50 192.168.10.100/24 192.168.10.1 3 800 810
+#   ./BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
 #
 
-source "${UTILITYPATH}/Conversion.sh"
 source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/SSH.sh"
 
 ###############################################################################
 # Check prerequisites and parse arguments
 ###############################################################################
+
 __check_root__
 __check_proxmox__
+__install_or_prompt__ "sshpass"
 
-if [ $# -lt 6 ]; then
+###############################################################################
+# Argument Parsing
+###############################################################################
+if [ "$#" -lt 12 ]; then
   echo "Error: Missing arguments."
-  echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId>"
+  echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix> <interfaceName> <dns1> <dns2>"
   exit 1
 fi
 
-TEMPLATE_IP="$1"
-START_IP_CIDR="$2"
-NEW_GATEWAY="$3"
-INSTANCE_COUNT="$4"
-TEMPLATE_ID="$5"
-BASE_VM_ID="$6"
+templateIpAddr="$1"
+startIpCidr="$2"
+newGateway="$3"
+instanceCount="$4"
+templateId="$5"
+baseVmId="$6"
+sshUsername="$7"
+sshPassword="$8"
+vmNamePrefix="$9"
+interfaceName="${10}"
+dns1="${11}"
+dns2="${12}"
 
-# Split the starting IP and CIDR (e.g. 192.168.1.10/24 -> 192.168.1.10 and 24)
-IFS='/' read -r startIpAddrOnly startMask <<< "$START_IP_CIDR"
-
-# Convert the starting IP to an integer for incrementing
-ipInt="$( __ip_to_int__ "$startIpAddrOnly" )"
+IFS='/' read -r startIpAddrOnly startMask <<<"$startIpCidr"
+ipInt="$(__ip_to_int__ "$startIpAddrOnly")"
+netmask="$(__cidr_to_netmask__ "$startMask")"
 
 ###############################################################################
-# Main logic
+# Create a temporary .bat file with netsh commands for Windows IP reconfiguration
 ###############################################################################
-for (( i=0; i<INSTANCE_COUNT; i++ )); do
-  currentVmId=$(( BASE_VM_ID + i ))
-  currentIp="$( __int_to_ip__ "$ipInt" )"
-  currentIpCidr="$currentIp/$startMask"
+tempBat="/tmp/ChangeIP.bat.$$"
+cat <<'EOF' > "$tempBat"
+@echo off
+:: ChangeIP.bat
+:: Usage: ChangeIP.bat <InterfaceName> <NewIP> <Netmask> <Gateway> <DNS1> <DNS2>
 
-  echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
-  qm clone "$TEMPLATE_ID" "$currentVmId" --name "cloned-$currentVmId"
+if "%~6"=="" (
+  echo Usage: %~nx0 InterfaceName NewIP Netmask Gateway DNS1 DNS2
+  exit /b 1
+)
+
+set IFACE=%1
+set NEWIP=%2
+set NETMASK=%3
+set GATEWAY=%4
+set DNS1=%5
+set DNS2=%6
+
+echo Changing IP of interface [%IFACE%] to %NEWIP%/%NETMASK% gateway=%GATEWAY%
+ping 127.0.0.1 -n 4 >nul
+netsh interface ip set address name="%IFACE%" static %NEWIP% %NETMASK% %GATEWAY% 1
+
+echo Setting DNS to %DNS1% (primary) and %DNS2% (secondary)
+netsh interface ip set dns name="%IFACE%" static %DNS1% primary
+netsh interface ip add dns name="%IFACE%" %DNS2% index=2
+EOF
+
+###############################################################################
+# Main logic: Clone and configure Windows VMs
+###############################################################################
+for (( i=0; i<instanceCount; i++ )); do
+  currentVmId=$((baseVmId + i))
+  currentIp="$(__int_to_ip__ "$ipInt")"
+
+  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
+  qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}"
   qm start "$currentVmId"
 
-  echo "Configuring VM ID \"$currentVmId\" to use IP \"$currentIpCidr\" (gateway \"$NEW_GATEWAY\") on Windows..."
-  # Instruct Windows via PowerShell over SSH:
-  #  1) Identify the interface with the TEMPLATE_IP.
-  #  2) Remove that IP from the interface.
-  #  3) Assign the new IP/mask/gateway.
-  ssh "Administrator@${TEMPLATE_IP}" powershell -Command "
-    \$iface = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -eq '$TEMPLATE_IP' }
-    if (-not \$iface) {
-      Write-Error 'Error: Could not find the interface with IP $TEMPLATE_IP on the Windows VM.'
-      exit 1
-    }
-    Remove-NetIPAddress -InterfaceAlias \$iface.InterfaceAlias -IPAddress \$iface.IPAddress -Confirm:\$false
-    New-NetIPAddress -InterfaceAlias \$iface.InterfaceAlias -IPAddress '$currentIp' -PrefixLength $startMask -DefaultGateway '$NEW_GATEWAY' -AddressFamily IPv4
-  "
+  echo "Waiting for SSH on template IP: \"$templateIpAddr\"..."
+  __wait_for_ssh__ "$templateIpAddr"
 
-  # Increment IP for the next clone
+  echo "Uploading 'ChangeIP.bat' to Windows VM..."
+  sshpass -p "$sshPassword" scp -o StrictHostKeyChecking=no "$tempBat" "$sshUsername@$templateIpAddr:C:\\Users\\$sshUsername\\ChangeIP.bat"
+
+  echo "Starting IP change script in the background via 'start /b'..."
+  sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=3 -o ServerAliveCountMax=1 "$sshUsername@$templateIpAddr" "cmd /c \"C:\\Users\\$sshUsername\\ChangeIP.bat ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\"" || true
+
+  echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
+  __wait_for_ssh__ "$currentIp"
+
   ipInt=$(( ipInt + 1 ))
 done
+
+rm -f "$tempBat"
+__prompt_keep_installed_packages__

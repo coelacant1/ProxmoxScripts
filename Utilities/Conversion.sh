@@ -54,3 +54,17 @@ __int_to_ip__() {
         "$(($1 & 255))")
     echo "$ip"
 }
+
+
+###############################################################################
+# Convert a CIDR prefix (e.g., 24) to a dotted-decimal netmask
+###############################################################################
+__cidr_to_netmask__ {
+  local cidr="$1"
+  local mask=$(( 0xffffffff << (32 - cidr) & 0xffffffff ))
+  local octet1=$(( (mask >> 24) & 255 ))
+  local octet2=$(( (mask >> 16) & 255 ))
+  local octet3=$(( (mask >>  8) & 255 ))
+  local octet4=$((  mask        & 255 ))
+  echo "${octet1}.${octet2}.${octet3}.${octet4}"
+}

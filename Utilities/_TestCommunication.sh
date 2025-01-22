@@ -11,6 +11,10 @@
 #   - Printing info, success, and error messages
 #   - Handling errors via a trap
 #
+# Function Index:
+#   - simulate_task
+#   - simulate_error
+#
 
 if [ -z "${UTILITYPATH}" ]; then
   # UTILITYPATH is unset or empty
