@@ -296,3 +296,138 @@ __get_server_vms__() {
         | jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid'
 }
+
+# GLOBAL associative array to remember user-subnet inputs per bridge
+declare -A BRIDGE_SUBNET_CACHE
+# --- Get IP from a QEMU VMID -----------------------------------------------
+# @function __get_ip_from_vmid__
+# @description Retrieves the IP address of a VM by using its net0 MAC address
+#   for an ARP scan on the default interface (vmbr0). Prints the IP if found.
+# @usage
+#   __get_ip_from_vmid__ 100
+# @param 1 The VMID
+# @return
+#   Prints the discovered IP or exits 1 if not found.
+__get_ip_from_vmid__() {
+    __install_or_prompt__ "arp-scan"
+
+    local vmid="$1"
+    if [[ -z "$vmid" ]]; then
+        echo "Error: __get_ip_from_vmid__ requires a VMID argument." >&2
+        return 1
+    fi
+
+    # 1) Retrieve MAC address from net0
+    local mac
+    mac=$(
+        qm config "$vmid" \
+        | grep -E '^net[0-9]+:' \
+        | grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
+    )
+    if [[ -z "$mac" ]]; then
+        echo "Error: Could not retrieve net0 MAC address for VMID '$vmid'." >&2
+        return 1
+    fi
+
+    # 1) Try to retrieve IP via QEMU Guest Agent: network-get-interfaces
+    #
+    #    This works on both Linux and Windows if the guest agent is installed & running.
+    #    We parse JSON with jq to get the first IPv4 address we find.
+    #
+    local guest_ip
+    guest_ip=$(
+        qm guest cmd "$vmid" network-get-interfaces 2>/dev/null \
+        | jq -r --arg mac "$mac" '
+            .[] 
+            | select((.["hardware-address"] // "") 
+                     | ascii_downcase == ($mac | ascii_downcase))
+            | .["ip-addresses"][]?
+            | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
+            | .["ip-address"]
+        ' \
+        | head -n1
+    )
+    
+    # If the result is empty or "null," we didn't get any valid IP from the guest.
+    if [[ -n "$guest_ip" && "$guest_ip" != "null" ]]; then
+        echo "$guest_ip"
+        return 0
+    fi
+
+    echo " - Unable to retrieve IP via guest agent. Falling back to ARP scan..."
+
+    # 3) Identify the bridge from net0 config
+    local bridge
+    bridge=$(
+        qm config "$vmid" \
+        | grep -E '^net[0-9]+:' \
+        | grep -oP 'bridge=\K[^,]+'
+    )
+    if [[ -z "$bridge" ]]; then
+        echo "Error: Could not determine which bridge interface is used by VMID '$vmid'." >&2
+        return 1
+    fi
+
+    # 4) Check if the bridge has an IP address on the host
+    #    If not, we'll need to prompt for a subnet, unless already cached.
+    local interface_ip
+    interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)  # e.g. "192.168.13.1/24"
+
+    # If there's no IP on the bridge, either use a cached user subnet or prompt
+    local subnet_to_scan
+    if [[ -z "$interface_ip" ]]; then
+        # Check if we already asked the user this session
+        if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
+            subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
+            echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'"
+        else
+            # Prompt user for the subnet in CIDR format
+            read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
+            BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
+        fi
+    else
+        # If the bridge has an IP, let's assume we can do --localnet
+        # e.g. interface_ip is "192.168.13.1/24", so we can parse out the network part
+        # But typically, --localnet should just work. We'll just use it directly:
+        subnet_to_scan="--localnet"
+    fi
+
+    # 5) ARP scan
+    #    If the user gave a CIDR block (like 192.168.13.0/24), use it
+    #    Optionally set --arpspa if the interface doesn't have an IP
+    local scannedIp
+    if [[ "$subnet_to_scan" == "--localnet" ]]; then
+        # The bridge has an IP, so we can do localnet:
+        scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null \
+            | grep -i "$mac" \
+            | awk '{print $1}' \
+            | head -n1)
+    else
+        # The user-specified subnet in CIDR form, like "192.168.13.0/24"
+        # For the ARP Source Protocol Address (arpspa), we can pick a random IP or parse it from user input
+        # but let's just do a "fake" IP from that subnet or rely on user to input an IP we can use. 
+        # We'll parse out "192.168.13.0" from the subnet to compute a .1 address, if desired.
+        # For simplicity: just run with no ARP source or prompt for one. We'll demonstrate a minimal approach.
+
+        # Example of computing an arpspa from user input "192.168.13.0/24" -> "192.168.13.1"
+        # This is simplistic. If user typed "10.0.12.5/22", we'd need more robust logic. 
+        # We'll just replace the last octet with .1 if it ends in .0
+        local base_ip
+        base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)  # e.g. "192.168.13.0"
+        base_ip="${base_ip%.*}.1"                           # e.g. "192.168.13.1"
+
+        scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null \
+            | grep -i "$mac" \
+            | awk '{print $1}' \
+            | head -n1)
+    fi
+
+    if [[ -z "$scannedIp" ]]; then
+        echo "Error: Could not find an IP for VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
+        return 1
+    fi
+
+    # Return the IP address
+    echo "$scannedIp"
+    return 0
+}
