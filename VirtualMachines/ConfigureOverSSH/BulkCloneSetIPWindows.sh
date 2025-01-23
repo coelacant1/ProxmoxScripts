@@ -93,7 +93,7 @@ for (( i=0; i<instanceCount; i++ )); do
   qm start "$currentVmId"
 
   echo "Waiting for SSH on template IP: \"$templateIpAddr\"..."
-  __wait_for_ssh__ "$templateIpAddr"
+  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
 
   echo "Uploading 'ChangeIP.bat' to Windows VM..."
   sshpass -p "$sshPassword" scp -o StrictHostKeyChecking=no "$tempBat" "$sshUsername@$templateIpAddr:C:\\Users\\$sshUsername\\ChangeIP.bat"
@@ -102,7 +102,7 @@ for (( i=0; i<instanceCount; i++ )); do
   sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=3 -o ServerAliveCountMax=1 "$sshUsername@$templateIpAddr" "cmd /c \"C:\\Users\\$sshUsername\\ChangeIP.bat ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\"" || true
 
   echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
-  __wait_for_ssh__ "$currentIp"
+  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
 
   ipInt=$(( ipInt + 1 ))
 done

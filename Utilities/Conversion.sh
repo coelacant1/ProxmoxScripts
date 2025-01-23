@@ -57,9 +57,16 @@ __int_to_ip__() {
 
 
 ###############################################################################
-# Convert a CIDR prefix (e.g., 24) to a dotted-decimal netmask
+# 
 ###############################################################################
-__cidr_to_netmask__ {
+# @function __cidr_to_netmask__
+# @description Convert a CIDR prefix (e.g., 24) to a dotted-decimal netmask
+# @usage
+#   __cidr_to_netmask__ "/18"
+# @param 1 CIDR prefix
+# @return
+#   Prints full subnet netmask
+__cidr_to_netmask__() {
   local cidr="$1"
   local mask=$(( 0xffffffff << (32 - cidr) & 0xffffffff ))
   local octet1=$(( (mask >> 24) & 255 ))
