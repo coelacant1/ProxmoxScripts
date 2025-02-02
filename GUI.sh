@@ -16,6 +16,15 @@
 # Author: Coela Can't! (coelacant1)
 # Repo: https://github.com/coelacant1/ProxmoxScripts
 #
+# Function Index:
+#   - show_ascii_art
+#   - show_top_comments
+#   - extract_dot_slash_help_line
+#   - show_script_usage
+#   - display_path
+#   - run_script
+#   - navigate
+#
 
 set -e
 

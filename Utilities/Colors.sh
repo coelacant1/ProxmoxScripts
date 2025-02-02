@@ -18,10 +18,19 @@
 # Just for completeness, define a RESET to revert terminal colors.
 RESET="\033[0m"
 
-###############################################################################
-# Function: __int_lerp__
-#   Integer linear interpolation between START and END, using FRACTION (0..100).
-###############################################################################
+# --- __int_lerp__ ------------------------------------------------------------
+# @function __int_lerp__
+# @description Performs integer linear interpolation between START and END
+#   using FRACTION (0 to 100). Calculates: start + ((end - start) * fraction) / 100.
+# @usage
+#   __int_lerp__ <start> <end> <fraction>
+# @param start The starting integer value.
+# @param end The ending integer value.
+# @param fraction The interpolation fraction (0 to 100).
+# @return
+#   Prints the interpolated integer value.
+# @example_output
+#   For __int_lerp__ 10 20 50, the output is: 15
 __int_lerp__() {
     local start=$1
     local end=$2
@@ -31,14 +40,22 @@ __int_lerp__() {
     echo "$val"
 }
 
-###############################################################################
-# Function: __gradient_print__
-# Usage:    __gradient_print__ "multi-line text" R1 G1 B1 R2 G2 B2
-# Example:  __gradient_print__ "$ASCII_ART" 128 0 128 0 255 255
-#
-# Interpolates from (R1,G1,B1) -> (R2,G2,B2) line-by-line.
-# If there's only 1 line, prints in the end color.
-###############################################################################
+# --- __gradient_print__ ------------------------------------------------------
+# @function __gradient_print__
+# @description Prints multi-line text with a vertical color gradient.
+#   Interpolates colors from (R1,G1,B1) to (R2,G2,B2) line-by-line.
+#   For a single line, prints in the end color.
+# @usage
+#   __gradient_print__ "multi-line text" R1 G1 B1 R2 G2 B2 [excluded_chars]
+# @param text The multi-line text to print.
+# @param R1 G1 B1 The starting RGB color.
+# @param R2 G2 B2 The ending RGB color.
+# @param excluded_chars (Optional) String of characters to exclude from coloring.
+# @return
+#   Prints the text with a gradient applied.
+# @example_output
+#   When given ASCII art and colors from (128,0,128) to (0,255,255),
+#   the output is the ASCII art printed with a vertical gradient.
 __gradient_print__() {
     local text="$1"
     local R1="$2"
@@ -104,11 +121,20 @@ __gradient_print__() {
     done
 }
 
-
-###############################################################################
-# single___line_gradient__ (Left to Right)
-#    Interpolates each character from (R1,G1,B1) -> (R2,G2,B2).
-###############################################################################
+# --- __line_gradient__ -------------------------------------------------------
+# @function __line_gradient__
+# @description Applies a left-to-right color gradient to a single line of text.
+#   Interpolates each character from (R1,G1,B1) to (R2,G2,B2).
+# @usage
+#   __line_gradient__ "text" R1 G1 B1 R2 G2 B2
+# @param text The text to print.
+# @param R1 G1 B1 The starting RGB color.
+# @param R2 G2 B2 The ending RGB color.
+# @return
+#   Prints the text with a horizontal gradient applied.
+# @example_output
+#   For __line_gradient__ "Hello" 255 0 0 0 0 255,
+#   the output is "Hello" printed with a gradient transitioning from red to blue.
 __line_gradient__() {
   local text="$1"
   local R1="$2"
@@ -141,9 +167,18 @@ __line_gradient__() {
   echo -e "${RESET}"
 }
 
-###############################################################################
-# single_line_solid (One line in a single color)
-###############################################################################
+# --- __line_rgb__ ------------------------------------------------------------
+# @function __line_rgb__
+# @description Prints a line of text in a single, solid RGB color.
+# @usage
+#   __line_rgb__ "text" R G B
+# @param text The text to print.
+# @param R G B The RGB color values.
+# @return
+#   Prints the text in the specified color.
+# @example_output
+#   For __line_rgb__ "Static Text" 0 255 0,
+#   the output is "Static Text" printed in bright green.
 __line_rgb__() {
   local text="$1"
   local R="$2"
@@ -153,13 +188,20 @@ __line_rgb__() {
   echo -e "\033[38;2;${R};${G};${B}m${text}${RESET}"
 }
 
-###############################################################################
-# Function: __simulate_blink_async__
-# Usage:    __simulate_blink_async__ "text to blink" <times=5> <delay=0.3>
-#
-# Toggles between bright and dim states in a background subshell,
-# allowing the main script to continue without blocking.
-###############################################################################
+# --- __simulate_blink_async__ ------------------------------------------------
+# @function __simulate_blink_async__
+# @description Simulates a blinking effect by toggling between bright and dim text asynchronously.
+#   Runs in a background subshell, allowing the main script to continue.
+# @usage
+#   __simulate_blink_async__ "text to blink" [times] [delay]
+# @param text The text to blink.
+# @param times (Optional) Number of blink cycles (default: 5).
+# @param delay (Optional) Delay between toggles in seconds (default: 0.3).
+# @return
+#   Prints the blinking text effect asynchronously.
+# @example_output
+#   For __simulate_blink_async__ "Blinking" 5 0.3,
+#   the output is "Blinking" toggling between bright and dim (observed asynchronously).
 __simulate_blink_async__() {
     local text="$1"
     local times="${2:-5}"

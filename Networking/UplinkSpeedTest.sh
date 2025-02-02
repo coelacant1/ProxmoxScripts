@@ -16,7 +16,7 @@
 #   ./UplinkSpeedTest.sh all
 #
 #   # Run speed test on specific remote nodes (by name or IP)
-#   ./UplinkSpeedTest.sh IHK02 172.20.83.23
+#   ./UplinkSpeedTest.sh pve02 172.20.83.23
 #
 # This script requires:
 #   - 'speedtest' (or 'speedtest-cli') on each node
@@ -52,7 +52,7 @@ usage() {
   echo "  $0 all"
   echo
   echo "  # Test speed on specific nodes (by name or IP)"
-  echo "  $0 IHK02 172.20.83.23"
+  echo "  $0 pve02 172.20.83.23"
   exit 1
 }
 

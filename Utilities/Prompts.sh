@@ -2,8 +2,7 @@
 #
 # Prompts.sh
 #
-# Provides functions for user interaction and prompts (e.g., checking root
-# permissions, verifying Proxmox environment, installing packages on demand).
+# Provides functions for user interaction and prompts (e.g., checking root permissions, verifying Proxmox environment, installing packages on demand).
 #
 # Usage:
 #   source ./Prompts.sh
@@ -39,13 +38,12 @@ SESSION_INSTALLED_PACKAGES=()
 # Misc Functions
 ###############################################################################
 
-# --- Check Root User -------------------------------------------------------
+# --- __check_root__ ------------------------------------------------------------
 # @function __check_root__
 # @description Checks if the current user is root. Exits if not.
-# @usage
-#   __check_root__
-# @return
-#   Exits 1 if not root.
+# @usage __check_root__
+# @return Exits 1 if not root.
+# @example_output If not run as root, the output is: "Error: This script must be run as root (sudo)."
 __check_root__() {
     if [[ $EUID -ne 0 ]]; then
         echo "Error: This script must be run as root (sudo)."
@@ -53,13 +51,12 @@ __check_root__() {
     fi
 }
 
-# --- Check Proxmox ---------------------------------------------------------
+# --- __check_proxmox__ ------------------------------------------------------------
 # @function __check_proxmox__
 # @description Checks if this is a Proxmox node. Exits if not.
-# @usage
-#   __check_proxmox__
-# @return
-#   Exits 2 if not Proxmox.
+# @usage __check_proxmox__
+# @return Exits 2 if not Proxmox.
+# @example_output If 'pveversion' is not found, the output is: "Error: 'pveversion' command not found. Are you sure this is a Proxmox node?"
 __check_proxmox__() {
     if ! command -v pveversion &>/dev/null; then
         echo "Error: 'pveversion' command not found. Are you sure this is a Proxmox node?"
@@ -67,16 +64,15 @@ __check_proxmox__() {
     fi
 }
 
-# --- Install or Prompt Function --------------------------------------------
+# --- __install_or_prompt__ ------------------------------------------------------------
 # @function __install_or_prompt__
 # @description Checks if a specified command is available. If not, prompts
 #   the user to install it via apt-get. Exits if the user declines.
 #   Also keeps track of installed packages in SESSION_INSTALLED_PACKAGES.
-# @usage
-#   __install_or_prompt__ <command_name>
+# @usage __install_or_prompt__ <command_name>
 # @param command_name The name of the command to check and install if missing.
-# @return
-#   Exits 1 if user declines the installation.
+# @return Exits 1 if user declines the installation.
+# @example_output If "curl" is missing and the user declines installation, the output is: "Aborting script because 'curl' is not installed."
 __install_or_prompt__() {
     local cmd="$1"
 
@@ -93,15 +89,14 @@ __install_or_prompt__() {
     fi
 }
 
-# --- Prompt to Keep or Remove Installed Packages ----------------------------
+# --- __prompt_keep_installed_packages__ ------------------------------------------------------------
 # @function __prompt_keep_installed_packages__
 # @description Prompts the user whether to keep or remove all packages that
 #   were installed in this session via __install_or_prompt__(). If the user chooses
 #   "No", each package in SESSION_INSTALLED_PACKAGES is removed.
-# @usage
-#   __prompt_keep_installed_packages__
-# @return
-#   Removes packages if user says "No", otherwise does nothing.
+# @usage __prompt_keep_installed_packages__
+# @return Removes packages if user says "No", otherwise does nothing.
+# @example_output If the user chooses "No", the output is: "Removing the packages installed in this session..." followed by "Packages removed."
 __prompt_keep_installed_packages__() {
     if [[ ${#SESSION_INSTALLED_PACKAGES[@]} -eq 0 ]]; then
         return

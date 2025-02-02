@@ -23,7 +23,6 @@
 #
 
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
 
 __check_root__
 __check_proxmox__

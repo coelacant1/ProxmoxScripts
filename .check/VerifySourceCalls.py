@@ -10,8 +10,10 @@ from pathlib import Path
 # HARD-CODED DIRECTORIES:
 # Adjust these as needed for your environment.
 # -----------------------------------------------------------------------------
-SCRIPTS_DIR = "../"
-UTILITIES_DIR = "../Utilities"
+script_dir = Path(__file__).resolve().parent
+
+SCRIPTS_DIR = script_dir.parent  # if your scripts are one level up
+UTILITIES_DIR = script_dir.parent / "Utilities"
 
 # -----------------------------------------------------------------------------
 # Regex for function definitions: "__myFunction__() {" or "function __myFunction__ {"
@@ -279,8 +281,8 @@ def find_comment_block_end(lines):
 # -----------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Check unknown calls in .sh scripts and optionally fix missing sources.")
-    parser.add_argument("--scripts-dir", default="../", help="Directory of .sh scripts to check (recursively).")
-    parser.add_argument("--utilities-dir", default="../Utilities", help="Directory containing utility .sh scripts.")
+    parser.add_argument("--scripts-dir", default=SCRIPTS_DIR, help="Directory of .sh scripts to check (recursively).")
+    parser.add_argument("--utilities-dir", default=UTILITIES_DIR, help="Directory containing utility .sh scripts.")
     parser.add_argument("--fix", action="store_true", help="Automatically add missing 'source' lines if exactly one utility defines the unknown call.")
     args = parser.parse_args()
 

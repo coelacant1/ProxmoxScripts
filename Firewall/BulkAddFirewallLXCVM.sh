@@ -13,6 +13,11 @@
 #   # Insert 'MySecurityGroup' for IDs from 100 to 110
 #   ./InsertFirewallSecurityGroup.sh 100 110 MySecurityGroup
 #
+# Function Index:
+#   - enable_firewall_on_lxc_gw_iface
+#   - enable_firewall_on_vm_net0
+#   - enable_firewall_on_resource
+#
 
 source "${UTILITYPATH}/Prompts.sh"
 
