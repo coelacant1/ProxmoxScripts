@@ -14,6 +14,7 @@
 #   ./BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
 #
 
+source "${UTILITYPATH}/Conversion.sh"
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"
 
@@ -60,10 +61,10 @@ cat <<'EOF' > "$tempBat"
 :: ChangeIP.bat
 :: Usage: ChangeIP.bat <InterfaceName> <NewIP> <Netmask> <Gateway> <DNS1> <DNS2>
 
-if "%~6"=="" (
-  echo Usage: %~nx0 InterfaceName NewIP Netmask Gateway DNS1 DNS2
-  exit /b 1
-)
+::if "%~6"=="" (
+::  echo Usage: %~nx0 InterfaceName NewIP Netmask Gateway DNS1 DNS2
+::   exit /b 1
+::)
 
 set IFACE=%1
 set NEWIP=%2
@@ -81,12 +82,16 @@ netsh interface ip set dns name="%IFACE%" static %DNS1% primary
 netsh interface ip add dns name="%IFACE%" %DNS2% index=2
 EOF
 
+ssh-keygen -f "/root/.ssh/known_hosts" -R "${templateIpAddr}"
+
 ###############################################################################
 # Main logic: Clone and configure Windows VMs
 ###############################################################################
 for (( i=0; i<instanceCount; i++ )); do
   currentVmId=$((baseVmId + i))
   currentIp="$(__int_to_ip__ "$ipInt")"
+
+  ssh-keygen -f "/root/.ssh/known_hosts" -R "${currentIp}"
 
   echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
   qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}"
