@@ -196,8 +196,8 @@ __get_name_from_ip__() {
 #   101
 #   102
 __get_cluster_lxc__() {
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-        | jq -r '.[] | select(.type=="lxc") | .vmid'
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r '.[] | select(.type=="lxc") | .vmid'
 }
 
 # --- __get_server_lxc__ ------------------------------------------------------------
@@ -227,8 +227,8 @@ __get_server_lxc__() {
         return 1
     fi
 
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-        | jq -r --arg NODENAME "$nodeName" \
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="lxc" and .node==$NODENAME) | .vmid'
 }
 
@@ -242,8 +242,8 @@ __get_server_lxc__() {
 #   302
 __get_cluster_vms__() {
     __install_or_prompt__ "jq"
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-        | jq -r '.[] | select(.type=="qemu") | .vmid'
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r '.[] | select(.type=="qemu") | .vmid'
 }
 
 # --- __get_server_vms__ ------------------------------------------------------------
@@ -273,111 +273,197 @@ __get_server_vms__() {
         return 1
     fi
 
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-        | jq -r --arg NODENAME "$nodeName" \
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid'
 }
 
-# --- __get_ip_from_vmid__ ------------------------------------------------------------
-# @function __get_ip_from_vmid__
+# --- get_ip_from_vmid ------------------------------------------------------------
+# @function get_ip_from_vmid
 # @description Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).
 #   Prints the IP if found.
-# @usage __get_ip_from_vmid__ 100
+# @usage get_ip_from_vmid 100
 # @param 1 The VMID.
 # @return Prints the discovered IP or exits 1 if not found.
-# @example_output For __get_ip_from_vmid__ 100, the output might be:
+# @example_output For get_ip_from_vmid 100, the output might be:
 #   192.168.1.100
 __get_ip_from_vmid__() {
     local vmid="$1"
     if [[ -z "$vmid" ]]; then
-        echo "Error: __get_ip_from_vmid__ requires a VMID argument." >&2
+        echo "Error: get_ip_from_vmid requires a VMID argument." >&2
         return 1
     fi
 
-    # 1) Retrieve MAC address from net0
-    local mac
-    mac=$(
-        qm config "$vmid" \
-        | grep -E '^net[0-9]+:' \
-        | grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
-    )
-    if [[ -z "$mac" ]]; then
-        echo "Error: Could not retrieve net0 MAC address for VMID '$vmid'." >&2
-        return 1
-    fi
+    #
+    # Check whether the VMID belongs to an LXC container or a QEMU VM.
+    # (This example assumes that container configs live in /etc/pve/lxc/ and
+    # QEMU configs in /etc/pve/qemu-server/.)
+    #
+    if [ -f "/etc/pve/lxc/${vmid}.conf" ]; then
+        # --- LXC CONTAINER -------------------------------------------------
+        echo "Detected LXC container VMID '$vmid'..." >&2
 
-    # 2) Try to retrieve IP via QEMU Guest Agent: network-get-interfaces
-    local guest_ip
-    guest_ip=$(
-        qm guest cmd "$vmid" network-get-interfaces 2>/dev/null \
-        | jq -r --arg mac "$mac" '
-            .[] 
-            | select((.["hardware-address"] // "") 
-                     | ascii_downcase == ($mac | ascii_downcase))
-            | .["ip-addresses"][]?
-            | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
-            | .["ip-address"]
-        ' \
-        | head -n1
-    )
-    
-    if [[ -n "$guest_ip" && "$guest_ip" != "null" ]]; then
-        echo "$guest_ip"
-        return 0
-    fi
-
-    echo " - Unable to retrieve IP via guest agent. Falling back to ARP scan..."
-
-    # 3) Identify the bridge from net0 config
-    local bridge
-    bridge=$(
-        qm config "$vmid" \
-        | grep -E '^net[0-9]+:' \
-        | grep -oP 'bridge=\K[^,]+'
-    )
-    if [[ -z "$bridge" ]]; then
-        echo "Error: Could not determine which bridge interface is used by VMID '$vmid'." >&2
-        return 1
-    fi
-
-    # 4) Check if the bridge has an IP address on the host
-    local interface_ip
-    interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)
-
-    local subnet_to_scan
-    if [[ -z "$interface_ip" ]]; then
-        if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
-            subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
-            echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'"
-        else
-            read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
-            BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
+        # 1) Try to get the IP by executing 'hostname -I' inside the container.
+        local guest_ip
+        guest_ip=$(pct exec "$vmid" -- hostname -I 2>/dev/null |
+            awk '{ for(i=1;i<=NF;i++) { if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i != "127.0.0.1") { print $i; exit } } }')
+        if [[ -n "$guest_ip" ]]; then
+            echo "$guest_ip"
+            return 0
         fi
-    else
-        subnet_to_scan="--localnet"
-    fi
 
-    local scannedIp
-    if [[ "$subnet_to_scan" == "--localnet" ]]; then
-        scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null \
-            | grep -i "$mac" \
-            | awk '{print $1}' \
-            | head -n1)
-    else
-        local base_ip
-        base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
-        base_ip="${base_ip%.*}.1"
-        scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null \
-            | grep -i "$mac" \
-            | awk '{print $1}' \
-            | head -n1)
-    fi
+        echo " - Unable to retrieve IP from container via hostname -I. Falling back to ARP scan..." >&2
 
-    if [[ -z "$scannedIp" ]]; then
-        echo "Error: Could not find an IP for VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
+        # 2) Retrieve MAC address from container configuration (net0)
+        local mac
+        mac=$(pct config "$vmid" |
+            grep -E '^net[0-9]+:' |
+            grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}')
+        if [[ -z "$mac" ]]; then
+            echo "Error: Could not retrieve net0 MAC address for container VMID '$vmid'." >&2
+            return 1
+        fi
+
+        # 3) Determine the bridge from container config
+        local bridge
+        bridge=$(pct config "$vmid" |
+            grep -E '^net[0-9]+:' |
+            grep -oP 'bridge=\K[^,]+')
+        if [[ -z "$bridge" ]]; then
+            echo "Error: Could not determine which bridge interface is used by container VMID '$vmid'." >&2
+            return 1
+        fi
+
+        # 4) Check whether the host’s bridge has an IP address.
+        local interface_ip
+        interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)
+
+        local subnet_to_scan
+        if [[ -z "$interface_ip" ]]; then
+            if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
+                subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
+                echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'" >&2
+            else
+                read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
+                BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
+            fi
+        else
+            subnet_to_scan="--localnet"
+        fi
+
+        # 5) Run arp-scan on the determined subnet to find the matching MAC address.
+        local scannedIp
+        if [[ "$subnet_to_scan" == "--localnet" ]]; then
+            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
+                grep -i "$mac" |
+                awk '{print $1}' | head -n1)
+        else
+            local base_ip
+            base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
+            base_ip="${base_ip%.*}.1"
+            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
+                grep -i "$mac" |
+                awk '{print $1}' | head -n1)
+        fi
+
+        if [[ -z "$scannedIp" ]]; then
+            echo "Error: Could not find an IP for container VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
+            return 1
+        fi
+
+        echo "$scannedIp"
+        return 0
+    elif [ -f "/etc/pve/qemu-server/${vmid}.conf" ]; then
+        # --- QEMU VM --------------------------------------------------------
+        echo "Detected QEMU VM VMID '$vmid'..." >&2
+
+        # 1) Retrieve MAC address from net0
+        local mac
+        mac=$(
+            qm config "$vmid" |
+                grep -E '^net[0-9]+:' |
+                grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
+        )
+        if [[ -z "$mac" ]]; then
+            echo "Error: Could not retrieve net0 MAC address for VMID '$vmid'." >&2
+            return 1
+        fi
+
+        # 2) Try to retrieve IP via QEMU Guest Agent: network-get-interfaces
+        local guest_ip
+        guest_ip=$(
+            qm guest cmd "$vmid" network-get-interfaces 2>/dev/null |
+                jq -r --arg mac "$mac" '
+                .[] 
+                | select((.["hardware-address"] // "") 
+                         | ascii_downcase == ($mac | ascii_downcase))
+                | .["ip-addresses"][]?
+                | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
+                | .["ip-address"]
+            ' |
+                head -n1
+        )
+        if [[ -n "$guest_ip" && "$guest_ip" != "null" ]]; then
+            echo "$guest_ip"
+            return 0
+        fi
+
+        echo " - Unable to retrieve IP via guest agent. Falling back to ARP scan..." >&2
+
+        # 3) Identify the bridge from net0 config
+        local bridge
+        bridge=$(
+            qm config "$vmid" |
+                grep -E '^net[0-9]+:' |
+                grep -oP 'bridge=\K[^,]+'
+        )
+        if [[ -z "$bridge" ]]; then
+            echo "Error: Could not determine which bridge interface is used by VMID '$vmid'." >&2
+            return 1
+        fi
+
+        # 4) Check if the bridge has an IP address on the host
+        local interface_ip
+        interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)
+
+        local subnet_to_scan
+        if [[ -z "$interface_ip" ]]; then
+            if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
+                subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
+                echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'" >&2
+            else
+                read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
+                BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
+            fi
+        else
+            subnet_to_scan="--localnet"
+        fi
+
+        # 5) Run arp-scan on the determined subnet to find the matching MAC address.
+        local scannedIp
+        if [[ "$subnet_to_scan" == "--localnet" ]]; then
+            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
+                grep -i "$mac" |
+                awk '{print $1}' | head -n1)
+        else
+            local base_ip
+            base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
+            base_ip="${base_ip%.*}.1"
+            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
+                grep -i "$mac" |
+                awk '{print $1}' | head -n1)
+        fi
+
+        if [[ -z "$scannedIp" ]]; then
+            echo "Error: Could not find an IP for VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
+            return 1
+        fi
+
+        echo "$scannedIp"
+        return 0
+
+    else
+        echo "Error: VMID '$vmid' not found in LXC or QEMU configurations." >&2
         return 1
     fi
-
-    echo "$scannedIp"
-    return 0
 }

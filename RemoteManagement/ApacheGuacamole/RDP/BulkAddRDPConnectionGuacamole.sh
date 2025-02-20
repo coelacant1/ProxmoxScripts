@@ -1,16 +1,16 @@
 #!/bin/bash
 #
-# BulkAddConnectionGuacamole.sh
+# BulkAddRDPConnectionGuacamole.sh
 #
 # Creates multiple RDP connections in Apache Guacamole for a consecutive range of
 # Proxmox VMs. It uses the VMID range [START_VMID..END_VMID], retrieves each VM’s
 # IP, and uses the VM’s name as the Guacamole connection name.
 #
 # Usage:
-#   ./BulkAddConnectionGuacamole.sh GUAC_SERVER_URL START_VMID END_VMID GUAC_RDP_USER GUAC_RDP_PASS
+#   ./BulkAddRDPConnectionGuacamole.sh GUAC_SERVER_URL START_VMID END_VMID GUAC_RDP_USER GUAC_RDP_PASS
 #
 # Example:
-#   ./BulkAddConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" 100 110 "myRdpUser" "myRdpPass"
+#   ./BulkAddRDPConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" 100 110 "myRdpUser" "myRdpPass"
 #
 # Notes:
 #   - This script expects a valid Guacamole auth token in /tmp/cc_pve/guac_token.
