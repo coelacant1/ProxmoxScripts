@@ -33,6 +33,15 @@ __install_or_prompt__ "sshpass"
 __install_or_prompt__ "arp-scan"
 __install_or_prompt__ "jq"
 
+# Global associative arrays for node mappings.
+declare -A NODEID_TO_IP=()
+declare -A NODEID_TO_NAME=()
+declare -A NAME_TO_IP=()
+declare -A IP_TO_NAME=()
+
+# A flag to indicate whether mappings have been initialized.
+MAPPINGS_INITIALIZED=0
+
 # --- __get_remote_node_ips__ ------------------------------------------------------------
 # @function __get_remote_node_ips__
 # @description Gathers IPs for all cluster nodes (excluding local) from 'pvecm status'.
@@ -93,33 +102,48 @@ __get_number_of_cluster_nodes__() {
 # @return Populates the associative arrays with node information.
 # @example_output No direct output; internal mappings are initialized for later queries.
 __init_node_mappings__() {
+    # Reset the arrays.
     NODEID_TO_IP=()
     NODEID_TO_NAME=()
     NAME_TO_IP=()
     IP_TO_NAME=()
 
+    # Process the output from pvecm status.
     while IFS= read -r line; do
-        local nodeid_hex
-        local ip_part
-        nodeid_hex=$(awk '{print $1}' <<<"$line")
-        ip_part=$(awk '{print $3}' <<<"$line")
+        # Extract the first and third fields.
+        local nodeid_hex ip_part
+        nodeid_hex=$(awk '{print $1}' <<< "$line" | xargs)  # xargs trims whitespace.
+        ip_part=$(awk '{print $3}' <<< "$line" | xargs)
         ip_part="${ip_part//(local)/}"
+        ip_part=$(echo "$ip_part" | xargs)  # Trim any leftover spaces.
+
+        # Ensure the extracted nodeid_hex starts with "0x" and valid hex digits.
+        if [[ "$nodeid_hex" != 0x[0-9a-fA-F]* ]]; then
+            echo "DEBUG: Skipping invalid node id: '$nodeid_hex'" >&2
+            continue
+        fi
+
+        # Convert the hexadecimal string to decimal.
         local nodeid_dec=$((16#${nodeid_hex#0x}))
         NODEID_TO_IP["$nodeid_dec"]="$ip_part"
-    done < <(pvecm status 2>/dev/null | awk '/^0x/{print}')
+    done < <(pvecm status 2>/dev/null | awk '/^[[:space:]]*0x[0-9a-fA-F]+/ {print}')
 
+    # Process the output from pvecm nodes.
     while IFS= read -r line; do
-        local nodeid_dec
-        local name_part
-        nodeid_dec=$(awk '{print $1}' <<<"$line")
-        name_part=$(awk '{print $3}' <<<"$line")
+        local nodeid_dec name_part
+        nodeid_dec=$(awk '{print $1}' <<< "$line" | xargs)
+        name_part=$(awk '{print $3}' <<< "$line" | xargs)
         name_part="${name_part//(local)/}"
+        name_part=$(echo "$name_part" | xargs)
         NODEID_TO_NAME["$nodeid_dec"]="$name_part"
-    done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]*[0-9]/ {print}')
+    done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]*[0-9]+/ {print}')
 
+    # Build forward (NAME_TO_IP) and reverse (IP_TO_NAME) mappings.
     for nodeid in "${!NODEID_TO_NAME[@]}"; do
-        local name="${NODEID_TO_NAME[$nodeid]}"
-        local ip="${NODEID_TO_IP[$nodeid]}"
+        local name
+        local ip
+        name=$(echo "${NODEID_TO_NAME[$nodeid]}" | xargs)
+        ip=$(echo "${NODEID_TO_IP[$nodeid]}" | xargs)
         if [[ -n "$name" && -n "$ip" ]]; then
             NAME_TO_IP["$name"]="$ip"
             IP_TO_NAME["$ip"]="$name"
@@ -128,6 +152,8 @@ __init_node_mappings__() {
 
     MAPPINGS_INITIALIZED=1
 }
+
+
 
 # --- __get_ip_from_name__ ------------------------------------------------------------
 # @function __get_ip_from_name__
@@ -139,12 +165,14 @@ __init_node_mappings__() {
 # @example_output For __get_ip_from_name__ "pve03", the output is:
 #   192.168.83.23
 __get_ip_from_name__() {
-    local node_name="$1"
+    local node_name
+    node_name=$(echo "$1" | xargs)
     if [[ -z "$node_name" ]]; then
         echo "Error: __get_ip_from_name__ requires a node name argument." >&2
         return 1
     fi
 
+    # Ensure that the node mappings are initialized.
     if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
         __init_node_mappings__
     fi
@@ -168,12 +196,14 @@ __get_ip_from_name__() {
 # @example_output For __get_name_from_ip__ "172.20.83.23", the output is:
 #   pve03
 __get_name_from_ip__() {
-    local node_ip="$1"
+    local node_ip
+    node_ip=$(echo "$1" | xargs)
     if [[ -z "$node_ip" ]]; then
         echo "Error: __get_name_from_ip__ requires an IP argument." >&2
         return 1
     fi
 
+    # Initialize mappings if needed.
     if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
         __init_node_mappings__
     fi
@@ -186,6 +216,8 @@ __get_name_from_ip__() {
 
     echo "$name"
 }
+
+
 
 # --- __get_cluster_lxc__ ------------------------------------------------------------
 # @function __get_cluster_lxc__

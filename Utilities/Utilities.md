@@ -167,9 +167,9 @@ Usage: readarray -t NODE_VMS < <( __get_server_vms__ "local" )
 Example Output: For __get_server_vms__ "local", the output might be: 401 402  
 Output: Prints each QEMU VMID on its own line.
 
-Queries.sh/__get_ip_from_vmid__: Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).  
-Usage: __get_ip_from_vmid__ 100  
-Example Output: For __get_ip_from_vmid__ 100, the output might be: 192.168.1.100  
+Queries.sh/get_ip_from_vmid: Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).  
+Usage: get_ip_from_vmid 100  
+Example Output: For get_ip_from_vmid 100, the output might be: 192.168.1.100  
 Output: Prints the discovered IP or exits 1 if not found.
 
 ## SSH.sh

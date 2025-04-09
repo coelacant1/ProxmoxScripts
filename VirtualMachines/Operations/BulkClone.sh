@@ -38,11 +38,12 @@ for (( i=0; i<$NUM_VMS; i++ )); do
     VM_NAME="${BASE_VM_NAME}${NAME_INDEX}"
 
     # Clone the VM and set the constructed name
-    qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME
 
     # Check if a pool name was provided and add VM to the pool if it was
     if [ -n "$POOL_NAME" ]; then
-        qm set $TARGET_VM_ID --pool $POOL_NAME
+        qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME --pool $POOL_NAME
+    elif 
+        qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME
     fi
 done
 

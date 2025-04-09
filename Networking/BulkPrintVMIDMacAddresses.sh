@@ -6,7 +6,7 @@
 #
 # Usage:
 # Simply run this script on a Proxmox cluster host that has permissions to access the Proxmox VE API:
-# ./ListAllMacAddresses.sh
+# ./BulkPrintVMIDMacAddresses.sh
 #
 
 # Source utility scripts (adjust UTILITYPATH as needed)
