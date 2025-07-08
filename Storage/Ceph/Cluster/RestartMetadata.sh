@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# UpdateMDSRestart.sh
+# RestartMetadata.sh
 #
 # Restarts every Ceph Metadata Server (MDS) on the cluster one at a time.
 #
 # Usage:
-#   ./UpdateMDSRestart.sh
+#   ./RestartMetadata.sh
 #
 # This script retrieves Ceph MDS information in JSON format, parses each MDS's
 # name and address, and restarts the corresponding MDS service (ceph-mds@<mdsName>).
