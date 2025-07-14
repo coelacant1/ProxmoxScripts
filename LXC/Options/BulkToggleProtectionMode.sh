@@ -57,19 +57,32 @@ fi
 ###############################################################################
 # Determine Desired Protection State
 ###############################################################################
-if [ "$ACTION" == "enable" ]; then
-  PROTECTION_STATE=1
+if [ "$ACTION" = "enable" ]; then
+  UNPRIV_STATE=1
 else
-  PROTECTION_STATE=0
+  UNPRIV_STATE=0
 fi
 
 ###############################################################################
 # Define Helper Function
 ###############################################################################
-set_protection() {
-  local containerId="$1"
-  local protectionState="$2"
-  pct set "${containerId}" --protected "${protectionState}"
+patch_conf() {
+  local ctid="$1"
+  local state="$2"
+  local conf="/etc/pve/lxc/${ctid}.conf"
+
+  if [ ! -f "$conf" ]; then
+    echo "  CT $ctid: config not found - skipping."
+    return
+  fi
+
+  if grep -qE '^[[:space:]]*unprivileged:' "$conf"; then
+    sed -i -E "s|^[[:space:]]*unprivileged:.*|unprivileged: $state|" "$conf"
+  else
+    echo "unprivileged: $state" >> "$conf"
+  fi
+
+  echo "  CT $ctid: unprivileged set to $state"
 }
 
 ###############################################################################
@@ -80,7 +93,7 @@ for (( i=0; i<NUM_CTS; i++ )); do
 
   if pct status "${CURRENT_CT_ID}" &> /dev/null; then
     echo "Setting protection to '${ACTION}' for container ID '${CURRENT_CT_ID}'..."
-    set_protection "${CURRENT_CT_ID}" "${PROTECTION_STATE}"
+    patch_conf "$CURRENT_CT_ID" "$UNPRIV_STATE"
     if [ $? -eq 0 ]; then
       echo "Successfully set protection to '${ACTION}' for container ID '${CURRENT_CT_ID}'."
     else
@@ -91,4 +104,4 @@ for (( i=0; i<NUM_CTS; i++ )); do
   fi
 done
 
-echo "Bulk protection configuration completed!"
+echo "Bulk protection configuration completed, please restart LXC containers."
