@@ -6,7 +6,7 @@
 # in the repository executable and finally call CCPVEOffline.sh.
 #
 # Usage:
-#   ./CCPVE.sh [-nh]
+#   ./CCPVE.sh [-h]
 #
 # This script requires 'unzip' and 'wget'. If not installed, it will prompt to install them.
 #
@@ -18,12 +18,13 @@ set -e
 
 apt update || true
 
-SHOW_HEADER="true"
+# By default do not show the GUI header; use -h to display it
+SHOW_HEADER="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -nh)
-            SHOW_HEADER="false"
+        -h)
+            SHOW_HEADER="true"
             shift
             ;;
         *)
@@ -97,8 +98,8 @@ fi
 # --- Call GUI.sh --------------------------------------------------
 if [ -f "./GUI.sh" ]; then
     echo "Calling GUI.sh..."
-    if [ "$SHOW_HEADER" != "true" ]; then
-        bash "./GUI.sh" -nh
+    if [ "$SHOW_HEADER" = "true" ]; then
+        bash "./GUI.sh" -h
     else
         bash "./GUI.sh"
     fi
