@@ -3,9 +3,9 @@
 # GUI.sh
 #
 # A menu-driven Bash script to navigate and run .sh files in the current folder (and subfolders).
-# This version assumes everything is already extracted/unzipped in this directory—no download or unzip needed.
+# This version assumes everything is already extracted/unzipped in this directory-no download or unzip needed.
 #
-# ./GUI.sh [-nh]
+# ./GUI.sh [-h]
 #
 # Usage:
 #   1) cd into the directory containing your .sh files (and this script).
@@ -37,7 +37,7 @@ DISPLAY_PREFIX="cc_pve" # How we display the "root" in the UI
 HELP_FLAG="--help"      # If your scripts support a help flag, we pass this
 LAST_SCRIPT=""          # The last script run
 LAST_OUTPUT=""          # Truncated output of the last script
-SHOW_HEADER="true"
+SHOW_HEADER="false"
 
 ###############################################################################
 # IMPORT UTILITY FUNCTIONS FOR SCRIPTS AND COLOR GRADIENT LIBRARY
@@ -52,8 +52,8 @@ source "${UTILITYPATH}/Colors.sh"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -nh)
-            SHOW_HEADER="false"
+        -h)
+            SHOW_HEADER="true"
             shift
             ;;
         *)

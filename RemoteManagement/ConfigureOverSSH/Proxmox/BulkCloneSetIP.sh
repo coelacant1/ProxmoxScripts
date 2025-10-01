@@ -133,7 +133,7 @@ EOF
   # Build + push inner script
   tmpInner="$(mktemp)"
   cat >"$tmpInner" <<'INNER_EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 NEW_PREFIX="$1"   # e.g., BC:13:46

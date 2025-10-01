@@ -37,10 +37,9 @@ Or an even shorter single line call:
 bash <(curl -L pve.coela.sh)
 ```
 
-
-Short single line call with a minimal header:
+Short single line call with the full header:
 ```bash
-bash <(curl -L pve.coela.sh) -nh
+bash <(curl -L pve.coela.sh) -h
 ```
 
 ![Single Line Online Command](.site/SingleLineCommand.png)
