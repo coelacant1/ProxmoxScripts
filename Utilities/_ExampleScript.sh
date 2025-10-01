@@ -2,41 +2,89 @@
 #
 # _ExampleScript.sh
 #
-# Demonstrates usage of the included spinner and message functions.
+# Minimal script template matching ProxmoxScripts repository conventions.
+# Copy this file and adapt for new scripts.
 #
 # Usage:
-#   ./_ExampleScript.sh <text1> <text2>
+#   ./_ExampleScript.sh <required-arg>
 #
+# Example:
+#   ./_ExampleScript.sh foo
 #
-# This script simulates a process, updates its status, and then shows success and error messages.
+# Function Index:
+#   - usage
+#   - cleanup
+#   - main
 #
-
-source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
-# Initial Checks
+# Setup / Globals
+###############################################################################
+# Assumes UTILITYPATH already exported by GUI.sh (or caller). Do not auto-discover
+# to avoid duplicating logic or mis-resolving paths when invoked from GUI.
+
+# Source shared helpers (keep minimal; don't duplicate functionality)
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Communication.sh"
+
+###############################################################################
+# Initial checks
 ###############################################################################
 __check_root__
 __check_proxmox__
 
 ###############################################################################
+# Usage
+###############################################################################
+usage() {
+  cat <<-USAGE
+Usage: ${0##*/} <required-arg> [optional-arg]
+
+Examples:
+  ${0##*/} foo
+USAGE
+}
+
+###############################################################################
 # Parse Arguments
 ###############################################################################
-if [ $# -lt 2 ]; then
-  echo "Error: Insufficient arguments."
-  echo "Usage: ./_ExampleScript.sh <text1> <text2>"
+if [[ $# -lt 1 ]]; then
+  echo "Error: Missing required arguments." >&2
+  usage
   exit 1
 fi
 
 ###############################################################################
+# Functions
+###############################################################################
+cleanup() {
+  # called on exit to clean temporary files, stop spinners, etc.
+  __stop_spin__ 2>/dev/null || true
+}
+
+trap cleanup EXIT
+
+###############################################################################
 # MAIN
 ###############################################################################
-__info__ "Simulating an error scenario..."
-sleep 2
-__err__ "A simulated error has occurred!"
+main() {
+  __info__ "Starting: ${0##*/}"
 
-__info__ "Starting a simulated process..."
-sleep 2
-__update__ "Process is halfway..."
-sleep 2
-__ok__ "Process completed successfully."
+  # Example work
+  __update__ "Working on ${1}..."
+  sleep 1
+
+  if false; then
+    __err__ "An example error occurred"
+    exit 1
+  fi
+
+  __ok__ "Finished: ${0##*/}"
+}
+
+main "$@"
+
+###############################################################################
+# Testing status
+###############################################################################
+# Tested: none
