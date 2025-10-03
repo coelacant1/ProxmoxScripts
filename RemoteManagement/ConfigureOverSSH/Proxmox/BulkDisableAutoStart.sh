@@ -61,8 +61,7 @@ source "${UTILITYPATH}/SSH.sh"
 
 __check_root__
 __check_proxmox__
-__install_or_prompt__ "sshpass"
-__install_or_prompt__ "jq"
+__ensure_dependencies__ jq sshpass
 
 
 ###############################################################################
@@ -92,18 +91,15 @@ fi
 
 # disable_autostart_inner <host>
 # Runs inside nested host: disable autostart for qm + pct resources.
-disable_autostart_inner() {
-  local host="$1"
-  (
-    printf '%s\n' "$sshPass"
-    cat <<'INNER'
+read -r -d '' disableAutostartScript <<'EOF' || true
+#!/bin/bash
 set -euo pipefail
+
 if ! command -v qm &>/dev/null; then
   echo "Not a Proxmox environment (qm missing)." >&2
   exit 1
 fi
-# Disable autostart for QEMU VMs
-declare -a vms
+
 mapfile -t vms < <(qm list | awk 'NR>1 {print $1}')
 for id in "${vms[@]}"; do
   if qm config "$id" | grep -q '^onboot: *1'; then
@@ -113,9 +109,8 @@ for id in "${vms[@]}"; do
     echo "VM $id: already 0 or no onboot flag"
   fi
 done
-# Disable autostart for LXCs if pct exists
+
 if command -v pct &>/dev/null; then
-  declare -a cts
   mapfile -t cts < <(pct list | awk 'NR>1 {print $1}')
   for cid in "${cts[@]}"; do
     if pct config "$cid" | grep -q '^onboot: *1'; then
@@ -126,9 +121,16 @@ if command -v pct &>/dev/null; then
     fi
   done
 fi
-INNER
-  ) | sshpass -p "$sshPass" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$sshUser@$host" "sudo -S -p '' bash -s"
+EOF
+
+disable_autostart_inner() {
+  local host="$1"
+  __ssh_exec_script__ \
+    --host "$host" \
+    --user "$sshUser" \
+    --password "$sshPass" \
+    --sudo \
+    --script-content "$disableAutostartScript"
 }
 
 # process_vmid <vmid>

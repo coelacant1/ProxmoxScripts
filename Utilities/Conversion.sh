@@ -20,6 +20,7 @@
 #   - __ip_to_int__
 #   - __int_to_ip__
 #   - __cidr_to_netmask__
+#   - __vmid_to_mac_prefix__
 #
 
 ###############################################################################
@@ -71,4 +72,91 @@ __cidr_to_netmask__() {
   local octet3=$(( (mask >>  8) & 255 ))
   local octet4=$((  mask        & 255 ))
   echo "${octet1}.${octet2}.${octet3}.${octet4}"
+}
+
+# --- __vmid_to_mac_prefix__ -------------------------------------------------
+# @function __vmid_to_mac_prefix__
+# @description Converts a numeric VMID into a deterministic MAC prefix string (e.g., BC:12:34).
+# @usage __vmid_to_mac_prefix__ --vmid 1234 [--prefix BC] [--pad-length 4]
+# @flags
+#   --vmid <vmid>         Integer VMID (required).
+#   --prefix <prefix>     Two-hex-character vendor prefix (default "BC").
+#   --pad-length <len>    Total digits (must be even, default 4). Additional digits produce extra octets.
+# @return Prints the computed MAC prefix (uppercase) to stdout.
+# @example __vmid_to_mac_prefix__ --vmid 27
+# @example __vmid_to_mac_prefix__ --vmid 512 --prefix aa --pad-length 6
+__vmid_to_mac_prefix__() {
+    local vmid=""
+    local prefix="BC"
+    local padLength=4
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --vmid)
+                vmid="$2"
+                shift 2
+                ;;
+            --prefix)
+                prefix="$2"
+                shift 2
+                ;;
+            --pad-length)
+                padLength="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                ;;
+            *)
+                echo "Error: Unknown option '$1' passed to __vmid_to_mac_prefix__." >&2
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ -z "$vmid" ]]; then
+        echo "Error: __vmid_to_mac_prefix__ requires --vmid." >&2
+        return 1
+    fi
+
+    if [[ ! "$vmid" =~ ^[0-9]+$ ]]; then
+        echo "Error: VMID must be a non-negative integer." >&2
+        return 1
+    fi
+
+    if [[ -z "$padLength" || ! "$padLength" =~ ^[0-9]+$ ]]; then
+        echo "Error: --pad-length must be a positive integer." >&2
+        return 1
+    fi
+
+    if (( padLength <= 0 || padLength % 2 != 0 )); then
+        echo "Error: --pad-length must be a positive, even integer." >&2
+        return 1
+    fi
+
+        local padded
+        printf -v padded "%0${padLength}d" "$vmid"
+
+        local effectiveLength=${#padded}
+        if (( effectiveLength % 2 != 0 )); then
+            padded="0${padded}"
+            ((effectiveLength++))
+        fi
+
+        local -a segments=()
+        local i
+        for (( i = 0; i < effectiveLength; i += 2 )); do
+            segments+=("${padded:i:2}")
+        done
+
+    local upperPrefix
+    upperPrefix=$(echo "$prefix" | tr '[:lower:]' '[:upper:]')
+
+    local result="$upperPrefix"
+    local segment
+    for segment in "${segments[@]}"; do
+        result+=":${segment^^}"
+    done
+
+    echo "$result"
 }

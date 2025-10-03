@@ -19,7 +19,6 @@
 # Function Index:
 #   - show_ascii_art
 #   - show_top_comments
-#   - extract_dot_slash_help_line
 #   - show_script_usage
 #   - display_path
 #   - run_script
@@ -45,6 +44,7 @@ SHOW_HEADER="false"
 
 UTILITYPATH="./Utilities"
 source "${UTILITYPATH}/Colors.sh"
+source "${UTILITYPATH}/Communication.sh"
 
 ###############################################################################
 # HEADER MANAGEMENT
@@ -149,49 +149,10 @@ show_top_comments() {
     clear
     show_ascii_art
 
-    __line_rgb__ "=== Top Comments for: $(display_path "$script_path") ===" 200 200 0
-    echo
+    __display_script_info__ "$script_path" "$(display_path "$script_path")"
 
-    local printing=false
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^#! ]] && [[ "$line" =~ "bash" ]]; then
-            continue
-        fi
-        if [[ "$line" == "#" ]]; then
-            continue
-        fi
-        if [[ "$line" =~ ^# ]]; then
-            __line_rgb__ "$line" 0 200 0
-            printing=true
-        else
-            if [ "$printing" = true ]; then
-                break
-            fi
-        fi
-    done <"$script_path"
-
-    echo
     __line_rgb__ "Press Enter to continue." 0 255 255
     read -r
-}
-
-# Attempt to find a line like '# ./something.sh ...' in the top comments
-
-extract_dot_slash_help_line() {
-    local script_path="$1"
-    local found_line=""
-    while IFS= read -r line; do
-        if [[ ! "$line" =~ ^# ]]; then
-            break
-        fi
-        local stripped="${line#\#}"
-        stripped="${stripped#"${stripped%%[![:space:]]*}"}"
-        if [[ "$stripped" =~ ^\./ ]]; then
-            found_line="$stripped"
-            break
-        fi
-    done <"$script_path"
-    echo "$found_line"
 }
 
 # If the script is executable with a '--help' usage, we can try to show that.
@@ -226,19 +187,11 @@ display_path() {
 ###############################################################################
 run_script() {
     local script_path="$1"
-    local ds_line
-    ds_line=$(extract_dot_slash_help_line "$script_path")
 
     clear
     show_ascii_art
-    if [ -n "$ds_line" ]; then
-        __line_rgb__ "Example usage (from script comments):" 0 200 0
-        echo "  $ds_line"
-        echo
-    else
-        __line_rgb__ show_top_comments "$script_path" 0 200 0
-        echo
-    fi
+    
+    __display_script_info__ "$script_path" "$(display_path "$script_path")"
 
     __line_rgb__ "=== Enter parameters for $(display_path "$script_path") (type 'c' to cancel or leave empty to run no-args):" 200 200 0
     read -r param_line

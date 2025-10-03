@@ -56,10 +56,9 @@ ACTION="$2"
 
 # Decide which utilities to ensure based on mode
 if [[ "$SCRIPT_MODE" == "local" ]]; then
-  __install_or_prompt__ "jq"
+  __ensure_dependencies__ jq
 elif [[ "$SCRIPT_MODE" == "remote" ]]; then
-  __install_or_prompt__ "jq"
-  __install_or_prompt__ "sshpass"
+  __ensure_dependencies__ jq sshpass
 fi
 
 ###############################################################################
@@ -255,35 +254,60 @@ function remote_install() {
   local scheduleType="$5"
   local scheduleTime="$6"
 
+  local -a connection_flags=(--host "$vmHost" --user "$vmUser" --password "$vmPass")
+
   echo "Installing ceph-common on remote node '${vmHost}'..."
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo apt-get update -y && sudo apt-get install -y ceph-common"
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --shell bash \
+    --command "apt-get update -y && apt-get install -y ceph-common"
 
   echo "Ensuring /etc/ceph on remote..."
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo mkdir -p /etc/ceph && sudo chmod 755 /etc/ceph"
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --command "mkdir -p /etc/ceph && chmod 755 /etc/ceph"
 
   echo "Copying ceph.conf and ceph.client.admin.keyring to remote..."
-  sshpass -p "${vmPass}" scp -o StrictHostKeyChecking=no /etc/ceph/ceph.conf \
-    "${vmUser}@${vmHost}:/tmp/ceph.conf"
-  sshpass -p "${vmPass}" scp -o StrictHostKeyChecking=no /etc/ceph/ceph.client.admin.keyring \
-    "${vmUser}@${vmHost}:/tmp/ceph.client.admin.keyring"
+  __scp_send__ \
+    "${connection_flags[@]}" \
+    --source /etc/ceph/ceph.conf \
+    --destination /tmp/ceph.conf
+  __scp_send__ \
+    "${connection_flags[@]}" \
+    --source /etc/ceph/ceph.client.admin.keyring \
+    --destination /tmp/ceph.client.admin.keyring
 
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo mv /tmp/ceph.conf /etc/ceph/ && sudo chown root:root /etc/ceph/ceph.conf && sudo chmod 644 /etc/ceph/ceph.conf"
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo mv /tmp/ceph.client.admin.keyring /etc/ceph/ && sudo chown root:root /etc/ceph/ceph.client.admin.keyring && sudo chmod 600 /etc/ceph/ceph.client.admin.keyring"
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --shell bash \
+    --command "mv /tmp/ceph.conf /etc/ceph/ && chown root:root /etc/ceph/ceph.conf && chmod 644 /etc/ceph/ceph.conf"
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --shell bash \
+    --command "mv /tmp/ceph.client.admin.keyring /etc/ceph/ && chown root:root /etc/ceph/ceph.client.admin.keyring && chmod 600 /etc/ceph/ceph.client.admin.keyring"
 
   local localScriptPath
   localScriptPath="$(realpath "$0")"
   local remoteScriptName="CephScrubScheduler-remote.sh"
   echo "Copying this script to remote as /tmp/${remoteScriptName} ..."
-  sshpass -p "${vmPass}" scp -o StrictHostKeyChecking=no "${localScriptPath}" \
-    "${vmUser}@${vmHost}:/tmp/${remoteScriptName}"
+  __scp_send__ \
+    "${connection_flags[@]}" \
+    --source "$localScriptPath" \
+    --destination "/tmp/${remoteScriptName}"
+
+  printf -v remoteInstallCmd 'bash /tmp/%s local install "%s" "%s" "%s"' \
+    "$remoteScriptName" "$poolName" "$scheduleType" "$scheduleTime"
 
   echo "Running 'local install' on remote..."
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo bash /tmp/${remoteScriptName} local install \"${poolName}\" \"${scheduleType}\" \"${scheduleTime}\""
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --shell bash \
+    --command "$remoteInstallCmd"
 }
 
 function remote_uninstall() {
@@ -292,12 +316,19 @@ function remote_uninstall() {
   local vmPass="$3"
   local poolName="$4"
 
-  echo "Uninstalling on remote node '${vmHost}'..."
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo bash /tmp/CephScrubScheduler-remote.sh local uninstall \"${poolName}\""
+  local -a connection_flags=(--host "$vmHost" --user "$vmUser" --password "$vmPass")
 
-  sshpass -p "${vmPass}" ssh -o StrictHostKeyChecking=no "${vmUser}@${vmHost}" \
-    "sudo rm -f /tmp/CephScrubScheduler-remote.sh"
+  echo "Uninstalling on remote node '${vmHost}'..."
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --shell bash \
+    --command "bash /tmp/CephScrubScheduler-remote.sh local uninstall \"${poolName}\""
+
+  __ssh_exec__ \
+    "${connection_flags[@]}" \
+    --sudo \
+    --command "rm -f /tmp/CephScrubScheduler-remote.sh"
 }
 
 ###############################################################################

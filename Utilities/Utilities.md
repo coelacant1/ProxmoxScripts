@@ -93,6 +93,11 @@ Usage: __cidr_to_netmask__ 18
 Example Output: For __cidr_to_netmask__ 18, the output is: 255.255.192.0  
 Output: Prints the full subnet netmask.
 
+Conversion.sh/__vmid_to_mac_prefix__: Converts a numeric VMID into a deterministic MAC prefix (e.g., BC:13:46).  
+Usage: __vmid_to_mac_prefix__ --vmid 1346 [--prefix BC] [--pad-length 4]  
+Example Output: For __vmid_to_mac_prefix__ --vmid 1346, the output is: BC:13:46  
+Output: Prints the uppercase MAC prefix derived from the VMID.
+
 ## Prompts.sh
 
 Prompts.sh/__check_root__: Checks if the current user is root.  
@@ -114,6 +119,15 @@ Prompts.sh/__prompt_keep_installed_packages__: Prompts the user whether to keep 
 Usage: __prompt_keep_installed_packages__  
 Example Output: If the user chooses "No", the output is: "Removing the packages installed in this session..." followed by "Packages removed."  
 Output: Removes packages if user says "No", otherwise does nothing.
+
+Prompts.sh/__ensure_dependencies__: Verifies that the specified commands exist and installs them if missing (optionally without prompting).  
+Usage: __ensure_dependencies__ [--auto-install] [--quiet] jq sshpass  
+Example Output: If jq is missing, the output includes: "Installing missing dependency 'jq'..."  
+Output: Installs or confirms dependencies and tracks packages added this session.
+
+Prompts.sh/__require_root_and_proxmox__: Convenience helper that ensures the script is run as root on a Proxmox node.  
+Usage: __require_root_and_proxmox__  
+Output: Exits if the current user is not root or the host lacks `pveversion`.
 
 ## Queries.sh
 
@@ -137,12 +151,12 @@ Usage: __init_node_mappings__
 Example Output: No direct output; internal mappings are initialized for later queries.  
 Output: Populates the associative arrays with node information.
 
-Queries.sh/__get_ip_from_name__: Given a node’s name (e.  
+Queries.sh/__get_ip_from_name__: Given a node’s name (e.g., `pve03`), prints its link0 IP address.  
 Usage: __get_ip_from_name__ "pve03"  
 Example Output: For __get_ip_from_name__ "pve03", the output is: 192.168.83.23  
 Output: Prints the IP to stdout or exits 1 if not found.
 
-Queries.sh/__get_name_from_ip__: Given a node’s link0 IP (e.  
+Queries.sh/__get_name_from_ip__: Given a node’s link0 IP (e.g., `172.20.83.23`), prints its name.  
 Usage: __get_name_from_ip__ "172.20.83.23"  
 Example Output: For __get_name_from_ip__ "172.20.83.23", the output is: pve03  
 Output: Prints the node name to stdout or exits 1 if not found.
@@ -172,9 +186,34 @@ Usage: get_ip_from_vmid 100
 Example Output: For get_ip_from_vmid 100, the output might be: 192.168.1.100  
 Output: Prints the discovered IP or exits 1 if not found.
 
+Queries.sh/__get_ip_from_guest_agent__: Uses the QEMU guest agent to fetch the first non-loopback IP address for a VMID, with retry and family selection controls.  
+Usage: __get_ip_from_guest_agent__ --vmid 105 --retries 60 --delay 5  
+Example Output: Returns the detected IPv4 address once the guest agent reports it.  
+Output: Prints the discovered IP or exits 1 if not found after all retries.
+
 ## SSH.sh
 
 SSH.sh/__wait_for_ssh__: Repeatedly attempts to connect via SSH to a specified host using a given username and password until SSH is reachable or until the maximum number of attempts is exhausted.  
 Usage: __wait_for_ssh__ <host> <sshUsername> <sshPassword>  
 Example Output: For __wait_for_ssh__ "192.168.1.100" "user" "pass", the output might be: SSH is up on "192.168.1.100"  
 Output: Returns 0 if a connection is established within the max attempts, otherwise exits with code 1.
+
+SSH.sh/__ssh_exec__: Runs ad-hoc commands on a remote host over SSH with support for passwords, keys, custom ports, sudo, and strict host-key enforcement.  
+Usage: __ssh_exec__ --host 10.0.0.5 --user root --password secret --command "uname -a"  
+Output: Streams the command output locally; exits non-zero if the remote command fails.
+
+SSH.sh/__scp_send__: Transfers local files or directories to a remote host via SCP with optional recursion and timeout controls.  
+Usage: __scp_send__ --host 10.0.0.5 --user root --password secret --source ./script.sh --destination /root/  
+Output: Copies the specified sources to the remote destination.
+
+SSH.sh/__scp_fetch__: Retrieves files or directories from the remote host to the local machine using SCP.  
+Usage: __scp_fetch__ --host 10.0.0.5 --user root --password secret --source /root/data.txt --destination ./downloads/  
+Output: Copies the remote sources into the local destination path.
+
+SSH.sh/__ssh_exec_script__: Uploads a local script (or inline content) to a remote host, marks it executable, runs it (optionally with sudo), and removes it afterward unless told to keep it.  
+Usage: __ssh_exec_script__ --host 10.0.0.5 --user root --password secret --script-path ./remote_task.sh --arg value  
+Output: Executes the script remotely and streams its output locally.
+
+SSH.sh/__ssh_exec_function__: Packages local Bash function definitions, sends them to the remote host, and invokes the chosen function with optional arguments.  
+Usage: __ssh_exec_function__ --host node --user root --password secret --function configure_node --call configure_node --arg 10.0.0.5  
+Output: Runs the provided function remotely and forwards its stdout/stderr.
