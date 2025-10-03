@@ -25,6 +25,14 @@ fi
 source "${UTILITYPATH}/SSH.sh"
 
 ###############################################################################
+# Demo function for __ssh_exec_function__ helper
+###############################################################################
+demo_remote_function() {
+  local message="${1:-}"
+  echo "[REMOTE] demo_remote_function executed with: $message"
+}
+
+###############################################################################
 # Parse input arguments or prompt the user
 ###############################################################################
 host="${1}"
@@ -55,4 +63,15 @@ __wait_for_ssh__ "${host}" "${sshUsername}" "${sshPassword}"
 
 # If the function returns successfully, continue:
 echo "Success: SSH is accessible on '${host}'."
+if [[ "${SSH_TEST_RUN_FUNCTION:-0}" == "1" ]]; then
+  echo
+  echo "=== Demonstrating __ssh_exec_function__ ==="
+  __ssh_exec_function__ \
+    --host "${host}" \
+    --user "${sshUsername}" \
+    --password "${sshPassword}" \
+    --function demo_remote_function \
+    --call demo_remote_function \
+    --arg "Hello from $(hostname -s)"
+fi
 exit 0

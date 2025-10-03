@@ -26,6 +26,8 @@
 #   - __check_proxmox__
 #   - __install_or_prompt__
 #   - __prompt_keep_installed_packages__
+#   - __ensure_dependencies__
+#   - __require_root_and_proxmox__
 #
 
 ###############################################################################
@@ -115,4 +117,73 @@ __prompt_keep_installed_packages__() {
     else
         echo "Keeping all installed packages."
     fi
+}
+
+# --- __ensure_dependencies__ -------------------------------------------------
+# @function __ensure_dependencies__
+# @description Verifies that the specified commands are available; installs them if missing. Supports automatic installation or interactive prompting.
+# @usage __ensure_dependencies__ [--auto-install] [--quiet] <command> [<command> ...]
+# @flags
+#   --auto-install    Automatically install missing dependencies without prompting.
+#   --quiet           Suppress status messages for dependencies that are already present.
+# @example __ensure_dependencies__ jq sshpass
+# @example __ensure_dependencies__ --auto-install curl rsync
+__ensure_dependencies__() {
+    local autoInstall=0
+    local quiet=0
+    local -a deps=()
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --auto-install)
+                autoInstall=1
+                shift
+                ;;
+            --quiet)
+                quiet=1
+                shift
+                ;;
+            --)
+                shift
+                deps+=("$@")
+                break
+                ;;
+            *)
+                deps+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    if [[ ${#deps[@]} -eq 0 ]]; then
+        echo "Error: __ensure_dependencies__ requires at least one command name." >&2
+        return 1
+    fi
+
+    local dep
+    for dep in "${deps[@]}"; do
+        if command -v "$dep" &>/dev/null; then
+            if [[ "$quiet" -eq 0 ]]; then
+                echo "Dependency '$dep' is already installed."
+            fi
+            continue
+        fi
+
+        if [[ "$autoInstall" -eq 1 ]]; then
+            echo "Installing missing dependency '$dep'..."
+            apt-get install -y "$dep"
+            SESSION_INSTALLED_PACKAGES+=("$dep")
+        else
+            __install_or_prompt__ "$dep"
+        fi
+    done
+}
+
+# --- __require_root_and_proxmox__ -------------------------------------------
+# @function __require_root_and_proxmox__
+# @description Convenience helper that ensures the script is run as root on a Proxmox node.
+# @usage __require_root_and_proxmox__
+__require_root_and_proxmox__() {
+    __check_root__
+    __check_proxmox__
 }
