@@ -26,96 +26,196 @@ This repository contains Bash scripts (`.sh` files) that help automate and manag
 
 ---
 
-## 3. Script Structure and Style
+## 3. Shell Script Style Guide
 
-### 3.1 Shebang
+> This section consolidates the repository’s scripting conventions (formerly in `Utilities/ScriptStyleGuide.md`) so everything you need lives in one place.
 
-- All scripts **must** start with:
-```bash
-#!/bin/bash
-```
+### 3.1 Core Principles
 
-### 3.2 Usage and Description
+- Keep scripts simple, idempotent, and safe for Proxmox nodes.
+- Prefer readable, well-documented code over clever one-liners.
+- Reuse shared helpers under `Utilities/` instead of copying logic.
 
-- The **first line** (or first few lines) in the script, after the `#!/bin/bash`, must be commented with **usage instructions** and a brief **description**. For example:
+### 3.2 Where to Place Files
+
+- Utilities and shared helpers: `Utilities/`
+- Feature scripts: domain folders (e.g., `Host/`, `Cluster/`, `Storage/`)
+- Use descriptive MixedCase filenames such as `CreateCluster.sh`.
+
+### 3.3 Shebang and Strictness
+
+- Start every script with `#!/bin/bash`.
+- Avoid enabling `set -e` globally; prefer explicit error handling, `set -e` within narrow scopes, or traps for critical sections.
+- When you need strict error handling, install an `ERR` trap to provide context on failure (see section 3.9).
+
+### 3.4 Required Header
+
+All scripts must begin with a comment block that covers:
+
+- File name and short description
+- Usage example(s) starting with `./`
+- Relevant notes (root requirement, Proxmox requirement, etc.)
+- A “Function Index” placeholder (see next section)
+
+Example header:
 
 ```bash
 #!/bin/bash
 #
-# AddNode.sh
+# MyScript.sh
 #
-# A script to join a new Proxmox node to an existing cluster, with optional multi-ring support.
+# Short description of what the script does.
 #
 # Usage:
-#   ./AddNode.sh <cluster-IP> [<ring0-addr>] [<ring1-addr>]
+#   ./MyScript.sh <arg1> [--flag]
 #
-# [Further explanation, examples, etc...]
+# Function Index:
+#   - check_something
+#   - do_work
+#
 ```
 
-- If you need to add multiple examples, list them under the usage section, preceded by a brief comment. Ensure each example is easy to understand.
+### 3.5 Function Index
 
-### 3.3 Code Readability and Commenting
+- Keep the header line exactly `# Function Index:` followed by individual `#   - function_name` lines.
+- The helper at `.check/UpdateFunctionIndex.py` rewrites this section automatically by scanning for `name() {` or `function name()` definitions. Leave the list contiguous with the rest of the header comment.
 
-- **Comment your code** where it’s not self-explanatory.  
-- Use section splits with a clear header for readability, for example:
+### 3.6 Common Script Structure
+
+1. Source needed utilities (e.g., `source "${UTILITYPATH}/Prompts.sh"`). When launched via `GUI.sh`, `${UTILITYPATH}` is already exported.
+2. Perform prerequisite checks (`__check_root__`, `__check_proxmox__`, dependency checks with `command -v`).
+3. Parse arguments and validate input. Print usage and exit on bad input.
+4. Group functions logically with clear separators such as `# --- Preliminary Checks -----------------------------------------------------`.
+5. Implement main logic inside a `main()` function and call it at the end of the script.
+6. Record testing notes near the bottom of the file.
+
+### 3.7 Coding Conventions
+
+- Use consistent indentation (stick to the file’s existing spacing).
+- Prefer `local var` inside functions.
+- Quote all variable expansions (`"${var}"`) unless you intentionally rely on word splitting.
+- Use `[[ ... ]]` for conditionals and `(( ... ))` for arithmetic.
+- Choose descriptive variable names; reserve UPPERCASE for environment-level knobs and use lower/mixed case for locals.
+- Avoid code duplication - factor shared logic into utilities.
+
+### 3.8 Logging and User Feedback
+
+- Source `Utilities/Communication.sh` to access helpers such as `__info__`, `__update__`, `__ok__`, and `__err__` for consistent messaging.
+- `Utilities/Colors.sh` provides ANSI color helpers if you need custom formatting beyond the communication helpers.
+
+### 3.9 Error Handling and Cleanup
+
+- Install an error trap when using `Communication.sh`:
+   ```bash
+   trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+   ```
+- Use `trap cleanup EXIT` to ensure temporary files or background processes are removed.
+- Provide specific error messages before exiting so users know what to fix.
+- Check for required commands with `command -v` and exit with meaningful codes.
+
+### 3.10 Argument Parsing
+
+- Keep parsing straightforward. Use `getopts` when handling many flags; otherwise a simple `while`/`case` loop is fine.
+- Always validate user input and print the usage block if the arguments are incorrect.
+
+### 3.11 Testing Notes
+
+- Add a `# Testing status` comment near the end of the script describing how you validated it (environments, scenarios, known limitations).
+- Run [ShellCheck](https://www.shellcheck.net/) or equivalent linters and address warnings where practical.
+
+### 3.12 Reusable Templates and Utilities
+
+- Review `Utilities/_ExampleScript.sh` for a fully fleshed-out reference implementation that demonstrates every convention in practice.
+- Key helper libraries under `Utilities/`:
+   - `Colors.sh` – colorized output and styling helpers.
+   - `Communication.sh` – messaging helpers and the standard error trap.
+   - `Conversion.sh` – data conversion helpers (IP ↔ int, formatting, `__vmid_to_mac_prefix__`, etc.).
+   - `Prompts.sh` – user prompts, dependency helpers (`__install_or_prompt__`, `__ensure_dependencies__`), and environment checks (`__check_root__`, `__check_proxmox__`, `__require_root_and_proxmox__`).
+   - `Queries.sh` – wrappers around Proxmox queries (`__get_ip_from_vmid__`, `__get_ip_from_guest_agent__`, VM/LXC listings, etc.).
+   - `SSH.sh` – utilities for reliable SSH waits, scp transfers, script uploads, and remote function execution (`__ssh_exec__`, `__scp_send__`, `__ssh_exec_script__`, `__ssh_exec_function__`).
+- `Utilities/Utilities.md` provides higher-level documentation for these helpers; update it when you add or modify utilities.
+
+### 3.13 GUI Invocation Expectations
+
+- When invoked via `GUI.sh`, scripts should rely on `${UTILITYPATH}` for sourcing utilities and must be executable on their own (`./script.sh` or `bash script.sh`).
+- Include at least one `./ExampleCommand.sh` usage line in the header - the GUI extracts these examples for display.
+- Clean up background processes and temporary state on exit.
+
+### 3.14 Quick Pre-Commit Checklist
+
+- [ ] Header includes description, usage, and Function Index placeholder.
+- [ ] All required utilities are sourced; no duplicated helper logic.
+- [ ] Variables are quoted and scoped appropriately.
+- [ ] Error handling and cleanup paths are present.
+- [ ] Testing notes updated and (where possible) ShellCheck run.
+
+### 3.15 Minimal End-to-End Example
+
+For a quick reference, here’s a compact script skeleton that follows every requirement. Use this as a mental checklist or see `_ExampleScript.sh`:
+
 ```bash
-# --- Preliminary Checks -----------------------------------------------------
+#!/bin/bash
+#
+# SampleMinimal.sh
+#
+# Demonstrates the minimal structure for ProxmoxScripts contributions.
+#
+# Usage:
+#   ./SampleMinimal.sh --example "value"
+#
+# Function Index:
+#   - parse_args
+#   - main
+#
+
+set -u
+
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+trap 'rm -f "${TMP_FILE:-}"' EXIT
+
+parse_args() {
+   EXAMPLE_VALUE=""
+   while [[ $# -gt 0 ]]; do
+      case "$1" in
+         --example)
+            EXAMPLE_VALUE="$2"; shift 2 ;;
+         -h|--help)
+            __info__ "Usage: ./SampleMinimal.sh --example <value>"; exit 0 ;;
+         *)
+            __err__ "Unknown argument: $1"; exit 64 ;;
+      esac
+   done
+
+   [[ -n "$EXAMPLE_VALUE" ]] || { __err__ "--example is required"; exit 64; }
+}
+
+main() {
+   __check_root__
+   __info__ "Running with example value: ${EXAMPLE_VALUE}"
+   # ... perform work here ...
+   __ok__ "Done"
+}
+
+parse_args "$@"
+main
+
+# Testing status:
+#   - 2025-10-03: Ran locally on PVE 8.2 test node (root shell)
 ```
-- Keep sections logically grouped (e.g., argument parsing, validations, main script logic, cleanup).
-- Use functions when applicable.
 
-### 3.4 Avoid Code Duplication
-
-- If a script can call another script instead of repeating code, please **call the other script**.
-- Keep common functionality modular if possible (e.g., in a shared script or function library).
-
-### 3.5 Error Handling
-
-- Always include:
-```bash
-set -e
-```
-  at or near the top of the script to exit immediately on any non-zero command return.
-
-- Provide clear error messages when exiting, for example:
-```bash
-if [[ $EUID -ne 0 ]]; then
-  echo "Error: This script must be run as root (sudo)."
-  exit 1
-fi
-```
-
-- Test for required commands using `command -v` or similar checks:
-```bash
-if ! command -v pvecm &>/dev/null; then
-  echo "Error: 'pvecm' not found. Are you sure this is a Proxmox node?"
-  exit 2
-fi
-```
-
-### 3.6 Variable Naming
-
-- Use **descriptive variable names** in uppercase for environment-dependent or widely-used variables (e.g., `CLUSTER_IP`, `RING0_ADDR`).  
-- Temporary or local variables can be lowercase or mixed case if it improves readability.
-
-### 3.7 Quoting and Expansion
-
-- Always **quote variables** when they might contain spaces or special characters:
-```bash
-echo "CLUSTER_IP is: $CLUSTER_IP"
-```
-
-### 3.8 ShellCheck and Linting
-
-- We recommend running [ShellCheck](https://www.shellcheck.net/) on your scripts to catch common issues.  
-- Fix any warnings or errors surfaced by ShellCheck or other linters before submitting your contribution.
+For a complete walk-through with richer prompts, colors, and validation patterns, study `Utilities/_ExampleScript.sh` alongside this minimal skeleton.
 
 ---
 
 ## 4. Submitting Changes
 
 1. **Commit Messages**  
-   - Use clear, concise commit messages.  
+   - Use clear, concise commit messages. 
    - Reference any related issues (e.g., `Fixes #123`) in your commit or PR description.
 
 2. **Pull Request Description**  

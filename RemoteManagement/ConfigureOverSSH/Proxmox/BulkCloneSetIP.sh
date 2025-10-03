@@ -26,8 +26,7 @@ source "${UTILITYPATH}/Conversion.sh"
 __check_root__
 __check_proxmox__
 
-__install_or_prompt__ "jq"
-__install_or_prompt__ "sshpass"
+__ensure_dependencies__ sshpass
 
 ###############################################################################
 # Argument Parsing
@@ -52,87 +51,24 @@ IFS='/' read -r startIpAddrOnly startMask <<<"$startIpCidr"
 ipInt="$(__ip_to_int__ "$startIpAddrOnly")"
 
 ###############################################################################
-# Helpers
-###############################################################################
-# Get first non-loopback IPv4 from guest agent (with retries)
-get_ip_via_agent() {
-  local vmid="$1"
-  for _ in {1..30}; do
-    if qm agent "$vmid" ping >/dev/null 2>&1; then
-      local json ip
-      if json="$(qm agent "$vmid" network-get-interfaces 2>/dev/null)"; then
-        ip="$(echo "$json" \
-          | jq -r '.[] | select(.name!="lo") | .["ip-addresses"][]? 
-                    | select(.["ip-address-type"]=="ipv4") 
-                    | .["ip-address"]' \
-          | head -n1)"
-        if [[ -n "${ip:-}" ]]; then
-          echo "$ip"
-          return 0
-        fi
-      fi
-    fi
-    sleep 2
-  done
-  return 1
-}
-
-# Compute BC:<VMID[0..1]>:<VMID[2..3]> from decimal VMID (zero-padded to 4 digits)
-vmid_to_prefix() {
-  local vmid="$1"
-  local z; z=$(printf "%04d" "$vmid")
-  echo "BC:${z:0:2}:${z:2:2}"
-}
-
-# Run a command on the child via SSH
-ssh_child() {
-  local host="$1"; shift
-  sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$sshUsername@$host" "$@"
-}
-
-# Copy a file to the child via SCP
-scp_child() {
-  local src="$1" dst="$2" host="$3"
-  sshpass -p "$sshPassword" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$src" "$sshUsername@$host:$dst"
-}
-
-###############################################################################
 # Main Logic
 ###############################################################################
-for ((i=0; i<instanceCount; i++)); do
-  currentVmId=$((baseVmId + i))
-  currentIp="$(__int_to_ip__ "$ipInt")"
-  currentIpCidr="$currentIp/$startMask"
+read -r -d '' networkUpdateScript <<'EOF' || true
+#!/bin/bash
+set -euo pipefail
 
-  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
-  qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}" >/dev/null
-  echo "Starting VM \"$currentVmId\"..."
-  qm start "$currentVmId" >/dev/null || true
+templateIp="$1"
+currentIpCidr="$2"
+newGateway="$3"
 
-  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
-
-  sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" bash -s <<EOF
 sed -i '/\bgateway\b/d' /etc/network/interfaces
-sed -i "s#${templateIpAddr}/[0-9]\\+#${currentIpCidr}#g" /etc/network/interfaces
+sed -i "s#${templateIp}/[0-9]\\+#${currentIpCidr}#g" /etc/network/interfaces
 sed -i "\#address ${currentIpCidr}#a gateway ${newGateway}" /etc/network/interfaces
-TAB="\$(printf '\\t')"
-sed -i "s|^[[:space:]]*gateway\\(.*\\)|\${TAB}gateway\\1|" /etc/network/interfaces
+TAB="$(printf '\t')"
+sed -i "s|^[[:space:]]*gateway\\(.*\\)|${TAB}gateway\\1|" /etc/network/interfaces
 EOF
 
-  sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no "$sshUsername@$templateIpAddr" \
-    "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
-
-  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
-
-  # --- Child Proxmox: set datacenter mac_prefix and rewrite existing MACs ----
-  newPrefix="$(vmid_to_prefix "$currentVmId")"
-  echo "Computed MAC prefix for VMID $currentVmId: $newPrefix"
-
-  # Build + push inner script
-  tmpInner="$(mktemp)"
-  cat >"$tmpInner" <<'INNER_EOF'
+read -r -d '' macUpdateScript <<'EOF' || true
 #!/bin/bash
 set -euo pipefail
 
@@ -184,18 +120,65 @@ echo "Reloading pvedaemon (non-disruptive) ..."
 systemctl reload pvedaemon 2>/dev/null || true
 
 echo "Done."
-INNER_EOF
+EOF
 
-  echo "Copying inner MAC-update script to $currentIp ..."
-  scp_child "$tmpInner" "/root/_mac_update.sh" "$currentIp"
-  rm -f "$tmpInner"
+for ((i=0; i<instanceCount; i++)); do
+  currentVmId=$((baseVmId + i))
+  currentIp="$(__int_to_ip__ "$ipInt")"
+  currentIpCidr="$currentIp/$startMask"
 
-  echo "Applying MAC prefix + rewriting child VMs on $currentIp ..."
-  ssh_child "$currentIp" "bash /root/_mac_update.sh '$newPrefix'"
+  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
+  qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}" >/dev/null
+  echo "Starting VM \"$currentVmId\"..."
+  qm start "$currentVmId" >/dev/null || true
+
+  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
+  __ssh_exec_script__ \
+    --host "$templateIpAddr" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --sudo \
+    --script-content "$networkUpdateScript" \
+    --arg "$templateIpAddr" \
+    --arg "$currentIpCidr" \
+    --arg "$newGateway"
+
+  __ssh_exec__ \
+    --host "$templateIpAddr" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --sudo \
+    --shell bash \
+    --command "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
+
+  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
+
+  # --- Child Proxmox: set datacenter mac_prefix and rewrite existing MACs ----
+  newPrefix="$(__vmid_to_mac_prefix__ --vmid "$currentVmId")"
+  echo "Computed MAC prefix for VMID $currentVmId: $newPrefix"
+
+  __ssh_exec_script__ \
+    --host "$currentIp" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --sudo \
+    --script-content "$macUpdateScript" \
+    --arg "$newPrefix"
 
   echo "Verification on $currentIp:"
-  ssh_child "$currentIp" "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
-  ssh_child "$currentIp" "qm list || true; pct list || true"
+  __ssh_exec__ \
+    --host "$currentIp" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --sudo \
+    --command "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
+  __ssh_exec__ \
+    --host "$currentIp" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --sudo \
+    --shell bash \
+    --command "qm list || true; pct list || true"
 
   # Next IP
   ipInt=$((ipInt + 1))

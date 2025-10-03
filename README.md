@@ -42,6 +42,47 @@ Short single line call with the full header:
 bash <(curl -L pve.coela.sh) -h
 ```
 
+Use the testing branch (downloads from the 'testing' branch instead of 'main'):
+```bash
+bash <(curl -L pve.coela.sh) --testing
+```
+
+Or specify an explicit branch:
+```bash
+bash <(curl -L pve.coela.sh) --branch experimental-feature
+```
+
+### Direct Non-Interactive Script Execution
+
+You can now execute a specific script from the repository directly (without launching the interactive text UI) using new flags exposed by `CCPVE.sh`.
+
+List all runnable scripts (relative paths):
+```bash
+bash <(curl -L pve.coela.sh) --list
+```
+
+Run a specific script by relative path (as shown in the list):
+```bash
+bash <(curl -L pve.coela.sh) --run Host/QuickDiagnostic.sh
+```
+
+Pass arguments to that script:
+```bash
+bash <(curl -L pve.coela.sh) --run Storage/Benchmark.sh --args "--device /dev/nvme0n1 --mode quick"
+```
+
+Combined wget form examples:
+```bash
+bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)" --list
+bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)" --run VirtualMachines/CreateFromISO.sh --args "--iso debian-12.iso --vmid 900 --storage local-lvm"
+```
+
+Notes:
+- Arguments are passed verbatim to the target script (no additional quoting added).
+- The repository is still downloaded fresh each invocation (ephemeral mode). For repeated usage, clone the repo instead.
+- Use `--list` first if unsure of the correct relative path.
+- Utilities path (`UTILITYPATH`) is exported automatically so scripts can source shared helpers.
+
 ![Single Line Online Command](.site/SingleLineCommand.png)
 
 ### Installation

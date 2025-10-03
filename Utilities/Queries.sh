@@ -25,6 +25,7 @@
 #   - __get_cluster_vms__
 #   - __get_server_vms__
 #   - __get_ip_from_vmid__
+#   - __get_ip_from_guest_agent__
 #
 
 source "${UTILITYPATH}/Prompts.sh"
@@ -498,4 +499,118 @@ __get_ip_from_vmid__() {
         echo "Error: VMID '$vmid' not found in LXC or QEMU configurations." >&2
         return 1
     fi
+}
+
+# --- __get_ip_from_guest_agent__ -------------------------------------------
+# @function __get_ip_from_guest_agent__
+# @description Attempts to retrieve the first non-loopback IP address reported by the QEMU guest agent for a VM.
+# @usage __get_ip_from_guest_agent__ --vmid <vmid> [--retries <count>] [--delay <seconds>] [--ip-family <ipv4|ipv6>] [--include-loopback] [--allow-link-local]
+# @flags
+#   --vmid <vmid>             Target VMID (required).
+#   --retries <count>         Number of attempts to query the guest agent (default: 30).
+#   --delay <seconds>         Delay between attempts (default: 2 seconds).
+#   --ip-family <family>      IP family to return: ipv4 (default) or ipv6.
+#   --include-loopback        Include loopback interfaces (default excludes them).
+#   --allow-link-local        Allow link-local IPv6 addresses (default skips fe80::/10).
+# @return Prints the discovered IP on success; exits with status 1 otherwise.
+# @example __get_ip_from_guest_agent__ --vmid 105 --retries 60 --delay 5
+__get_ip_from_guest_agent__() {
+    local vmid=""
+    local retries=30
+    local delaySeconds=2
+    local ipFamily="ipv4"
+    local includeLoopback=0
+    local allowLinkLocal=0
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --vmid)
+                vmid="$2"
+                shift 2
+                ;;
+            --retries)
+                retries="$2"
+                shift 2
+                ;;
+            --delay)
+                delaySeconds="$2"
+                shift 2
+                ;;
+            --ip-family)
+                ipFamily="$2"
+                shift 2
+                ;;
+            --ipv6)
+                ipFamily="ipv6"
+                shift
+                ;;
+            --include-loopback)
+                includeLoopback=1
+                shift
+                ;;
+            --allow-link-local)
+                allowLinkLocal=1
+                shift
+                ;;
+            --)
+                shift
+                ;;
+            *)
+                echo "Error: Unknown option '$1' passed to __get_ip_from_guest_agent__." >&2
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ -z "$vmid" ]]; then
+        echo "Error: __get_ip_from_guest_agent__ requires --vmid." >&2
+        return 1
+    fi
+
+    if [[ "$ipFamily" != "ipv4" && "$ipFamily" != "ipv6" ]]; then
+        echo "Error: __get_ip_from_guest_agent__ --ip-family must be 'ipv4' or 'ipv6'." >&2
+        return 1
+    fi
+
+    local attempt
+    for ((attempt = 1; attempt <= retries; attempt++)); do
+        if ! qm agent "$vmid" ping >/dev/null 2>&1; then
+            sleep "$delaySeconds"
+            continue
+        fi
+
+        local json
+        json=$(qm agent "$vmid" network-get-interfaces 2>/dev/null)
+        if [[ -z "$json" || "$json" == "null" ]]; then
+            sleep "$delaySeconds"
+            continue
+        fi
+
+        local ip
+        ip=$(echo "$json" | jq -r \
+            --arg family "$ipFamily" \
+            --argjson includeLoopback "$includeLoopback" \
+            --argjson allowLinkLocal "$allowLinkLocal" \
+            '
+            .[]
+            | select($includeLoopback == 1 or .name != "lo")
+            | .["ip-addresses"][]?
+            | select(. ["ip-address-type"] == $family)
+            | select(
+                $family != "ipv6"
+                or $allowLinkLocal == 1
+                or (. ["ip-address"] | startswith("fe80") | not)
+            )
+            | .["ip-address"]
+            ' | head -n1)
+
+        if [[ -n "$ip" && "$ip" != "null" ]]; then
+            echo "$ip"
+            return 0
+        fi
+
+        sleep "$delaySeconds"
+    done
+
+    return 1
 }

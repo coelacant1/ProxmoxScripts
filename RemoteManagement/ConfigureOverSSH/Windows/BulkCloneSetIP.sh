@@ -24,7 +24,7 @@ source "${UTILITYPATH}/SSH.sh"
 
 __check_root__
 __check_proxmox__
-__install_or_prompt__ "sshpass"
+__ensure_dependencies__ sshpass
 
 ###############################################################################
 # Argument Parsing
@@ -84,6 +84,9 @@ EOF
 
 ssh-keygen -f "/root/.ssh/known_hosts" -R "${templateIpAddr}"
 
+remoteBatPath="C:/Users/${sshUsername}/ChangeIP.bat"
+remoteBatPathCmd="C:\\Users\\${sshUsername}\\ChangeIP.bat"
+
 ###############################################################################
 # Main logic: Clone and configure Windows VMs
 ###############################################################################
@@ -101,10 +104,24 @@ for (( i=0; i<instanceCount; i++ )); do
   __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
 
   echo "Uploading 'ChangeIP.bat' to Windows VM..."
-  sshpass -p "$sshPassword" scp -o StrictHostKeyChecking=no "$tempBat" "$sshUsername@$templateIpAddr:C:\\Users\\$sshUsername\\ChangeIP.bat"
+  __scp_send__ \
+    --host "$templateIpAddr" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --source "$tempBat" \
+    --destination "$remoteBatPath"
 
   echo "Starting IP change script in the background via 'start /b'..."
-  sshpass -p "$sshPassword" ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=3 -o ServerAliveCountMax=1 "$sshUsername@$templateIpAddr" "cmd /c \"C:\\Users\\$sshUsername\\ChangeIP.bat ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\"" || true
+  printf -v remoteCmd 'cmd /c "${remoteBatPathCmd} \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\""' \
+    "$interfaceName" "$currentIp" "$netmask" "$newGateway" "$dns1" "$dns2"
+
+  __ssh_exec__ \
+    --host "$templateIpAddr" \
+    --user "$sshUsername" \
+    --password "$sshPassword" \
+    --extra-ssh-arg "-o ServerAliveInterval=3" \
+    --extra-ssh-arg "-o ServerAliveCountMax=1" \
+    --command "$remoteCmd" || true
 
   echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
   __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"

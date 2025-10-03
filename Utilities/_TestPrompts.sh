@@ -24,12 +24,20 @@ echo "=== TEST: __check_proxmox__ ==="
 __check_proxmox__
 
 echo
+echo "=== TEST: __require_root_and_proxmox__ ==="
+__require_root_and_proxmox__
+
+echo
 echo "=== TEST: __install_or_prompt__ (curl) ==="
 __install_or_prompt__ "curl"
 
 echo
 echo "=== TEST: __prompt_keep_installed_packages__ ==="
 __prompt_keep_installed_packages__
+
+echo
+echo "=== TEST: __ensure_dependencies__ (noop) ==="
+__ensure_dependencies__ --quiet bash
 
 echo
 echo "All tests completed successfully."

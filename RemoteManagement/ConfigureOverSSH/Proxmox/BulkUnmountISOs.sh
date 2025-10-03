@@ -59,8 +59,7 @@ source "${UTILITYPATH}/SSH.sh"
 
 __check_root__
 __check_proxmox__
-__install_or_prompt__ "sshpass"
-__install_or_prompt__ "jq"
+__ensure_dependencies__ jq sshpass
 
 ###############################################################################
 # Args
@@ -85,44 +84,49 @@ fi
 # Inner operation
 ###############################################################################
 # unmount_isos_inner <host>
-unmount_isos_inner() {
-  local host="$1"
-  (
-    printf '%s\n' "$sshPass"
-    cat <<'INNER'
+read -r -d '' unmountIsosScript <<'EOF' || true
+#!/bin/bash
 set -euo pipefail
+
 if ! command -v qm &>/dev/null; then
   echo "Not a Proxmox environment (qm missing)." >&2
   exit 1
 fi
+
 mapfile -t vms < <(qm list | awk 'NR>1 {print $1}')
 if (( ${#vms[@]} == 0 )); then
-  echo "No VMs found inside nested host."; exit 0
+  echo "No VMs found inside nested host."
+  exit 0
 fi
+
 for id in "${vms[@]}"; do
   cfg="$(qm config "$id")" || continue
   changed=0
-  # Identify cdrom lines (EX: ide2: local-lvm:iso/some.iso,media=cdrom)
-  # We will set them to 'none'
+
   while IFS= read -r line; do
-    bus="${line%%:*}"       # ide2, scsi2, sata1 etc.
-    # Only cdrom entries referencing an iso file
+    bus="${line%%:*}"
     if [[ "$line" =~ iso/.*\.iso ]] || [[ "$line" =~ media=cdrom ]]; then
-      echo "Clearing ISO on VM $id ($bus)";
+      echo "Clearing ISO on VM $id ($bus)"
       qm set "$id" -delete "$bus" >/dev/null 2>&1 || true
-      # Re-add empty cdrom placeholder (optional)
       qm set "$id" -$bus none,media=cdrom >/dev/null 2>&1 || true
       changed=1
     fi
   done < <(echo "$cfg" | grep -E '^(ide|scsi|sata)[0-9]+:')
+
   if (( changed == 0 )); then
     echo "VM $id: no ISO attachments to clear"
   fi
-
 done
-INNER
-  ) | sshpass -p "$sshPass" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$sshUser@$host" "sudo -S -p '' bash -s"
+EOF
+
+unmount_isos_inner() {
+  local host="$1"
+  __ssh_exec_script__ \
+    --host "$host" \
+    --user "$sshUser" \
+    --password "$sshPass" \
+    --sudo \
+    --script-content "$unmountIsosScript"
 }
 
 ###############################################################################

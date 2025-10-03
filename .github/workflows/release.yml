@@ -2,11 +2,14 @@ name: Release on .sh changes
 
 on:
   push:
+    branches:
+      - main
     paths:
-      - '**/*.sh'  # Triggers only if .sh files are changed/added
+      - '**/*.sh'  # Triggers only if .sh files are changed/added on main
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
