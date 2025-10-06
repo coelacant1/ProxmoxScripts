@@ -8,8 +8,7 @@
 # via the CCPVE one-liner.
 #
 # Usage:
-#   ./BatchRunCLI.sh --start <vmid> --end <vmid> --ssh-user <user> --ssh-pass <pass> \
-#     --run Host/QuickDiagnostic.sh [--args "arg1 arg2"]
+#   ./BatchRunCLI.sh --start <vmid> --end <vmid> --ssh-user <user> --ssh-pass <pass> --run Host/QuickDiagnostic.sh [--args "arg1 arg2"]
 #   ./BatchRunCLI.sh --start 300 --end 305 --ssh-user root --ssh-pass secret
 #
 # Function Index:
@@ -41,6 +40,7 @@ RUN_SCRIPT=""
 RUN_ARGS=""
 EXEC_COMMAND=""
 INTERACTIVE="false"
+ALT_SCREEN_ACTIVE="false"
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
@@ -50,6 +50,8 @@ source "${UTILITYPATH}/Queries.sh"
 source "${UTILITYPATH}/SSH.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Colors.sh
+source "${UTILITYPATH}/Colors.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 trap 'cleanup' EXIT
@@ -69,6 +71,7 @@ Required:
 
 Optional:
   --args "arg1 arg2"     Arguments passed verbatim to the target script
+  --exec "command"       Run an arbitrary shell command on each guest instead of a script
   -h/--help              Show this help and exit
 
 Interactive Mode (omit --run):
@@ -89,9 +92,8 @@ EOF
 
 parse_args() {
     if [[ $# -eq 0 ]]; then
-    --run <scriptPath>     Relative script path (non-interactive mode)
-    --exec "command"       Run an arbitrary shell command on each guest (non-interactive)
-        exit 64
+        INTERACTIVE="true"
+        return
     fi
 
     while [[ $# -gt 0 ]]; do
@@ -127,8 +129,29 @@ ensure_dependencies() {
     __ensure_dependencies__ sshpass
 }
 
+enter_alternate_screen() {
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        if tput smcup >/dev/null 2>&1; then
+            ALT_SCREEN_ACTIVE="true"
+        fi
+    fi
+}
+
+exit_alternate_screen() {
+    if [[ "$ALT_SCREEN_ACTIVE" == "true" ]]; then
+        tput rmcup >/dev/null 2>&1 || true
+        ALT_SCREEN_ACTIVE="false"
+    fi
+}
+
 gather_interactive_inputs() {
-    __info__ "Entering interactive mode (no --run provided)."
+    if [[ "$ALT_SCREEN_ACTIVE" != "true" ]]; then
+        enter_alternate_screen
+    fi
+    clear
+    echo
+    __line_rgb__ "=== Interactive Batch Mode ===" 0 255 255
+    echo
 
     if [[ -z "$START_VMID" ]]; then
         read -r -p "Start VMID: " START_VMID
@@ -152,35 +175,16 @@ gather_interactive_inputs() {
     read -r -p "Optional arguments for ${RUN_SCRIPT} (leave blank for none): " RUN_ARGS
 }
 
-show_header_block() {
-    local file_path="$1"
-    local printing=false
-
-    while IFS= read -r line; do
-        [[ $line =~ ^#!/bin/bash$ ]] && continue
-        if [[ $line == "#" ]]; then
-            continue
-        fi
-        if [[ $line =~ ^# ]]; then
-            echo "${line#\# }"
-            printing=true
-        else
-            [[ $printing == true ]] && break
-        fi
-    done <"$file_path"
-}
-
-extract_example_lines() {
-    local file_path="$1"
-    grep -E '^# *\./' "$file_path" | sed -E 's/^# *//'
-}
-
 choose_script_via_navigation() {
     local current_dir="$SCRIPT_ROOT"
 
     while true; do
+        clear
         echo
-        __info__ "Current directory: ${current_dir#$SCRIPT_ROOT/}"
+        echo -n "CURRENT DIRECTORY: "
+        __line_rgb__ "./${current_dir#$SCRIPT_ROOT/}" 0 255 0
+        echo
+        __line_rgb__ "Folders and scripts:" 200 200 200
         echo "--------------------------------------------------"
 
         mapfile -t DIRS < <(find "$current_dir" -mindepth 1 -maxdepth 1 -type d ! -name 'Utilities' ! -name '.*' | sort)
@@ -191,20 +195,23 @@ choose_script_via_navigation() {
         local -A choices=()
 
         for dir_path in "${DIRS[@]}"; do
-            printf "%2d) %s/\n" "$index" "$(basename "$dir_path")"
+            __line_rgb__ "$(printf "%2d) %s/" "$index" "$(basename "$dir_path")")" 0 200 200
             choices[$index]="DIR::$dir_path"
             ((index++))
         done
 
         for script_path in "${SCRIPTS[@]}"; do
-            printf "%2d) %s\n" "$index" "$(basename "$script_path")"
+            __line_rgb__ "$(printf "%2d) %s" "$index" "$(basename "$script_path")")" 100 200 100
             choices[$index]="SCR::$script_path"
             ((index++))
         done
 
-        echo " hN) Show header for item N"
-        echo " b) Up directory          q) Quit selection"
+        echo
         echo "--------------------------------------------------"
+        __line_rgb__ " hN) Show header for item N" 150 150 150
+        __line_rgb__ " b) Up directory          q) Quit selection" 150 150 150
+        echo "--------------------------------------------------"
+        echo
 
         read -r -p "Select script or folder: " choice
 
@@ -213,7 +220,8 @@ choose_script_via_navigation() {
                 return 1 ;;
             b)
                 if [[ "$current_dir" == "$SCRIPT_ROOT" ]]; then
-                    __info__ "Already at repository root."
+                    __err__ "Already at repository root."
+                    sleep 1
                 else
                     current_dir="$(dirname "$current_dir")"
                 fi
@@ -222,24 +230,29 @@ choose_script_via_navigation() {
                 local num="${choice#h}"
                 local entry="${choices[$num]:-}"
                 if [[ -z "$entry" ]]; then
-                    __err__ "Invalid item number."; continue
+                    __err__ "Invalid item number."
+                    sleep 1
+                    continue
                 fi
                 if [[ ${entry%%::*} == SCR ]]; then
                     local file="${entry#*::}"
-                    echo "--- HEADER: $(basename "$file") ---"
-                    show_header_block "$file"
-                    echo "--- Example Invocations ---"
-                    extract_example_lines "$file" || true
-                    echo "-----------------------------"
+                    clear
+                    __display_script_info__ "$file" "$(basename "$file")"
+                    read -r -p "Press Enter to continue..."
                 else
                     __info__ "Directories do not have headers."
+                    sleep 1
                 fi
                 ;;
             ''|*[!0-9]*)
-                __err__ "Invalid selection." ;;
+                __err__ "Invalid selection."
+                sleep 1
+                ;;
             *)
                 if [[ -z "${choices[$choice]:-}" ]]; then
-                    __err__ "Selection out of range."; continue
+                    __err__ "Selection out of range."
+                    sleep 1
+                    continue
                 fi
                 local entry="${choices[$choice]}"
                 local type="${entry%%::*}"
@@ -250,12 +263,8 @@ choose_script_via_navigation() {
                 fi
                 RUN_SCRIPT="${path#$SCRIPT_ROOT/}"
                 local local_full="$path"
-                echo
-                __info__ "Selected script: ${RUN_SCRIPT}"
-                echo "--- Top Comments ---"
-                show_header_block "$local_full" || true
-                echo "--- Example Invocations ---"
-                extract_example_lines "$local_full" || echo "(none)"
+                clear
+                __display_script_info__ "$local_full" "${RUN_SCRIPT}"
                 return 0
                 ;;
         esac
@@ -284,19 +293,24 @@ wrap_remote_command() {
 execute_for_vmid() {
     local vmid="$1"
     local ip
+    local output
+    local exit_code
 
-    __update__ "Processing VMID ${vmid}"
+    __info__ "Processing VMID ${vmid}"
 
-    if ! ip=$( __get_ip_from_vmid__ "$vmid" ); then
+    # Capture IP resolution output and suppress stderr
+    if ! ip=$( __get_ip_from_vmid__ "$vmid" 2>/dev/null ); then
         __err__ "VMID ${vmid}: unable to resolve IP; skipping."
         return
     fi
-    __info__ "VMID ${vmid}: IP ${ip}"
+    __update__ "VMID ${vmid}: IP ${ip}"
 
-    if ! __wait_for_ssh__ "$ip" "$SSH_USER" "$SSH_PASS"; then
+    # Wait for SSH with suppressed output
+    if ! __wait_for_ssh__ "$ip" "$SSH_USER" "$SSH_PASS" >/dev/null 2>&1; then
         __err__ "VMID ${vmid}: SSH unreachable; skipping."
         return
     fi
+    __update__ "VMID ${vmid}: SSH ready, executing script..."
 
     local remote_line
     if [[ -n "$EXEC_COMMAND" ]]; then
@@ -308,12 +322,19 @@ execute_for_vmid() {
     local remote_cmd
     remote_cmd="$(wrap_remote_command "$remote_line")"
 
-    if ! __ssh_exec__ --host "$ip" --user "$SSH_USER" --password "$SSH_PASS" --command "$remote_cmd"; then
-        __err__ "VMID ${vmid}: remote execution failed."
+    # Capture output and exit code
+    output=$(__ssh_exec__ --host "$ip" --user "$SSH_USER" --password "$SSH_PASS" --command "$remote_cmd" 2>&1)
+    exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        __err__ "VMID ${vmid}: remote execution failed (exit code: ${exit_code})"
+        if [[ -n "$output" ]]; then
+            echo "  Output: ${output}" >&2
+        fi
         return
     fi
 
-    __ok__ "VMID ${vmid}: completed"
+    __ok__ "VMID ${vmid}: completed successfully"
 }
 
 run_bulk() {
@@ -327,26 +348,31 @@ run_bulk() {
         exit 64
     fi
 
-    __info__ "Running CCPVE CLI bulk execution: VMIDs ${START_VMID}-${END_VMID}"
+    echo
+    __line_rgb__ "=== Running CCPVE CLI bulk execution ===" 0 255 255
+    __line_rgb__ "VMIDs: ${START_VMID}-${END_VMID}" 200 200 200
     if [[ -n "$EXEC_COMMAND" ]]; then
-        __info__ "Command: ${EXEC_COMMAND}"
+        __line_rgb__ "Command: ${EXEC_COMMAND}" 200 200 200
     else
-        __info__ "Target script: ${RUN_SCRIPT}"
+        __line_rgb__ "Target script: ${RUN_SCRIPT}" 200 200 200
         if [[ -n "$RUN_ARGS" ]]; then
-            __info__ "Script args: ${RUN_ARGS}"
+            __line_rgb__ "Script args: ${RUN_ARGS}" 200 200 200
         fi
     fi
+    echo
 
     local vmid
     for vmid in $(seq "$START_VMID" "$END_VMID"); do
         execute_for_vmid "$vmid"
     done
 
-    __ok__ "Batch execution finished."
+    echo
+    __line_rgb__ "Batch execution finished." 0 255 0
+    echo
 }
 
 cleanup() {
-    : # Placeholder for future temp file cleanup.
+    exit_alternate_screen
 }
 
 main() {
