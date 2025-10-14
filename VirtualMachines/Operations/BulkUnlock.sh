@@ -2,7 +2,8 @@
 #
 # BulkUnlock.sh
 #
-# This script unlocks a range of virtual machines (VMs) within a Proxmox VE environment.
+# Unlocks a range of virtual machines (VMs) within a Proxmox VE environment.
+# Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
 #   ./BulkUnlock.sh <first_vm_id> <last_vm_id>
@@ -11,33 +12,118 @@
 #   first_vm_id - The ID of the first VM to unlock.
 #   last_vm_id  - The ID of the last VM to unlock.
 #
-# Example:
-#   # Bulk unlock VMs from ID 400 to 430
+# Examples:
 #   ./BulkUnlock.sh 400 430
+#   This will unlock VMs 400-430 regardless of which nodes they are on
+#
+# Function Index:
+#   - usage
+#   - parse_args
+#   - unlock_vm
+#   - main
 #
 
+set -u
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
+source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# Check prerequisites
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main
-###############################################################################
-if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 <first_vm_id> <last_vm_id>"
-  exit 1
-fi
+# --- usage -------------------------------------------------------------------
+usage() {
+    cat <<-USAGE
+Usage: ${0##*/} <first_vm_id> <last_vm_id>
 
-FIRST_VM_ID="$1"
-LAST_VM_ID="$2"
+Unlocks a range of VMs across the entire cluster.
+Automatically detects which node each VM is on.
 
-for (( vmId=FIRST_VM_ID; vmId<=LAST_VM_ID; vmId++ )); do
-  echo "Unlocking VM ID: \"$vmId\""
-  qm unlock "$vmId"
-done
+Arguments:
+  first_vm_id  - The ID of the first VM to unlock
+  last_vm_id   - The ID of the last VM to unlock
 
-echo "Bulk unlock operation completed!"
+Examples:
+  ${0##*/} 400 430
+USAGE
+}
+
+# --- parse_args --------------------------------------------------------------
+parse_args() {
+    if [[ $# -lt 2 ]]; then
+        __err__ "Missing required arguments"
+        usage
+        exit 64
+    fi
+
+    FIRST_VM_ID="$1"
+    LAST_VM_ID="$2"
+
+    if ! [[ "$FIRST_VM_ID" =~ ^[0-9]+$ ]] || ! [[ "$LAST_VM_ID" =~ ^[0-9]+$ ]]; then
+        __err__ "VM IDs must be numeric"
+        exit 64
+    fi
+
+    if (( FIRST_VM_ID > LAST_VM_ID )); then
+        __err__ "First VM ID must be less than or equal to last VM ID"
+        exit 64
+    fi
+}
+
+# --- unlock_vm ---------------------------------------------------------------
+unlock_vm() {
+    local vmid="$1"
+    local node
+    
+    node=$(__get_vm_node__ "$vmid")
+    
+    if [[ -z "$node" ]]; then
+        __update__ "VM ${vmid} not found in cluster, skipping"
+        return 0
+    fi
+    
+    __update__ "Unlocking VM ${vmid} on node ${node}..."
+    if qm unlock "$vmid" --node "$node" 2>/dev/null; then
+        __ok__ "VM ${vmid} unlocked successfully on ${node}"
+    else
+        __err__ "Failed to unlock VM ${vmid} on ${node}"
+        return 1
+    fi
+}
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    
+    __info__ "Bulk unlock (cluster-wide): VMs ${FIRST_VM_ID} to ${LAST_VM_ID}"
+    
+    local failed_count=0
+    local processed_count=0
+    
+    for (( vm_id=FIRST_VM_ID; vm_id<=LAST_VM_ID; vm_id++ )); do
+        if unlock_vm "$vm_id"; then
+            ((processed_count++))
+        else
+            ((failed_count++))
+        fi
+    done
+    
+    __info__ "Processed ${processed_count} VM(s)"
+    
+    if (( failed_count > 0 )); then
+        __err__ "Unlock completed with ${failed_count} failure(s)"
+        exit 1
+    else
+        __ok__ "All VMs unlocked successfully"
+    fi
+}
+
+parse_args "$@"
+main
+
+# Testing status:
+#   - 2025-10-14: Updated with cluster-wide auto-detection

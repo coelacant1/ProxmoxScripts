@@ -24,6 +24,9 @@
 #   - __get_server_lxc__
 #   - __get_cluster_vms__
 #   - __get_server_vms__
+#   - __get_vm_node__
+#   - __resolve_node_name__
+#   - __validate_vm_id_range__
 #   - __get_ip_from_vmid__
 #   - __get_ip_from_guest_agent__
 #
@@ -309,6 +312,93 @@ __get_server_vms__() {
     pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
         jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid'
+}
+
+# --- __get_vm_node__ ---------------------------------------------------------
+# @function __get_vm_node__
+# @description Gets the node name where a specific VM is located in the cluster.
+#   Returns empty string if VM is not found.
+# @usage local node=$(__get_vm_node__ 400)
+# @param 1 The VMID to locate.
+# @return Prints the node name to stdout, or empty string if not found.
+# @example_output For __get_vm_node__ 400, the output might be:
+#   pve01
+__get_vm_node__() {
+    local vmid="$1"
+    if [[ -z "$vmid" ]]; then
+        echo "Error: __get_vm_node__ requires a VMID argument." >&2
+        return 1
+    fi
+    
+    __install_or_prompt__ "jq"
+    
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
+        jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true
+}
+
+# --- __resolve_node_name__ ---------------------------------------------------
+# @function __resolve_node_name__
+# @description Resolves a node specification (local/hostname/IP) to a node name.
+#   Converts "local" to the current hostname, resolves IPs to node names.
+# @usage local node=$(__resolve_node_name__ "local")
+# @param 1 Node specification: "local", hostname, or IP address.
+# @return Prints the resolved node name to stdout, or exits 1 if resolution fails.
+# @example_output For __resolve_node_name__ "local", the output might be:
+#   pve01
+# @example_output For __resolve_node_name__ "192.168.1.20", the output might be:
+#   pve02
+__resolve_node_name__() {
+    local node_spec="$1"
+    local node_name
+    
+    if [[ -z "$node_spec" ]]; then
+        echo "Error: __resolve_node_name__ requires a node specification argument." >&2
+        return 1
+    fi
+    
+    if [[ "$node_spec" == "local" ]]; then
+        node_name="$(hostname -s)"
+    elif [[ "$node_spec" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        node_name="$(__get_name_from_ip__ "$node_spec")"
+        if [[ -z "$node_name" ]]; then
+            echo "Error: Unable to resolve node name from IP: ${node_spec}" >&2
+            return 1
+        fi
+    else
+        node_name="$node_spec"
+    fi
+    
+    echo "$node_name"
+}
+
+# --- __validate_vm_id_range__ ------------------------------------------------
+# @function __validate_vm_id_range__
+# @description Validates that VM IDs are numeric and in correct order.
+# @usage __validate_vm_id_range__ "$START_ID" "$END_ID"
+# @param 1 Start VM ID.
+# @param 2 End VM ID.
+# @return Returns 0 if valid, 1 if invalid (with error message to stderr).
+# @example __validate_vm_id_range__ 400 430
+__validate_vm_id_range__() {
+    local start_id="$1"
+    local end_id="$2"
+    
+    if [[ -z "$start_id" ]] || [[ -z "$end_id" ]]; then
+        echo "Error: __validate_vm_id_range__ requires start and end VM IDs." >&2
+        return 1
+    fi
+    
+    if ! [[ "$start_id" =~ ^[0-9]+$ ]] || ! [[ "$end_id" =~ ^[0-9]+$ ]]; then
+        echo "Error: VM IDs must be numeric (got start='$start_id', end='$end_id')." >&2
+        return 1
+    fi
+    
+    if (( start_id > end_id )); then
+        echo "Error: Start VM ID must be less than or equal to end VM ID (got start=$start_id, end=$end_id)." >&2
+        return 1
+    fi
+    
+    return 0
 }
 
 # --- get_ip_from_vmid ------------------------------------------------------------
