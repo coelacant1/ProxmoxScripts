@@ -15,7 +15,6 @@
 
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment

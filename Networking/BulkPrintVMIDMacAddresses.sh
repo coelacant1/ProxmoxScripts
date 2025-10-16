@@ -10,8 +10,6 @@
 #
 
 # Source utility scripts (adjust UTILITYPATH as needed)
-source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Pre-flight checks

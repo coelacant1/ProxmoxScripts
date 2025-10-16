@@ -32,8 +32,11 @@ FUNC_DEF_REGEX = re.compile(
 SOURCE_REGEX = re.compile(
     r'^\s*(?:source|\.)\s+"?\$\{?UTILITYPATH\}?/([a-zA-Z0-9_.-]+)"?'
 )
-# If your scripts always explicitly have ".sh" in the filename, adapt as needed:
-#   r'^\s*(?:source|\.)\s+"?\$\{?UTILITYPATH\}?/([a-zA-Z0-9_.-]+\.sh)"?'
+
+# Regex for shellcheck source directive comments
+SHELLCHECK_SOURCE_REGEX = re.compile(
+    r'^\s*#\s*shellcheck\s+source=Utilities/([a-zA-Z0-9_.-]+)'
+)
 
 # -----------------------------------------------------------------------------
 # Regex for function call tokens like "__something__"
@@ -94,10 +97,19 @@ def parse_script_for_includes_and_local_funcs(script_path):
     with open(script_path, "r", encoding="utf-8", newline='\n') as f:
         for line in f:
             line_stripped = line.strip()
+            
+            # Check for source statement
             s_match = SOURCE_REGEX.search(line_stripped)
             if s_match:
                 # e.g., "Prompts.sh" or "Queries.sh"
                 includes.add(s_match.group(1))
+            
+            # Also check for shellcheck directive (for consistency checking)
+            sc_match = SHELLCHECK_SOURCE_REGEX.search(line_stripped)
+            if sc_match:
+                # Verify this matches an actual source line
+                includes.add(sc_match.group(1))
+                
     return includes, local_funcs
 
 # -----------------------------------------------------------------------------
@@ -208,7 +220,9 @@ def fix_script(
     """
     Modify 'script_path' in-place:
       - Insert each needed 'source "${UTILITYPATH}/{something}"' after the top comment block
+        with proper shellcheck directive
       - Remove lines that exactly match 'source "${UTILITYPATH}/{something}"'
+        and their shellcheck directive
     after user has confirmed.
     """
     if not add_sources and not remove_sources:
@@ -220,32 +234,50 @@ def fix_script(
     # 1) Build set of lines to remove (exact match, ignoring trailing spaces).
     remove_lines = {f'source "${{UTILITYPATH}}/{r}"' for r in remove_sources}
     remove_lines_dot = {f'. "${{UTILITYPATH}}/{r}"' for r in remove_sources}
+    remove_shellcheck = {f'# shellcheck source=Utilities/{r}' for r in remove_sources}
 
-    # 2) Insert lines for new sources after the top comment block.
-    #    - The "comment block" is consecutive lines from the top that start with # (or are blank?).
-    #      The request specifically said "every line starts with # until the end of the block".
-    #      We'll define that carefully:
-    insertion_index = find_comment_block_end(lines)
+    # 2) Insert lines for new sources after existing source statements or after comment block
+    #    Find where other source statements are, or use comment block end
+    insertion_index = find_source_insertion_point(lines)
 
-    # We'll build new lines as needed. We'll ensure we use the 'source' form (not dot).
+    # Build new lines with shellcheck directive
     lines_to_insert = []
     for a in sorted(add_sources):
-        line_text = f'source "${{UTILITYPATH}}/{a}"\n'
+        shellcheck_line = f'# shellcheck source=Utilities/{a}\n'
+        source_line = f'source "${{UTILITYPATH}}/{a}"\n'
+        
         # only insert if it doesn't already exist
-        if not any(line.strip() == line_text.strip() for line in lines):
-            lines_to_insert.append(line_text)
+        if not any(line.strip() == source_line.strip() for line in lines):
+            lines_to_insert.append(shellcheck_line)
+            lines_to_insert.append(source_line)
 
-    # 3) Rebuild lines, skipping the ones to remove.
+    # 3) Rebuild lines, skipping the ones to remove (including their shellcheck lines)
     new_lines = []
+    skip_next = False
     for i, line in enumerate(lines):
+        # Check if we should skip this line because it's a shellcheck directive for a removed source
+        if skip_next:
+            skip_next = False
+            continue
+            
+        # Check if this is a shellcheck directive for a source we're removing
+        stripped = line.strip()
+        if stripped in remove_shellcheck:
+            skip_next = True  # Skip the next line (the actual source statement)
+            continue
+            
+        # Check if line is a source to remove
+        if should_remove_source_line(line, remove_lines, remove_lines_dot):
+            # Also check if previous line was a shellcheck directive
+            if i > 0 and new_lines and new_lines[-1].strip().startswith('# shellcheck source='):
+                new_lines.pop()  # Remove the shellcheck directive too
+            continue
+            
         # We'll insert new sources at the insertion index
         if i == insertion_index and lines_to_insert:
             for to_ins in lines_to_insert:
                 new_lines.append(to_ins)
-        # Check if line is in remove_lines
-        if should_remove_source_line(line, remove_lines, remove_lines_dot):
-            # skip it
-            continue
+                
         new_lines.append(line)
 
     # Edge case: if insertion_index == len(lines), we might insert at the end
@@ -275,6 +307,40 @@ def find_comment_block_end(lines):
         if not stripped.startswith("#") and stripped != "":
             return i
     return len(lines)
+
+def find_source_insertion_point(lines):
+    """
+    Find the best place to insert new source statements:
+    1. After existing source statements if any exist
+    2. After "set -u" or similar shell options
+    3. After the comment block
+    Returns the line index where new sources should be inserted.
+    """
+    last_source_line = -1
+    last_set_line = -1
+    comment_block_end = find_comment_block_end(lines)
+    
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        
+        # Check for existing source statements
+        if SOURCE_REGEX.search(stripped) or stripped.startswith('# shellcheck source='):
+            last_source_line = i
+            
+        # Check for set statements (set -u, set -e, etc.)
+        if stripped.startswith('set -') and i > comment_block_end:
+            last_set_line = i
+    
+    # Insert after the last source statement if any exist
+    if last_source_line >= 0:
+        return last_source_line + 1
+    
+    # Otherwise insert after set statements
+    if last_set_line >= 0:
+        return last_set_line + 2  # Add blank line after set
+    
+    # Otherwise insert after comment block
+    return comment_block_end + 1  # Add blank line after comment
 
 # -----------------------------------------------------------------------------
 # 8) Main script

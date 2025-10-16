@@ -1,12 +1,14 @@
 # Pending Change Tracker
 ## Datacenter
-- [ ] Add storage: SMB, NFS, PBS (For bulk CLI calls)
+- [x] Add storage: SMB, NFS, PBS (For bulk CLI calls)
+
+
 
 ## Virtual Machines
 ### Operations
-- [ ] Bulk Hibernate
-- [ ] Bulk Pause
-- [ ] Bulk Resume
+- [x] Bulk Hibernate
+- [x] Bulk Pause
+- [x] Bulk Resume
 
 ### Hardware
 - [x] Bulk start
@@ -19,16 +21,17 @@
 - [ ] Change display type
 - [ ] Change machine type
 - [ ] Change SCSI controller type
-- [ ] Change hard disk options: cache, discard, io thread, read only, ssd emulation, backup, skip replication, async io
-- [ ] Change vmbr model: add optional vlan, firewall, disconnect, mtu, rate limit, multiqueue, mac address (and prefix), model
+- [x] Change hard disk options: cache, discard, io thread, read only, ssd emulation, backup, skip replication, async io
+- [x] Change vmbr configuration: add optional vlan, firewall, disconnect, mtu, rate limit, multiqueue, mac address (and prefix), model
+- [ ] Change memory to add balooning option as well as min/max size separately
 - [ ] Add hard disk
 - [ ] Add serial port
 - [ ] Add cloudinit drive
-- [ ] Disconnect all CD/DVD drives
+- [x] Disconnect all CD/DVD drives
 
 ### Options
 - [x] Disable AutoStart on all VMs/LXCs
-- [ ] Disable touch pointer
+- [x] Disable touch pointer
 - [ ] Change boot order (list available on main VM, must all be same cloned instance)
 - [ ] Change hot plug
 - [ ] Change SMBIOS (interactive)

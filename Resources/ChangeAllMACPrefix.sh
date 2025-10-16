@@ -25,6 +25,10 @@
 #
 
 DCFG="/etc/pve/datacenter.cfg"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
 BACKUP_DIR="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
 DRY_RUN=0
 OVERRIDE_PREFIX=""

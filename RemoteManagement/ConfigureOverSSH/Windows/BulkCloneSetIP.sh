@@ -14,7 +14,6 @@
 #   ./BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
 #
 
-source "${UTILITYPATH}/Conversion.sh"
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"
 

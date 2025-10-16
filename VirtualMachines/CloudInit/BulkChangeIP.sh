@@ -34,10 +34,6 @@ set -u
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
-# shellcheck source=Utilities/Conversion.sh
-source "${UTILITYPATH}/Conversion.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 

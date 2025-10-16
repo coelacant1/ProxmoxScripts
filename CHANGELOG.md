@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-10-16
+
+### Added
+- **RemoteManagement/ApacheGuacamole/RDP/BulkRemoveRDPConnection.sh** - New script for bulk removal of Guacamole RDP connections
+  - Supports removal by substring search or VMID range
+  - Includes safety confirmation prompts
+  - Two operating modes: substring search and VMID range deletion
+- **Storage/AddStorage.sh** - Comprehensive script for adding storage to Proxmox cluster
+  - Supports NFS, SMB/CIFS, and Proxmox Backup Server (PBS) storage types
+  - Configurable content types, mount options, and node targeting
+  - Built-in validation and error handling
+- **Storage/RemoveStorage.sh** - Safe storage removal script
+  - Checks for storage usage before removal
+  - Supports force removal option
+  - Validates storage exists before attempting removal
+- **VirtualMachines/Hardware/BulkConfigureCPU.sh** - New script for bulk CPU configuration
+- **VirtualMachines/Hardware/BulkConfigureNetwork.sh** - New script for bulk network configuration
+- **.check/VerifySourceCalls.py** - Enhanced with improved dependency detection and fix mode
+  - Automatically adds missing source dependencies
+  - Removes unused source includes
+  - Adds proper shellcheck directives
+
+### Changed
+- **Major dependency cleanup** - Fixed source call dependencies across 42+ shell scripts
+  - Removed unused source includes from multiple scripts
+  - Added missing dependencies (Communication.sh, Prompts.sh) where needed
+  - All scripts now pass VerifySourceCalls validation
+- **Line ending normalization** - Converted CRLF to LF across all modified scripts for Unix compatibility
+- **Utilities/Communication.sh** - Added new utility functions for better script communication
+- **Utilities/Prompts.sh** - Enhanced prompt utilities with additional functionality
+- **Utilities/Utilities.md** - Expanded documentation for utility functions
+- **Resources/ChangeAllMACPrefix.sh** - Fixed missing source dependencies
+- Updated multiple VM management scripts:
+  - VirtualMachines/BulkAddIPToNote.sh - Removed unused dependencies
+  - CloudInit scripts: BulkAddSSHKey.sh, BulkChangeDNS.sh, BulkChangeIP.sh, BulkChangeUserPass.sh, BulkMoveCloudInit.sh, BulkTogglePackageUpgrade.sh
+  - Hardware scripts: BulkSetCPUTypeCoreCount.sh, BulkSetMemoryConfig.sh, BulkUnmountISOs.sh
+  - Operations scripts: BulkDelete.sh, BulkMigrate.sh, BulkRemoteMigrate.sh, BulkReset.sh, BulkStart.sh, BulkStop.sh, BulkUnlock.sh
+  - Options scripts: BulkEnableGuestAgent.sh, BulkToggleProtectionMode.sh, BulkToggleStartAtBoot.sh
+  - Storage scripts: BulkChangeStorage.sh, BulkMoveDisk.sh, BulkResizeStorage.sh
+  - Backup scripts: BulkBackup.sh
+- **Networking/BulkPrintVMIDMacAddresses.sh** - Removed unused Prompts.sh and Queries.sh dependencies
+- **Storage/Ceph/** - Cleaned up dependencies in Ceph cluster management scripts
+  - RestartManagers.sh, RestartMetadata.sh, RestartMonitors.sh, RestartOSDs.sh
+- **RemoteManagement/ApacheGuacamole/RDP/** - Fixed dependencies in multiple scripts
+  - BulkAddSFTPServer.sh, BulkPrintRDPConfiguration.sh, BulkRemoveSFTPServer.sh
+- **RemoteManagement/ConfigureOverSSH/** - Dependency cleanup in SSH configuration scripts
+
+### Fixed
+- **Storage/AddStorage.sh** - Fixed line ending formatting (CRLF → LF)
+- **Storage/RemoveStorage.sh** - Fixed line ending formatting (CRLF → LF)
+- **Storage/Ceph/SetScrubInterval.sh** - Added missing source dependencies and fixed formatting
+- All scripts now have proper shellcheck source directives for IDE integration
+
+### Removed
+- **VirtualMachines/Hardware/BulkChangeNetwork.sh** - Deprecated (replaced by BulkConfigureNetwork.sh)
+- **VirtualMachines/Operations/-BulkHibernate.sh** - Removed incomplete development script
+
 ## [Unreleased] - 2025-10-14
 
 ### Added
@@ -13,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VirtualMachines/Configuration/** - New directory for VM configuration scripts
   - VMAddTerminalTTYS0.sh - Relocated terminal configuration script
 - **VirtualMachines/Operations/BulkMigrate.sh** - New script for VM migration operations
-- **VirtualMachines/Operations/-BulkHibernate.sh** - New script for bulk VM hibernation (in development)
 - **.docs/** - New documentation directory structure
 - **.gitignore** - Added Git ignore file for repository hygiene
 - **CHANGELOG.md** - Comprehensive changelog with detailed version history and verbose commit descriptions

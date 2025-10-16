@@ -66,6 +66,11 @@ Usage: __ok__ "success message"
 Example Output: The spinner stops and "Completed successfully!" is printed in green bold.  
 Output: Terminates the spinner and displays the success message.
 
+Communication.sh/__warn__: Stops the spinner and prints a warning message in yellow.  
+Usage: __warn__ "warning message"  
+Example Output: The spinner stops and "Warning: check configuration!" is printed in yellow bold.  
+Output: Terminates the spinner and displays the warning message.
+
 Communication.sh/__err__: Stops the spinner and prints an error message in red.  
 Usage: __err__ "error message"  
 Example Output: The spinner stops and "Operation failed!" is printed in red bold.  
@@ -75,6 +80,21 @@ Communication.sh/__handle_err__: Handles errors by stopping the spinner and prin
 Usage: trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR  
 Example Output: Error details with line number, exit code, and failing command are printed.  
 Output: Displays error details and stops the spinner.
+
+Communication.sh/__show_script_header__: Displays the top commented section of a script file in green.  
+Usage: __show_script_header__ <script_path>  
+Example Output: Shows script description, usage, arguments, etc. in green.  
+Output: Displays the header comments in green (0, 255, 0).
+
+Communication.sh/__show_script_examples__: Extracts and displays example invocation lines (lines starting with '# .  
+Usage: __show_script_examples__ <script_path>  
+Example Output: Shows lines like "./script.sh arg1 arg2" in green.  
+Output: Displays example invocation lines in green (0, 255, 0).
+
+Communication.sh/__display_script_info__: Displays complete script information with headers and examples in a consistent format.  
+Usage: __display_script_info__ <script_path> [script_display_name]  
+Example Output: Shows "Selected script", top comments, and example invocations sections.  
+Output: Displays formatted script information with colored headers and content.
 
 ## Conversion.sh
 
@@ -93,10 +113,10 @@ Usage: __cidr_to_netmask__ 18
 Example Output: For __cidr_to_netmask__ 18, the output is: 255.255.192.0  
 Output: Prints the full subnet netmask.
 
-Conversion.sh/__vmid_to_mac_prefix__: Converts a numeric VMID into a deterministic MAC prefix (e.g., BC:13:46).  
-Usage: __vmid_to_mac_prefix__ --vmid 1346 [--prefix BC] [--pad-length 4]  
-Example Output: For __vmid_to_mac_prefix__ --vmid 1346, the output is: BC:13:46  
-Output: Prints the uppercase MAC prefix derived from the VMID.
+Conversion.sh/__vmid_to_mac_prefix__: Converts a numeric VMID into a deterministic MAC prefix string (e.  
+Usage: __vmid_to_mac_prefix__ --vmid 1234 [--prefix BC] [--pad-length 4]  
+Example Output:   
+Output: Prints the computed MAC prefix (uppercase) to stdout.
 
 ## Prompts.sh
 
@@ -110,6 +130,11 @@ Usage: __check_proxmox__
 Example Output: If 'pveversion' is not found, the output is: "Error: 'pveversion' command not found. Are you sure this is a Proxmox node?"  
 Output: Exits 2 if not Proxmox.
 
+Prompts.sh/__prompt_user_yn__: Prompts the user with a yes/no question and returns 0 for yes, 1 for no.  
+Usage: __prompt_user_yn__ "Question text?"  
+Example Output: __prompt_user_yn__ "Continue with operation?" && echo "Proceeding..." || echo "Cancelled"  
+Output: Returns 0 if user answers yes (Y/y), 1 if user answers no (N/n) or presses Enter (default: no)
+
 Prompts.sh/__install_or_prompt__: Checks if a specified command is available.  
 Usage: __install_or_prompt__ <command_name>  
 Example Output: If "curl" is missing and the user declines installation, the output is: "Aborting script because 'curl' is not installed."  
@@ -120,14 +145,15 @@ Usage: __prompt_keep_installed_packages__
 Example Output: If the user chooses "No", the output is: "Removing the packages installed in this session..." followed by "Packages removed."  
 Output: Removes packages if user says "No", otherwise does nothing.
 
-Prompts.sh/__ensure_dependencies__: Verifies that the specified commands exist and installs them if missing (optionally without prompting).  
-Usage: __ensure_dependencies__ [--auto-install] [--quiet] jq sshpass  
-Example Output: If jq is missing, the output includes: "Installing missing dependency 'jq'..."  
-Output: Installs or confirms dependencies and tracks packages added this session.
+Prompts.sh/__ensure_dependencies__: Verifies that the specified commands are available; installs them if missing.  
+Usage: __ensure_dependencies__ [--auto-install] [--quiet] <command> [<command> ...]  
+Example Output:   
+Output: 
 
 Prompts.sh/__require_root_and_proxmox__: Convenience helper that ensures the script is run as root on a Proxmox node.  
 Usage: __require_root_and_proxmox__  
-Output: Exits if the current user is not root or the host lacks `pveversion`.
+Example Output:   
+Output: 
 
 ## Queries.sh
 
@@ -151,12 +177,12 @@ Usage: __init_node_mappings__
 Example Output: No direct output; internal mappings are initialized for later queries.  
 Output: Populates the associative arrays with node information.
 
-Queries.sh/__get_ip_from_name__: Given a node’s name (e.g., `pve03`), prints its link0 IP address.  
+Queries.sh/__get_ip_from_name__: Given a node’s name (e.  
 Usage: __get_ip_from_name__ "pve03"  
 Example Output: For __get_ip_from_name__ "pve03", the output is: 192.168.83.23  
 Output: Prints the IP to stdout or exits 1 if not found.
 
-Queries.sh/__get_name_from_ip__: Given a node’s link0 IP (e.g., `172.20.83.23`), prints its name.  
+Queries.sh/__get_name_from_ip__: Given a node’s link0 IP (e.  
 Usage: __get_name_from_ip__ "172.20.83.23"  
 Example Output: For __get_name_from_ip__ "172.20.83.23", the output is: pve03  
 Output: Prints the node name to stdout or exits 1 if not found.
@@ -181,15 +207,30 @@ Usage: readarray -t NODE_VMS < <( __get_server_vms__ "local" )
 Example Output: For __get_server_vms__ "local", the output might be: 401 402  
 Output: Prints each QEMU VMID on its own line.
 
+Queries.sh/__get_vm_node__: Gets the node name where a specific VM is located in the cluster.  
+Usage: local node=$(__get_vm_node__ 400)  
+Example Output: For __get_vm_node__ 400, the output might be: pve01  
+Output: Prints the node name to stdout, or empty string if not found.
+
+Queries.sh/__resolve_node_name__: Resolves a node specification (local/hostname/IP) to a node name.  
+Usage: local node=$(__resolve_node_name__ "local")  
+Example Output: For __resolve_node_name__ "192.168.1.20", the output might be: pve02  
+Output: Prints the resolved node name to stdout, or exits 1 if resolution fails.
+
+Queries.sh/__validate_vm_id_range__: Validates that VM IDs are numeric and in correct order.  
+Usage: __validate_vm_id_range__ "$START_ID" "$END_ID"  
+Example Output:   
+Output: Returns 0 if valid, 1 if invalid (with error message to stderr).
+
 Queries.sh/get_ip_from_vmid: Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).  
 Usage: get_ip_from_vmid 100  
 Example Output: For get_ip_from_vmid 100, the output might be: 192.168.1.100  
 Output: Prints the discovered IP or exits 1 if not found.
 
-Queries.sh/__get_ip_from_guest_agent__: Uses the QEMU guest agent to fetch the first non-loopback IP address for a VMID, with retry and family selection controls.  
-Usage: __get_ip_from_guest_agent__ --vmid 105 --retries 60 --delay 5  
-Example Output: Returns the detected IPv4 address once the guest agent reports it.  
-Output: Prints the discovered IP or exits 1 if not found after all retries.
+Queries.sh/__get_ip_from_guest_agent__: Attempts to retrieve the first non-loopback IP address reported by the QEMU guest agent for a VM.  
+Usage: __get_ip_from_guest_agent__ --vmid <vmid> [--retries <count>] [--delay <seconds>] [--ip-family <ipv4|ipv6>] [--include-loopback] [--allow-link-local]  
+Example Output:   
+Output: Prints the discovered IP on success; exits with status 1 otherwise.
 
 ## SSH.sh
 
@@ -198,22 +239,52 @@ Usage: __wait_for_ssh__ <host> <sshUsername> <sshPassword>
 Example Output: For __wait_for_ssh__ "192.168.1.100" "user" "pass", the output might be: SSH is up on "192.168.1.100"  
 Output: Returns 0 if a connection is established within the max attempts, otherwise exits with code 1.
 
-SSH.sh/__ssh_exec__: Runs ad-hoc commands on a remote host over SSH with support for passwords, keys, custom ports, sudo, and strict host-key enforcement.  
-Usage: __ssh_exec__ --host 10.0.0.5 --user root --password secret --command "uname -a"  
-Output: Streams the command output locally; exits non-zero if the remote command fails.
+SSH.sh/__ssh_exec__: Executes a command on a remote host via SSH, supporting password or key-based authentication and optional sudo or shell invocation.  
+Usage: __ssh_exec__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--sudo] [--shell <shell>] [--connect-timeout <seconds>] [--extra-ssh-arg <arg>] [--strict-host-key-checking] [--known-hosts-file <path>] --command "<command>"  
+Example Output:   
+Output: 
 
-SSH.sh/__scp_send__: Transfers local files or directories to a remote host via SCP with optional recursion and timeout controls.  
-Usage: __scp_send__ --host 10.0.0.5 --user root --password secret --source ./script.sh --destination /root/  
-Output: Copies the specified sources to the remote destination.
+SSH.sh/__scp_send__: Copies one or more local files/directories to a remote destination via SCP.  
+Usage: __scp_send__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--recursive] [--connect-timeout <seconds>] [--extra-scp-arg <arg>] --source <path> [--source <path> ...] --destination <remotePath>  
+Example Output:   
+Output: 
 
-SSH.sh/__scp_fetch__: Retrieves files or directories from the remote host to the local machine using SCP.  
-Usage: __scp_fetch__ --host 10.0.0.5 --user root --password secret --source /root/data.txt --destination ./downloads/  
-Output: Copies the remote sources into the local destination path.
+SSH.sh/__scp_fetch__: Copies files/directories from the remote host to the local machine via SCP.  
+Usage: __scp_fetch__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--recursive] [--connect-timeout <seconds>] --source <remotePath> [--source <remotePath> ...] --destination <localPath>  
+Example Output:   
+Output: 
 
-SSH.sh/__ssh_exec_script__: Uploads a local script (or inline content) to a remote host, marks it executable, runs it (optionally with sudo), and removes it afterward unless told to keep it.  
-Usage: __ssh_exec_script__ --host 10.0.0.5 --user root --password secret --script-path ./remote_task.sh --arg value  
-Output: Executes the script remotely and streams its output locally.
+SSH.sh/__ssh_exec_script__: Transfers a local script (or inline content) to the remote host, sets executable permissions, runs it, and optionally removes it afterward.  
+Usage: __ssh_exec_script__ --host <host> --user <user> [--password <pass> | --identity <key>] --script-path <path> [--remote-path <path>] [--arg <value> ...] [--sudo] [--keep-remote]  
+Example Output:   
+Output: 
 
-SSH.sh/__ssh_exec_function__: Packages local Bash function definitions, sends them to the remote host, and invokes the chosen function with optional arguments.  
-Usage: __ssh_exec_function__ --host node --user root --password secret --function configure_node --call configure_node --arg 10.0.0.5  
-Output: Runs the provided function remotely and forwards its stdout/stderr.
+SSH.sh/__ssh_exec_function__: Ships one or more local Bash function definitions to the remote host and invokes a selected function with optional arguments.  
+Usage: __ssh_exec_function__ --host <host> --user <user> [--password <pass> | --identity <key>] --function <name> [--function <name> ...] [--call <name>] [--arg <value> ...] [--sudo]  
+Example Output:   
+Output: 
+
+SSH.sh/__ssh_exec__: Executes a command on a remote host via SSH, supporting password or key-based authentication and optional sudo or shell invocation.  
+Usage: __ssh_exec__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--sudo] [--shell <shell>] [--connect-timeout <seconds>] [--extra-ssh-arg <arg>] [--strict-host-key-checking] [--known-hosts-file <path>] --command "<command>"  
+Example Output:   
+Output: 
+
+SSH.sh/__scp_send__: Copies one or more local files/directories to a remote destination via SCP.  
+Usage: __scp_send__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--recursive] [--connect-timeout <seconds>] [--extra-scp-arg <arg>] --source <path> [--source <path> ...] --destination <remotePath>  
+Example Output:   
+Output: 
+
+SSH.sh/__scp_fetch__: Copies files/directories from the remote host to the local machine via SCP.  
+Usage: __scp_fetch__ --host <host> --user <user> [--password <pass> | --identity <key>] [--port <port>] [--recursive] [--connect-timeout <seconds>] --source <remotePath> [--source <remotePath> ...] --destination <localPath>  
+Example Output:   
+Output: 
+
+SSH.sh/__ssh_exec_script__: Transfers a local script (or inline content) to the remote host, sets executable permissions, runs it, and optionally removes it afterward.  
+Usage: __ssh_exec_script__ --host <host> --user <user> [--password <pass> | --identity <key>] --script-path <path> [--remote-path <path>] [--arg <value> ...] [--sudo] [--keep-remote]  
+Example Output:   
+Output: 
+
+SSH.sh/__ssh_exec_function__: Ships one or more local Bash function definitions to the remote host and invokes a selected function with optional arguments.  
+Usage: __ssh_exec_function__ --host <host> --user <user> [--password <pass> | --identity <key>] --function <name> [--function <name> ...] [--call <name>] [--arg <value> ...] [--sudo]  
+Example Output:   
+Output: 

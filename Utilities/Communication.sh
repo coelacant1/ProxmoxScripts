@@ -22,6 +22,7 @@
 #   - __update__
 #   - __ok__
 #   - __err__
+#   - __warn__
 #   - __handle_err__
 #   - __show_script_header__
 #   - __show_script_examples__
@@ -131,6 +132,20 @@ __ok__() {
     echo -ne "\r\033[K"   # Clear the line first
     local msg="$1"
     echo -e "${GREEN}${BOLD}${msg}${RESET}"
+}
+
+# --- __warn__ ----------------------------------------------------------------
+# @function __warn__
+# @description Stops the spinner and prints a warning message in yellow.
+# @usage __warn__ "warning message"
+# @param msg The warning message to display.
+# @return Terminates the spinner and displays the warning message.
+# @example_output The spinner stops and "Warning: check configuration!" is printed in yellow bold.
+__warn__() {
+    __stop_spin__
+    echo -ne "\r\033[K"   # Clear the line first
+    local msg="$1"
+    echo -e "${YELLOW}${BOLD}${msg}${RESET}"
 }
 
 # --- __err__ ------------------------------------------------------------

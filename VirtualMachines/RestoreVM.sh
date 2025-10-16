@@ -19,7 +19,6 @@
 #   ./RestoreVM.sh 113 IHKBackup local-lvm
 #
 
-source "${UTILITYPATH}/Prompts.sh"
 
 check_root
 check_proxmox

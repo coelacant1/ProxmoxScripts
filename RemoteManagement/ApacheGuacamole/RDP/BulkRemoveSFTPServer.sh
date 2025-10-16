@@ -24,7 +24,8 @@
 
 # Optionally load utility functions (if available)
 source "${UTILITYPATH}/Prompts.sh"
-install_or_prompt "jq"
+
+__install_or_prompt__ "jq"
 
 # Assign input parameters
 GUAC_URL="$1"

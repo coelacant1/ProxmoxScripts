@@ -41,8 +41,6 @@ set -u
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -348,7 +346,7 @@ main() {
     __info__ "VMs to process: ${#vm_list[@]}"
     
     # Confirm before proceeding
-    if ! __prompt_yes_no__ "Proceed with migration?"; then
+    if ! __prompt_user_yn__ "Proceed with migration?"; then
         __info__ "Migration cancelled by user"
         exit 0
     fi
