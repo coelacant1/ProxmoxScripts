@@ -10,20 +10,24 @@
 #   # Then call its functions, for example:
 #   __check_root__
 #   __check_proxmox__
+#   __prompt_user_yn__ "Continue with operation?"
 #   __install_or_prompt__ "curl"
 #   __prompt_keep_installed_packages__
 #
 # Examples:
-#   # Example: Check root and Proxmox status, then install curl:
+#   # Example: Check root and Proxmox status, prompt user, then install curl:
 #   source ./Prompts.sh
 #   __check_root__
 #   __check_proxmox__
-#   __install_or_prompt__ "curl"
-#   __prompt_keep_installed_packages__
+#   if __prompt_user_yn__ "Continue with installation?"; then
+#       __install_or_prompt__ "curl"
+#       __prompt_keep_installed_packages__
+#   fi
 #
 # Function Index:
 #   - __check_root__
 #   - __check_proxmox__
+#   - __prompt_user_yn__
 #   - __install_or_prompt__
 #   - __prompt_keep_installed_packages__
 #   - __ensure_dependencies__
@@ -63,6 +67,27 @@ __check_proxmox__() {
     if ! command -v pveversion &>/dev/null; then
         echo "Error: 'pveversion' command not found. Are you sure this is a Proxmox node?"
         exit 2
+    fi
+}
+
+# --- __prompt_user_yn__ -------------------------------------------------------
+# @function __prompt_user_yn__
+# @description Prompts the user with a yes/no question and returns 0 for yes, 1 for no.
+# @usage __prompt_user_yn__ "Question text?"
+# @param question The question to ask the user
+# @return Returns 0 if user answers yes (Y/y), 1 if user answers no (N/n) or presses Enter (default: no)
+# @example_output 
+#   __prompt_user_yn__ "Continue with operation?" && echo "Proceeding..." || echo "Cancelled"
+__prompt_user_yn__() {
+    local question="$1"
+    local response
+    
+    read -r -p "${question} [y/N]: " response
+    
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        return 0
+    else
+        return 1
     fi
 }
 

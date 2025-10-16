@@ -41,6 +41,8 @@
 #
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/SSH.sh
+source "${UTILITYPATH}/SSH.sh"
 
 ###############################################################################
 # ENVIRONMENT CHECKS

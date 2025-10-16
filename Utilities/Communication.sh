@@ -22,6 +22,7 @@
 #   - __update__
 #   - __ok__
 #   - __err__
+#   - __warn__
 #   - __handle_err__
 #   - __show_script_header__
 #   - __show_script_examples__
@@ -72,7 +73,8 @@ __spin__() {
     
     while true; do
         local rgb="${RAINBOW_COLORS[color_i]}"
-        printf "\r\033[38;2;${rgb}m%s\033[0m " "${frames[spin_i]}"
+        # Move to start of line, then move 2 characters right to avoid text overlap
+        printf "\r\033[2C\033[38;2;${rgb}m%s\033[0m " "${frames[spin_i]}"
         spin_i=$(( (spin_i + 1) % ${#frames[@]} ))
         color_i=$(( (color_i + 1) % ${#RAINBOW_COLORS[@]} ))
         sleep "$interval"
@@ -97,13 +99,26 @@ __stop_spin__() {
 # --- __info__ ------------------------------------------------------------
 # @function __info__
 # @description Prints an informational message in bold yellow and starts the rainbow spinner.
+#              If a spinner is already running, it stops the old one first.
 # @usage __info__ "message"
 # @param msg The message to display.
 # @return Displays the message and starts the spinner.
 # @example_output "Processing..." is displayed in bold yellow with an active spinner.
 __info__() {
     local msg="$1"
+    
+    # Stop any existing spinner first
+    if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
+        kill "$SPINNER_PID" &>/dev/null
+        wait "$SPINNER_PID" 2>/dev/null || true
+        SPINNER_PID=""
+    fi
+    
+    # Clear the line and start fresh
+    echo -ne "\r\033[K"
     echo -ne "  ${YELLOW}${BOLD}${msg}${RESET} "
+    
+    # Start new spinner
     __spin__ &
     SPINNER_PID=$!
 }
@@ -116,7 +131,8 @@ __info__() {
 # @return Updates the spinner line text.
 # @example_output The text next to the spinner is replaced with "new message".
 __update__() {
-    echo -ne "\r\033[2C\033[K$1"
+    # Move to column 4 (after the spinner position) and clear to end of line
+    echo -ne "\r\033[4C\033[K$1"
 }
 
 # --- __ok__ ------------------------------------------------------------
@@ -131,6 +147,20 @@ __ok__() {
     echo -ne "\r\033[K"   # Clear the line first
     local msg="$1"
     echo -e "${GREEN}${BOLD}${msg}${RESET}"
+}
+
+# --- __warn__ ----------------------------------------------------------------
+# @function __warn__
+# @description Stops the spinner and prints a warning message in yellow.
+# @usage __warn__ "warning message"
+# @param msg The warning message to display.
+# @return Terminates the spinner and displays the warning message.
+# @example_output The spinner stops and "Warning: check configuration!" is printed in yellow bold.
+__warn__() {
+    __stop_spin__
+    echo -ne "\r\033[K"   # Clear the line first
+    local msg="$1"
+    echo -e "${YELLOW}${BOLD}${msg}${RESET}"
 }
 
 # --- __err__ ------------------------------------------------------------

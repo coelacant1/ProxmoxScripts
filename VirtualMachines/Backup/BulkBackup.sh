@@ -33,8 +33,6 @@ set -u
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -161,7 +159,7 @@ main() {
     fi
     
     # Confirm before proceeding
-    if ! __prompt_yes_no__ "Proceed with backup?"; then
+    if ! __prompt_user_yn__ "Proceed with backup?"; then
         __info__ "Backup cancelled by user"
         exit 0
     fi

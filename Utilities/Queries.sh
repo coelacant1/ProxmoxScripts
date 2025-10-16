@@ -29,6 +29,10 @@
 #   - __validate_vm_id_range__
 #   - __get_ip_from_vmid__
 #   - __get_ip_from_guest_agent__
+#   - __validate_vmid__
+#   - __check_vm_status__
+#   - __validate_ctid__
+#   - __check_ct_status__
 #
 
 source "${UTILITYPATH}/Prompts.sh"
@@ -703,4 +707,240 @@ __get_ip_from_guest_agent__() {
     done
 
     return 1
+}
+
+# --- __validate_vmid__ -------------------------------------------------------
+# @function __validate_vmid__
+# @description Validates that a VMID exists and is a VM (qemu), not a container.
+#   Exits with error if VMID doesn't exist or is not a VM.
+# @usage __validate_vmid__ <vmid>
+# @param vmid The VM ID to validate
+# @return 0 if valid VM, exits with error otherwise
+# @example_output For __validate_vmid__ 100:
+#   VMID 100 is a valid VM
+__validate_vmid__() {
+    local vmid="$1"
+    
+    if [[ -z "$vmid" ]]; then
+        echo "Error: VMID is required" >&2
+        return 1
+    fi
+    
+    # Validate VMID is numeric
+    if ! [[ "$vmid" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid VMID '${vmid}' - must be numeric" >&2
+        return 1
+    fi
+    
+    # Check if it's a VM
+    if qm status "$vmid" &>/dev/null; then
+        return 0
+    fi
+    
+    # Check if it's a container (not valid for this function)
+    if pct status "$vmid" &>/dev/null; then
+        echo "Error: VMID ${vmid} is a container, not a VM" >&2
+        echo "Use __validate_ctid__ for containers" >&2
+        return 1
+    fi
+    
+    # VMID doesn't exist
+    echo "Error: VMID ${vmid} not found" >&2
+    return 1
+}
+
+# --- __check_vm_status__ -----------------------------------------------------
+# @function __check_vm_status__
+# @description Checks if a VM is running and optionally stops it with user confirmation.
+#   Can be used in force mode to skip confirmation.
+# @usage __check_vm_status__ <vmid> [--stop] [--force]
+# @param vmid The VM ID to check
+# @param --stop Optional: Offer to stop the VM if running
+# @param --force Optional: Stop without confirmation (requires --stop)
+# @return 0 if VM is stopped, 1 if running and not stopped
+# @example __check_vm_status__ 100 --stop --force
+__check_vm_status__() {
+    local vmid="$1"
+    shift
+    
+    local should_stop=false
+    local force_stop=false
+    
+    # Parse optional arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --stop)
+                should_stop=true
+                shift
+                ;;
+            --force)
+                force_stop=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    
+    local status
+    status=$(qm status "$vmid" 2>/dev/null | awk '{print $2}')
+    
+    if [[ "$status" != "running" ]]; then
+        return 0
+    fi
+    
+    # VM is running
+    if ! $should_stop; then
+        echo "Warning: VM ${vmid} is running" >&2
+        return 1
+    fi
+    
+    # Should stop - check if we need confirmation
+    if ! $force_stop; then
+        echo "VM ${vmid} is currently running and must be stopped" >&2
+        read -p "Stop VM ${vmid} now? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Operation cancelled" >&2
+            return 1
+        fi
+    fi
+    
+    # Stop the VM
+    if ! qm stop "$vmid" 2>&1; then
+        echo "Error: Failed to stop VM ${vmid}" >&2
+        return 1
+    fi
+    
+    # Wait for VM to fully stop
+    local wait_count=0
+    while [[ "$(qm status "$vmid" 2>/dev/null | awk '{print $2}')" == "running" ]]; do
+        sleep 2
+        wait_count=$((wait_count + 1))
+        if [[ $wait_count -gt 30 ]]; then
+            echo "Error: Timeout waiting for VM ${vmid} to stop" >&2
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+# --- __validate_ctid__ -------------------------------------------------------
+# @function __validate_ctid__
+# @description Validates that a CTID exists and is a container (lxc), not a VM.
+#   Exits with error if CTID doesn't exist or is not a container.
+# @usage __validate_ctid__ <ctid>
+# @param ctid The container ID to validate
+# @return 0 if valid container, exits with error otherwise
+# @example_output For __validate_ctid__ 100:
+#   CTID 100 is a valid container
+__validate_ctid__() {
+    local ctid="$1"
+    
+    if [[ -z "$ctid" ]]; then
+        echo "Error: CTID is required" >&2
+        return 1
+    fi
+    
+    # Validate CTID is numeric
+    if ! [[ "$ctid" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid CTID '${ctid}' - must be numeric" >&2
+        return 1
+    fi
+    
+    # Check if it's a container
+    if pct status "$ctid" &>/dev/null; then
+        return 0
+    fi
+    
+    # Check if it's a VM (not valid for this function)
+    if qm status "$ctid" &>/dev/null; then
+        echo "Error: CTID ${ctid} is a VM, not a container" >&2
+        echo "Use __validate_vmid__ for VMs" >&2
+        return 1
+    fi
+    
+    # CTID doesn't exist
+    echo "Error: CTID ${ctid} not found" >&2
+    return 1
+}
+
+# --- __check_ct_status__ -----------------------------------------------------
+# @function __check_ct_status__
+# @description Checks if a container is running and optionally stops it with user confirmation.
+#   Can be used in force mode to skip confirmation.
+# @usage __check_ct_status__ <ctid> [--stop] [--force]
+# @param ctid The container ID to check
+# @param --stop Optional: Offer to stop the container if running
+# @param --force Optional: Stop without confirmation (requires --stop)
+# @return 0 if container is stopped, 1 if running and not stopped
+# @example __check_ct_status__ 100 --stop --force
+__check_ct_status__() {
+    local ctid="$1"
+    shift
+    
+    local should_stop=false
+    local force_stop=false
+    
+    # Parse optional arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --stop)
+                should_stop=true
+                shift
+                ;;
+            --force)
+                force_stop=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    
+    local status
+    status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}')
+    
+    if [[ "$status" != "running" ]]; then
+        return 0
+    fi
+    
+    # Container is running
+    if ! $should_stop; then
+        echo "Warning: Container ${ctid} is running" >&2
+        return 1
+    fi
+    
+    # Should stop - check if we need confirmation
+    if ! $force_stop; then
+        echo "Container ${ctid} is currently running and must be stopped" >&2
+        read -p "Stop container ${ctid} now? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Operation cancelled" >&2
+            return 1
+        fi
+    fi
+    
+    # Stop the container
+    if ! pct stop "$ctid" 2>&1; then
+        echo "Error: Failed to stop container ${ctid}" >&2
+        return 1
+    fi
+    
+    # Wait for container to fully stop
+    local wait_count=0
+    while [[ "$(pct status "$ctid" 2>/dev/null | awk '{print $2}')" == "running" ]]; do
+        sleep 2
+        wait_count=$((wait_count + 1))
+        if [[ $wait_count -gt 30 ]]; then
+            echo "Error: Timeout waiting for container ${ctid} to stop" >&2
+            return 1
+        fi
+    done
+    
+    return 0
 }

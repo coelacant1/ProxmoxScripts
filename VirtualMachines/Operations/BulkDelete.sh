@@ -32,8 +32,6 @@ set -u
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -142,7 +140,7 @@ main() {
     __warn__ "This operation cannot be undone!"
     
     # Confirm before proceeding
-    if ! __prompt_yes_no__ "Are you absolutely sure you want to delete these VMs?"; then
+    if ! __prompt_user_yn__ "Are you absolutely sure you want to delete these VMs?"; then
         __info__ "Deletion cancelled by user"
         exit 0
     fi
