@@ -8,8 +8,9 @@
 # via the CCPVE one-liner.
 #
 # Usage:
-#   ./BatchRunCLI.sh --start <vmid> --end <vmid> --ssh-user <user> --ssh-pass <pass> --run Host/QuickDiagnostic.sh [--args "arg1 arg2"]
+#   ./BatchRunCLI.sh --start <vmid> --end <vmid> --ssh-user <user> --ssh-pass <pass> --run Host/QuickDiagnostic.sh [--args "arg1 arg2"] [--branch <branch>]
 #   ./BatchRunCLI.sh --start 300 --end 305 --ssh-user root --ssh-pass secret
+#   ./BatchRunCLI.sh --start 100 --end 103 --ssh-user root --ssh-pass secret --run Host/QuickDiagnostic.sh --branch testing
 #
 # Function Index:
 #   - usage
@@ -39,6 +40,7 @@ SSH_PASS=""
 RUN_SCRIPT=""
 RUN_ARGS=""
 EXEC_COMMAND=""
+GIT_BRANCH="main"
 INTERACTIVE="false"
 ALT_SCREEN_ACTIVE="false"
 
@@ -71,6 +73,7 @@ Required:
 
 Optional:
   --args "arg1 arg2"     Arguments passed verbatim to the target script
+  --branch <branch>      Git branch to use (default: main)
   --exec "command"       Run an arbitrary shell command on each guest instead of a script
   -h/--help              Show this help and exit
 
@@ -82,10 +85,9 @@ Interactive Mode (omit --run):
   5) Execute remotely via CCPVE one-liner
 
 Examples:
-  $0 --start 100 --end 103 --ssh-user root --ssh-pass secret \
-     --run Host/QuickDiagnostic.sh
-  $0 --start 200 --end 205 --ssh-user root --ssh-pass secret \
-     --run Storage/Benchmark.sh --args "--device /dev/sdb --mode quick"
+  $0 --start 100 --end 103 --ssh-user root --ssh-pass secret --run Host/QuickDiagnostic.sh
+  $0 --start 200 --end 205 --ssh-user root --ssh-pass secret --run Storage/Benchmark.sh --args "--device /dev/sdb --mode quick"
+  $0 --start 100 --end 103 --ssh-user root --ssh-pass secret --run Host/QuickDiagnostic.sh --branch testing
   $0 --start 300 --end 305 --ssh-user root --ssh-pass secret   # interactive
 EOF
 }
@@ -104,6 +106,7 @@ parse_args() {
             --ssh-pass) SSH_PASS="$2"; shift 2 ;;
             --run) RUN_SCRIPT="$2"; shift 2 ;;
             --args) RUN_ARGS="$2"; shift 2 ;;
+            --branch) GIT_BRANCH="$2"; shift 2 ;;
             --exec) EXEC_COMMAND="$2"; shift 2 ;;
             -h|--help) usage; exit 0 ;;
             *) __err__ "Unknown argument: $1"; usage; exit 64 ;;
@@ -165,6 +168,11 @@ gather_interactive_inputs() {
     if [[ -z "$SSH_PASS" ]]; then
         read -r -s -p "SSH password for ${SSH_USER}: " SSH_PASS
         echo
+    fi
+    
+    read -r -p "Git branch to use (default: main): " branch_input
+    if [[ -n "$branch_input" ]]; then
+        GIT_BRANCH="$branch_input"
     fi
 
     choose_script_via_navigation || {
@@ -276,7 +284,7 @@ build_remote_script_command() {
     local args="$2"
     local base
 
-    base=$(printf 'bash <(curl -fsSL %s) --run %q' "$SHORT_URL" "$script_path")
+    base=$(printf 'bash <(curl -fsSL %s) --run %q --branch %q' "$SHORT_URL" "$script_path" "$GIT_BRANCH")
 
     if [[ -n "$args" ]]; then
         printf '%s --args %q' "$base" "$args"
@@ -351,6 +359,7 @@ run_bulk() {
     echo
     __line_rgb__ "=== Running CCPVE CLI bulk execution ===" 0 255 255
     __line_rgb__ "VMIDs: ${START_VMID}-${END_VMID}" 200 200 200
+    __line_rgb__ "Branch: ${GIT_BRANCH}" 200 200 200
     if [[ -n "$EXEC_COMMAND" ]]; then
         __line_rgb__ "Command: ${EXEC_COMMAND}" 200 200 200
     else

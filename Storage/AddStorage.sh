@@ -390,11 +390,6 @@ main() {
     __info__ "Adding ${STORAGE_TYPE^^} storage to cluster:"
     __info__ "  Storage ID: ${STORAGE_ID}"
     __info__ "  Server: ${SERVER}"
-    
-    if ! __prompt_user_yn__ "Proceed with adding storage?"; then
-        __info__ "Operation cancelled by user"
-        exit 0
-    fi
 
     # Add storage based on type
     case "$STORAGE_TYPE" in
