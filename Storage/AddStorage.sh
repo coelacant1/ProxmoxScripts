@@ -235,16 +235,9 @@ parse_args() {
         fi
         if [[ -z "$FINGERPRINT" ]]; then
             __warn__ "PBS storage strongly recommends --fingerprint for secure connection"
+            __warn__ "Proceeding without fingerprint - connection may fail"
             __info__ "To get the fingerprint, run on the PBS server:"
             __info__ "  proxmox-backup-manager cert info | grep Fingerprint"
-            __info__ "Or check the PBS web interface: Configuration -> Certificates"
-            echo
-            read -p "Continue without fingerprint? [y/N] " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                __info__ "Operation cancelled"
-                exit 0
-            fi
         fi
     fi
 }
@@ -278,7 +271,8 @@ add_nfs_storage() {
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
     [[ -n "$MOUNT_OPTIONS" ]] && cmd+=" --options \"${MOUNT_OPTIONS}\""
 
-    if eval "$cmd" 2>&1; then
+    # Redirect stdin to prevent any interactive prompts from hanging
+    if eval "$cmd" </dev/null 2>&1; then
         __ok__ "NFS storage '${STORAGE_ID}' added successfully"
         return 0
     else
@@ -305,19 +299,15 @@ add_smb_storage() {
         cmd+=" --username \"${USERNAME}\""
         
         if [[ -n "$PASSWORD" ]]; then
-            # Create password file temporarily
-            local pass_file="/tmp/.pve_smb_pass_${STORAGE_ID}"
-            echo "$PASSWORD" > "$pass_file"
-            chmod 600 "$pass_file"
-            cmd+=" --password \"$(cat "$pass_file")\""
-            rm -f "$pass_file"
+            cmd+=" --password \"${PASSWORD}\""
         fi
     fi
     
     [[ -n "$DOMAIN" ]] && cmd+=" --domain \"${DOMAIN}\""
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
 
-    if eval "$cmd" 2>&1; then
+    # Redirect stdin to prevent any interactive prompts from hanging
+    if eval "$cmd" </dev/null 2>&1; then
         __ok__ "SMB/CIFS storage '${STORAGE_ID}' added successfully"
         return 0
     else
@@ -346,18 +336,14 @@ add_pbs_storage() {
     local cmd="pvesm add pbs \"${STORAGE_ID}\" --server \"${SERVER}\" --username \"${USERNAME}\" --datastore \"${DATASTORE}\""
     
     if [[ -n "$PASSWORD" ]]; then
-        # Create password file temporarily
-        local pass_file="/tmp/.pve_pbs_pass_${STORAGE_ID}"
-        echo "$PASSWORD" > "$pass_file"
-        chmod 600 "$pass_file"
-        cmd+=" --password \"$(cat "$pass_file")\""
-        rm -f "$pass_file"
+        cmd+=" --password \"${PASSWORD}\""
     fi
     
     [[ -n "$FINGERPRINT" ]] && cmd+=" --fingerprint \"${FINGERPRINT}\""
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
 
-    if eval "$cmd" 2>&1; then
+    # Redirect stdin to prevent any interactive prompts from hanging
+    if eval "$cmd" </dev/null 2>&1; then
         __ok__ "PBS storage '${STORAGE_ID}' added successfully"
         return 0
     else
