@@ -16,6 +16,7 @@
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"
+source "${UTILITYPATH}/Conversion.sh"
 
 ###############################################################################
 # Check prerequisites and parse arguments
@@ -44,6 +45,8 @@ sshUsername="$7"
 sshPassword="$8"
 vmNamePrefix="$9"
 interfaceName="${10}"
+# Strip quotes from interfaceName if present
+interfaceName="${interfaceName//\"/}"
 dns1="${11}"
 dns2="${12}"
 
@@ -111,8 +114,13 @@ for (( i=0; i<instanceCount; i++ )); do
     --destination "$remoteBatPath"
 
   echo "Starting IP change script in the background via 'start /b'..."
-  printf -v remoteCmd 'cmd /c "${remoteBatPathCmd} \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\""' \
-    "$interfaceName" "$currentIp" "$netmask" "$newGateway" "$dns1" "$dns2"
+  echo "DEBUG: interfaceName='${interfaceName}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${newGateway}' dns1='${dns1}' dns2='${dns2}'"
+<<<<<<< HEAD
+  remoteCmd="cmd /c \"${remoteBatPathCmd} \\\"${interfaceName}\\\" ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\""
+=======
+  remoteCmd="cmd /c \"${remoteBatPathCmd} ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\""
+>>>>>>> 16697ce890883a184393ebd5f5c010e656434138
+  echo "DEBUG: remoteCmd='${remoteCmd}'"
 
   __ssh_exec__ \
     --host "$templateIpAddr" \
