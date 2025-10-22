@@ -111,8 +111,9 @@ for (( i=0; i<instanceCount; i++ )); do
     --destination "$remoteBatPath"
 
   echo "Starting IP change script in the background via 'start /b'..."
-  printf -v remoteCmd 'cmd /c "${remoteBatPathCmd} \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\""' \
-    "$interfaceName" "$currentIp" "$netmask" "$newGateway" "$dns1" "$dns2"
+  echo "DEBUG: interfaceName='${interfaceName}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${newGateway}' dns1='${dns1}' dns2='${dns2}'"
+  remoteCmd="cmd /c \"${remoteBatPathCmd} ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\""
+  echo "DEBUG: remoteCmd='${remoteCmd}'"
 
   __ssh_exec__ \
     --host "$templateIpAddr" \
