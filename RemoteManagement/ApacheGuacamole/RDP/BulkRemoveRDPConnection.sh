@@ -10,13 +10,13 @@
 #   2. Search by VMID range - removes connections for VMs in a specific VMID range
 #
 # Usage:
-#   ./BulkRemoveRDPConnection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
-#   ./BulkRemoveRDPConnection.sh GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]
+#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
+#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]
 #
 # Examples:
-#   ./BulkRemoveRDPConnection.sh "http://172.20.192.10:8080/guacamole" "TestVM"
-#   ./BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" "Clone" mysql
-#   ./BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" --vmid-range 100 110 mysql
+#   BulkRemoveRDPConnection.sh "http://172.20.192.10:8080/guacamole" "TestVM"
+#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" "Clone" mysql
+#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" --vmid-range 100 110 mysql
 #
 # Notes:
 #   - This script expects a valid Guacamole auth token in /tmp/cc_pve/guac_token.
@@ -26,10 +26,18 @@
 #
 # Function Index:
 #   - delete_connection
-#   - main
 #
 
+set -euo pipefail
+
 # shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 source "${UTILITYPATH}/Prompts.sh"
 
 __install_or_prompt__ "jq"
@@ -43,12 +51,12 @@ delete_connection() {
     local guac_url="$3"
     local data_source="$4"
     local auth_token="$5"
-    
+
     echo "  Deleting connection: '$conn_name' (ID: $conn_id)"
-    
+
     deleteResponse=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
         "${guac_url}/api/session/data/${data_source}/connections/${conn_id}?token=${auth_token}")
-    
+
     if [[ "$deleteResponse" -eq 200 || "$deleteResponse" -eq 204 ]]; then
         echo "    Successfully deleted connection '$conn_name' (ID: $conn_id)"
         return 0
@@ -71,7 +79,7 @@ if [[ "$2" == "--vmid-range" ]]; then
     START_VMID="$3"
     END_VMID="$4"
     GUAC_DATA_SOURCE="${5:-mysql}"
-    
+
     if [[ -z "$GUAC_URL" || -z "$START_VMID" || -z "$END_VMID" ]]; then
         echo "Error: Missing required arguments for VMID range mode."
         echo "Usage: $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
@@ -80,7 +88,7 @@ if [[ "$2" == "--vmid-range" ]]; then
 else
     SEARCH_SUBSTRING="$2"
     GUAC_DATA_SOURCE="${3:-mysql}"
-    
+
     if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
         echo "Error: Missing required arguments."
         echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
@@ -116,26 +124,26 @@ fi
 ###############################################################################
 if [[ "$MODE" == "vmid-range" ]]; then
     echo "Searching for connections with VMIDs in range $START_VMID to $END_VMID..."
-    
+
     # Build list of VM names for the VMID range
     vmNames=()
     for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
         vmName="$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
             jq -r --arg VMID "$vmid" '.[] | select(.vmid == ($VMID|tonumber)) | .name')"
-        
+
         if [[ -n "$vmName" && "$vmName" != "null" ]]; then
             vmNames+=("$vmName")
         else
             vmNames+=("VM-$vmid")
         fi
     done
-    
+
     # Create a jq array of VM names
     vmNamesJson=$(printf '%s\n' "${vmNames[@]}" | jq -R . | jq -s .)
-    
+
     matchingConnections=$(echo "$connectionsJson" | jq -r \
         --argjson names "$vmNamesJson" '
-        [ (.childConnections // [])[] 
+        [ (.childConnections // [])[]
           | select(.name as $n | $names | any(. == $n))
           | { id: .identifier, name: .name } ]
         ')
@@ -143,7 +151,7 @@ else
     echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
     matchingConnections=$(echo "$connectionsJson" | jq -r \
         --arg SUBSTR "$SEARCH_SUBSTRING" '
-        [ (.childConnections // [])[] 
+        [ (.childConnections // [])[]
           | select(.name | test($SUBSTR; "i"))
           | { id: .identifier, name: .name } ]
         ')
@@ -188,7 +196,7 @@ failed_count=0
 echo "$matchingConnections" | jq -c '.[]' | while IFS= read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
-    
+
     if delete_connection "$connId" "$connName" "$GUAC_URL" "$GUAC_DATA_SOURCE" "$AUTH_TOKEN"; then
         ((deleted_count++))
     else

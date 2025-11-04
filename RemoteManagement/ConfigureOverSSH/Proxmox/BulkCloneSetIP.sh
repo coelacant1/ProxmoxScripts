@@ -8,13 +8,18 @@
 #       to BC:<VMID[0..1]>:<VMID[2..3]> and rewrite existing VM/LXC MACs to that prefix.
 #
 # Usage:
-#   ./BulkCloneSetIPDebian.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix>
+#   BulkCloneSetIPDebian.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix>
 #
 # Example:
-#   ./BulkCloneSetIPDebian.sh 172.20.83.22 172.20.83.100/24 172.20.83.1 5 100 200 root pass123 CLOUD-
+#   BulkCloneSetIPDebian.sh 172.20.83.22 172.20.83.100/24 172.20.83.1 5 100 200 root pass123 CLOUD-
+#
+# Function Index:
+#   - rewrite_file_mac_prefix
 #
 
 set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"

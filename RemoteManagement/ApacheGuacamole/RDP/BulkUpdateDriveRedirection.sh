@@ -19,11 +19,13 @@
 # are preserved.
 #
 # Usage:
-#   ./BulkUpdateDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING DRIVE_NAME DRIVE_PATH [DATA_SOURCE]
+#   BulkUpdateDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING DRIVE_NAME DRIVE_PATH [DATA_SOURCE]
 #
 # Example:
-#   ./BulkUpdateDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" "Storage" "/mnt/storage" mysql
+#   BulkUpdateDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" "Storage" "/mnt/storage" mysql
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 __install_or_prompt__ "jq"
@@ -69,7 +71,7 @@ fi
 echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
   --arg SUBSTR "$SEARCH_SUBSTRING" '
-    [ (.childConnections // [])[] 
+    [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | { id: .identifier, name: .name } ]
   ')
@@ -91,21 +93,21 @@ echo "Updating drive redirection parameters for matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
-    
+
     echo "---------------------------------------------"
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
-    
+
     # Sanitize connection name for subfolder usage (replace spaces with underscores)
     sanitizedName=$(echo "$connName" | tr ' ' '_')
-    
+
     # Build the new drive path by appending the sanitized connection name as a subfolder
     newDrivePath="${DRIVE_PATH}/${sanitizedName}"
-    
+
     # Retrieve the full connection JSON using the identifier.
     connectionInfo=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ -z "$connectionInfo" ]]; then
       echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
       continue
@@ -114,10 +116,10 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     # Retrieve existing parameters from the dedicated endpoint.
     existingParams=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
-    
+
     # If no parameters are returned, default to an empty object.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
-    
+
     # Manually set new drive redirection keys.
     newParams=$(echo "$existingParams" | jq --arg dname "$DRIVE_NAME" --arg ndp "$newDrivePath" '
         .["enable-drive"] = true |
@@ -125,7 +127,7 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
         .["drive-path"]   = $ndp |
         .["create-drive-path"] = true
     ')
-    
+
     # Build the updated connection JSON payload.
     # Preserve parentIdentifier, name, protocol, and attributes from connectionInfo.
     updatedJson=$(echo "$connectionInfo" | jq --argjson params "$newParams" '
@@ -137,19 +139,19 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
           parameters: $params
         }
     ')
-    
+
     #echo "New merged parameters:"
     #echo "$newParams" | jq .
-    
+
     #echo "Updated connection payload:"
     #echo "$updatedJson" | jq .
-    
+
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       -H "Content-Type: application/json" \
       -d "$updatedJson" \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully updated connection '$connId'."
     else

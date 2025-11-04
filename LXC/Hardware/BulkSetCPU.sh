@@ -2,69 +2,72 @@
 #
 # BulkSetCPU.sh
 #
-# This script sets the CPU type and core count for a range of LXC containers.
+# Sets the CPU configuration (cores and sockets) for a range of LXC containers.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkSetCPU.sh <start_ct_id> <end_ct_id> <cpu_type> <core_count> [sockets]
+#   BulkSetCPU.sh <start_ct_id> <end_ct_id> <core_count> [sockets]
 #
-# Example:
-#   # Sets containers 400..402 to CPU type=host and 4 cores
-#   ./BulkSetCPU.sh 400 402 host 4
+# Arguments:
+#   start_ct_id - The ID of the first container to update.
+#   end_ct_id   - The ID of the last container to update.
+#   core_count  - Number of CPU cores to assign.
+#   sockets     - Optional. Number of CPU sockets (default: 1).
 #
-#   # Sets containers 400..402 to CPU type=host, 4 cores, 2 sockets
-#   ./BulkSetCPU.sh 400 402 host 4 2
+# Examples:
+#   BulkSetCPU.sh 400 402 4
+#   BulkSetCPU.sh 400 402 4 2
 #
-# Notes:
-#   - Must be run as root on a Proxmox node.
-#   - 'pct' is required (part of the PVE/LXC utilities).
+# Function Index:
+#   - main
+#   - set_cpu_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
-# --- Parse arguments -------------------------------------------------------
-if [[ $# -lt 4 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <cpu_type> <core_count> [sockets]"
-  echo "Example:"
-  echo "  $0 400 402 host 4"
-  echo "  (Sets containers 400..402 to CPU type=host, 4 cores)"
-  echo "  $0 400 402 host 4 2"
-  echo "  (Sets containers 400..402 to CPU type=host, 4 cores, 2 sockets)"
-  exit 1
-fi
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-CPU_TYPE="$3"
-CORE_COUNT="$4"
-SOCKETS="${5:-1}"  # Default to 1 socket if not provided
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid core_count:int sockets:int:?" "$@"
 
-# --- Basic checks ----------------------------------------------------------
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-# --- Display summary -------------------------------------------------------
-echo "=== Starting CPU config update for containers from $START_CT_ID to $END_CT_ID ==="
-echo " - CPU Type: \"$CPU_TYPE\""
-echo " - Core Count: \"$CORE_COUNT\""
-echo " - Sockets: \"$SOCKETS\""
+    # Set default socket count
+    SOCKETS="${SOCKETS:-1}"
 
-# --- Main Loop -------------------------------------------------------------
-for (( ctId=START_CT_ID; ctId<=END_CT_ID; ctId++ )); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Updating CPU for container \"$ctId\"..."
-    if pct set "$ctId" -cpu "$CPU_TYPE" -cores "$CORE_COUNT" -sockets "$SOCKETS"; then
-      echo " - Successfully updated CPU settings for CT \"$ctId\"."
-    else
-      echo " - Failed to update CPU settings for CT \"$ctId\"."
-    fi
-  else
-    echo " - Container \"$ctId\" does not exist. Skipping."
-  fi
-done
+    __info__ "Bulk set CPU config: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Cores: ${CORE_COUNT}, Sockets: ${SOCKETS}"
 
-echo "=== Bulk CPU config change process complete! ==="
+    # Local callback for bulk operation
+    set_cpu_callback() {
+        local vmid="$1"
+        __ct_set_cpu__ "$vmid" "$CORE_COUNT" "$SOCKETS"
+    }
+
+    # Use BulkOperations framework
+    __bulk_ct_operation__ --name "Set CPU" --report "$START_VMID" "$END_VMID" set_cpu_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "CPU configuration updated successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

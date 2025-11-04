@@ -12,6 +12,8 @@
 #   - __simulate_blink_async__
 #
 
+set -euo pipefail
+
 ###############################################################################
 # GLOBALS
 ###############################################################################
@@ -75,7 +77,7 @@ __gradient_print__() {
         local lineColorPrefix="\033[38;2;${R2};${G2};${B2}m"
         local lineColorSuffix="\033[0m"
         local single_line="${lines[0]}"
-        
+
         # Print char by char, skipping excludes
         for (( i=0; i<${#single_line}; i++ )); do
             local ch="${single_line:i:1}"
@@ -94,7 +96,7 @@ __gradient_print__() {
     # Multiple lines => top-to-bottom gradient
     for (( i=0; i<total_lines; i++ )); do
         local fraction=$(( i * 100 / (total_lines - 1) ))
-        
+
         # Interpolate color
         local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
         local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
@@ -108,7 +110,7 @@ __gradient_print__() {
         local line="${lines[$i]}"
         for (( j=0; j<${#line}; j++ )); do
             local ch="${line:j:1}"
-            
+
             # If ch is in the excluded list, print it uncolored
             if [[ "$excluded_chars" == *"$ch"* ]]; then
                 echo -n "$ch"

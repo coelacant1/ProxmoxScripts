@@ -21,18 +21,22 @@
 #   - __info__
 #   - __update__
 #   - __ok__
-#   - __err__
 #   - __warn__
+#   - __err__
 #   - __handle_err__
 #   - __show_script_header__
 #   - __show_script_examples__
 #   - __display_script_info__
 #
 
+set -euo pipefail
+
 ###############################################################################
 # GLOBALS
 ###############################################################################
 SPINNER_PID=""
+CURRENT_MESSAGE=""
+QUIET_MODE="${QUIET_MODE:-false}"
 
 ###############################################################################
 # Color Definitions and Spinner
@@ -60,6 +64,7 @@ RAINBOW_COLORS=(
 # --- __spin__ ------------------------------------------------------------
 # @function __spin__
 # @description Runs an infinite spinner with rainbow color cycling in the background.
+#              Reads CURRENT_MESSAGE to display alongside the spinner.
 # @usage __spin__ &
 # @return Runs indefinitely until terminated.
 # @example_output When executed in the background, the spinner animates through rainbow colors.
@@ -67,14 +72,18 @@ __spin__() {
     local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local spin_i=0
     local color_i=0
-    local interval=0.025
-    
+    local interval=0.05
+
     printf "\e[?25l"  # hide cursor
-    
+
     while true; do
         local rgb="${RAINBOW_COLORS[color_i]}"
-        # Move to start of line, then move 2 characters right to avoid text overlap
-        printf "\r\033[2C\033[38;2;${rgb}m%s\033[0m " "${frames[spin_i]}"
+
+        # Clear entire line, then print spinner and message
+        printf "\r\033[K"
+        printf "\033[38;2;${rgb}m%s\033[0m " "${frames[spin_i]}"
+        printf "%b" "$CURRENT_MESSAGE"
+
         spin_i=$(( (spin_i + 1) % ${#frames[@]} ))
         color_i=$(( (color_i + 1) % ${#RAINBOW_COLORS[@]} ))
         sleep "$interval"
@@ -89,10 +98,13 @@ __spin__() {
 # @example_output The spinner process is terminated and the cursor is made visible.
 __stop_spin__() {
     if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
-        kill "$SPINNER_PID" &>/dev/null
+        kill "$SPINNER_PID" &>/dev/null 2>&1
         wait "$SPINNER_PID" 2>/dev/null || true
         SPINNER_PID=""
     fi
+
+    # Clear the spinner line
+    printf "\r\033[K"
     printf "\e[?25h"  # show cursor
 }
 
@@ -106,21 +118,29 @@ __stop_spin__() {
 # @example_output "Processing..." is displayed in bold yellow with an active spinner.
 __info__() {
     local msg="$1"
-    
+
+    # Skip in quiet mode
+    [[ "$QUIET_MODE" == "true" ]] && return 0
+
     # Stop any existing spinner first
     if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
-        kill "$SPINNER_PID" &>/dev/null
+        kill "$SPINNER_PID" &>/dev/null 2>&1
         wait "$SPINNER_PID" 2>/dev/null || true
         SPINNER_PID=""
     fi
-    
-    # Clear the line and start fresh
-    echo -ne "\r\033[K"
-    echo -ne "  ${YELLOW}${BOLD}${msg}${RESET} "
-    
-    # Start new spinner
+
+    # Update message buffer with colored text
+    CURRENT_MESSAGE="  ${YELLOW}${BOLD}${msg}${RESET}"
+
+    # Clear any existing line content
+    printf "\r\033[K"
+
+    # Start new spinner (it will read CURRENT_MESSAGE)
     __spin__ &
     SPINNER_PID=$!
+
+    # Give spinner a moment to render first frame
+    sleep 0.01
 }
 
 # --- __update__ ------------------------------------------------------------
@@ -131,8 +151,14 @@ __info__() {
 # @return Updates the spinner line text.
 # @example_output The text next to the spinner is replaced with "new message".
 __update__() {
-    # Move to column 4 (after the spinner position) and clear to end of line
-    echo -ne "\r\033[4C\033[K$1"
+    local msg="$1"
+
+    # Skip in quiet mode
+    [[ "$QUIET_MODE" == "true" ]] && return 0
+
+    # Update the message buffer
+    # The spinner loop will pick it up on next iteration
+    CURRENT_MESSAGE="  $msg"
 }
 
 # --- __ok__ ------------------------------------------------------------
@@ -143,10 +169,14 @@ __update__() {
 # @return Terminates the spinner and displays the success message.
 # @example_output The spinner stops and "Completed successfully!" is printed in green bold.
 __ok__() {
-    __stop_spin__
-    echo -ne "\r\033[K"   # Clear the line first
     local msg="$1"
-    echo -e "${GREEN}${BOLD}${msg}${RESET}"
+
+    __stop_spin__
+
+    # Skip output in quiet mode
+    [[ "$QUIET_MODE" == "true" ]] && return 0
+
+    echo -e "  ${GREEN}${BOLD}✓${RESET} ${msg}"
 }
 
 # --- __warn__ ----------------------------------------------------------------
@@ -157,10 +187,12 @@ __ok__() {
 # @return Terminates the spinner and displays the warning message.
 # @example_output The spinner stops and "Warning: check configuration!" is printed in yellow bold.
 __warn__() {
-    __stop_spin__
-    echo -ne "\r\033[K"   # Clear the line first
     local msg="$1"
-    echo -e "${YELLOW}${BOLD}${msg}${RESET}"
+
+    __stop_spin__
+
+    # Always show warnings even in quiet mode
+    echo -e "  ${YELLOW}${BOLD}⚠${RESET} ${msg}" >&2
 }
 
 # --- __err__ ------------------------------------------------------------
@@ -171,10 +203,12 @@ __warn__() {
 # @return Terminates the spinner and displays the error message.
 # @example_output The spinner stops and "Operation failed!" is printed in red bold.
 __err__() {
-    __stop_spin__
-    echo -ne "\r\033[K"   # Clear the line first
     local msg="$1"
-    echo -e "${RED}${BOLD}${msg}${RESET}"
+
+    __stop_spin__
+
+    # Always show errors even in quiet mode
+    echo -e "  ${RED}${BOLD}✗${RESET} ${msg}" >&2
 }
 
 # --- __handle_err__ ------------------------------------------------------------
@@ -190,9 +224,11 @@ __handle_err__() {
     local line_number="$1"
     local command="$2"
     local exit_code="$?"
+
     __stop_spin__
-    echo -ne "\r\033[K"   # Clear the line first
-    echo -e "${RED}[ERROR]${RESET} line ${RED}${line_number}${RESET}, exit code ${RED}${exit_code}${RESET} while executing: ${YELLOW}${command}${RESET}"
+
+    echo -e "${RED}${BOLD}[ERROR]${RESET} at line ${RED}${line_number}${RESET}, exit code ${RED}${exit_code}${RESET}" >&2
+    echo -e "  Command: ${YELLOW}${command}${RESET}" >&2
 }
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
@@ -206,14 +242,14 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 # @example_output Shows script description, usage, arguments, etc. in green.
 __show_script_header__() {
     local script_path="$1"
-    
+
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
         if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Colors.sh" ]]; then
             source "${UTILITYPATH}/Colors.sh"
         fi
     fi
-    
+
     local printing=false
     while IFS= read -r line; do
         # Skip shebang line
@@ -244,20 +280,20 @@ __show_script_header__() {
 # @example_output Shows lines like "./script.sh arg1 arg2" in green.
 __show_script_examples__() {
     local script_path="$1"
-    
+
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
         if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Colors.sh" ]]; then
             source "${UTILITYPATH}/Colors.sh"
         fi
     fi
-    
+
     local found_any=false
     grep -E '^# *\./' "$script_path" 2>/dev/null | sed -E 's/^# *//' | while IFS= read -r line; do
         __line_rgb__ "$line" 0 255 0
         found_any=true
     done
-    
+
     # If no examples found, show message
     if [[ $found_any == false ]]; then
         echo "(none)"
@@ -275,14 +311,14 @@ __show_script_examples__() {
 __display_script_info__() {
     local script_path="$1"
     local display_name="${2:-$script_path}"
-    
+
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
         if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Colors.sh" ]]; then
             source "${UTILITYPATH}/Colors.sh"
         fi
     fi
-    
+
     echo
     __line_rgb__ "Selected script: ${display_name}" 0 255 255
     echo

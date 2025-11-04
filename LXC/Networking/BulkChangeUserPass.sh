@@ -2,60 +2,67 @@
 #
 # BulkChangeUserPass.sh
 #
-# This script changes a specified user’s password in a range of LXC containers.
-# It uses 'pct exec' to run 'chpasswd' inside each container.
+# Changes a user's password in a range of LXC containers.
+# Containers must be running for password change to work.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeUserPass.sh <start_ct_id> <end_ct_id> <username> <new_password>
+#   BulkChangeUserPass.sh <start_ct_id> <end_ct_id> <username> <new_password>
 #
-# Example:
-#   # Updates the root password on CTs 400..402 to 'MyNewPass123'.
-#   ./BulkChangeUserPass.sh 400 402 root MyNewPass123
+# Arguments:
+#   start_ct_id   - Starting container ID
+#   end_ct_id     - Ending container ID
+#   username      - Username to change password for
+#   new_password  - New password
 #
-# Note:
-#   - The container(s) must be running for 'pct exec' to succeed.
-#   - Adjust logic if you want to handle containers that are stopped.
+# Examples:
+#   BulkChangeUserPass.sh 400 402 root MyNewPass123
+#
+# Function Index:
+#   - main
+#   - change_password_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# Initial Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [ "$#" -ne 4 ]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <username> <new_password>"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid username:string new_password:string" "$@"
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-USERNAME="$3"
-NEW_PASSWORD="$4"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-###############################################################################
-# Main Logic
-###############################################################################
-echo "=== Starting password update for containers from \"$START_CT_ID\" through \"$END_CT_ID\" ==="
-echo "Target user: \"$USERNAME\""
+    __info__ "Bulk change user password: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Username: ${USERNAME}"
+    __warn__ "Containers must be running for this operation"
 
-for (( ctId=START_CT_ID; ctId<=END_CT_ID; ctId++ )); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Changing password for container \"$ctId\"..."
-    pct exec "$ctId" -- bash -c "echo \"$USERNAME:$NEW_PASSWORD\" | chpasswd"
-    if [ "$?" -eq 0 ]; then
-      echo " - Successfully changed password on CT \"$ctId\"."
-    else
-      echo " - Failed to change password on CT \"$ctId\" (container stopped or other error?)."
-    fi
-  else
-    echo " - Container \"$ctId\" does not exist. Skipping."
-  fi
-done
+    change_password_callback() {
+        local vmid="$1"
+        __ct_change_password__ "$vmid" "$USERNAME" "$NEW_PASSWORD"
+    }
 
-echo "=== Bulk password change process complete! ==="
+    __bulk_ct_operation__ --name "Change Password" --report "$START_VMID" "$END_VMID" change_password_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Passwords changed successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

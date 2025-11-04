@@ -7,8 +7,8 @@
 # units and restarts them safely with systemd.
 #
 # Usage:
-#   ./RestartMetadata.sh restart     # (default) Restart MDS daemons
-#   ./RestartMetadata.sh status      # Show MDS daemon status only
+#   RestartMetadata.sh restart     # (default) Restart MDS daemons
+#   RestartMetadata.sh status      # Show MDS daemon status only
 #
 # Function Index:
 #   - _find_mds_units
@@ -16,9 +16,13 @@
 #   - statusMds
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 
 __check_root__
@@ -44,7 +48,7 @@ function restartMds() {
 
     echo "Restarting Ceph Metadata Server daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-mds daemons have been restarted."

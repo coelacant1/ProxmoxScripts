@@ -2,64 +2,65 @@
 #
 # BulkAddSSHKey.sh
 #
-# This script appends an SSH public key to the root user's authorized_keys
-# for a specified range of LXC containers (no existing keys are removed).
+# Appends an SSH public key to the root user's authorized_keys file
+# for a range of LXC containers. Containers must be running.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkAddSSHKey.sh <start_ct_id> <end_ct_id> "<ssh_public_key>"
+#   BulkAddSSHKey.sh <start_ct_id> <end_ct_id> <ssh_public_key>
 #
-# Example:
-#   ./BulkAddSSHKey.sh 400 402 "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+# Arguments:
+#   start_ct_id    - Starting container ID
+#   end_ct_id      - Ending container ID
+#   ssh_public_key - SSH public key to add
 #
-# Notes:
-#   - Containers must be running for 'pct exec' to succeed.
-#   - If you want to add keys for another user, replace '/root/.ssh' with that user’s home directory.
-#   - This script must be run as root on a Proxmox node.
+# Examples:
+#   BulkAddSSHKey.sh 400 402 "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+#
+# Function Index:
+#   - main
+#   - add_ssh_key_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> \"<ssh_public_key>\""
-  echo "Example:"
-  echo "  $0 400 402 \"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...\""
-  exit 1
-fi
+__parse_args__ "start_vmid:vmid end_vmid:vmid ssh_key:string" "$@"
 
-startCtId="$1"
-endCtId="$2"
-sshKey="$3"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-# Basic checks
-__check_root__
-__check_proxmox__
+    __info__ "Bulk add SSH key: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __warn__ "Containers must be running for this operation"
 
-echo "=== Starting SSH key addition for containers from \"$startCtId\" to \"$endCtId\" ==="
-echo " - SSH key to append: \"$sshKey\""
+    add_ssh_key_callback() {
+        local vmid="$1"
+        __ct_add_ssh_key__ "$vmid" "$SSH_KEY"
+    }
 
-# Main loop
-for (( ctId=startCtId; ctId<=endCtId; ctId++ )); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Adding SSH key to container \"$ctId\"..."
-    pct exec "$ctId" -- bash -c "
-      mkdir -p /root/.ssh &&
-      chmod 700 /root/.ssh &&
-      echo \"$sshKey\" >> /root/.ssh/authorized_keys &&
-      chmod 600 /root/.ssh/authorized_keys
-    "
-    if [[ $? -eq 0 ]]; then
-      echo " - Successfully appended SSH key for CT \"$ctId\"."
-    else
-      echo " - Failed to append SSH key for CT \"$ctId\" (container stopped or other error?)."
-    fi
-  else
-    echo " - Container \"$ctId\" does not exist. Skipping."
-  fi
-done
+    __bulk_ct_operation__ --name "Add SSH Key" --report "$START_VMID" "$END_VMID" add_ssh_key_callback
 
-echo "=== Bulk SSH key addition process complete! ==="
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "SSH key added successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

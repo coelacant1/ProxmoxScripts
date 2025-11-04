@@ -7,7 +7,7 @@
 # Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeStorage.sh <start_id> <end_id> <current_storage> <new_storage>
+#   BulkChangeStorage.sh <start_id> <end_id> <current_storage> <new_storage>
 #
 # Arguments:
 #   start_id         - The starting VM ID for the operation.
@@ -16,145 +16,80 @@
 #   new_storage      - The new storage identifier.
 #
 # Examples:
-#   ./BulkChangeStorage.sh 100 200 local-lvm local-zfs
+#   BulkChangeStorage.sh 100 200 local-lvm local-zfs
 #
 # Function Index:
-#   - usage
-#   - parse_args
-#   - change_storage
 #   - main
+#   - change_storage_callback
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# --- usage -------------------------------------------------------------------
-# @function usage
-# @description Prints usage information and exits.
-usage() {
-    cat <<-USAGE
-Usage: ${0##*/} <start_id> <end_id> <current_storage> <new_storage>
-
-Changes storage location in VM configuration files.
-
-Arguments:
-  start_id         - Starting VM ID
-  end_id           - Ending VM ID
-  current_storage  - Current storage identifier
-  new_storage      - New storage identifier
-Examples:
-USAGE
-}
-
-# --- parse_args --------------------------------------------------------------
-# @function parse_args
-# @description Parses and validates command-line arguments.
-# @param @ All command-line arguments
-parse_args() {
-    if [[ $# -lt 4 ]]; then
-        __err__ "Missing required arguments"
-        usage
-        exit 64
-    fi
-
-    START_ID="$1"
-    END_ID="$2"
-    CURRENT_STORAGE="$3"
-    NEW_STORAGE="$4"
-    # Validate IDs are numeric
-    if ! [[ "$START_ID" =~ ^[0-9]+$ ]] || ! [[ "$END_ID" =~ ^[0-9]+$ ]]; then
-        __err__ "VM IDs must be numeric"
-        exit 64
-    fi
-
-    # Validate range
-    if (( START_ID > END_ID )); then
-        __err__ "Start ID must be less than or equal to end ID"
-        exit 64
-    fi
-}
-
-# --- change_storage ----------------------------------------------------------
-# @function change_storage
-# @description Changes storage identifier in VM configuration file.
-# @param 1 VM ID
-change_storage() {
-    local vmid="$1"
-    local node
-    
-    node=$(__get_vm_node__ "$vmid")
-    
-    if [[ -z "$node" ]]; then
-        __update__ "VM ${vmid} not found in cluster, skipping"
-        return 0
-    fi
-    
-    local config_file="/etc/pve/nodes/${node}/qemu-server/${vmid}.conf"
-    
-    if [[ ! -f "$config_file" ]]; then
-        __update__ "VM ${vmid} config does not exist, skipping"
-        return 0
-    fi
-    
-    if grep -q "$CURRENT_STORAGE" "$config_file"; then
-        __update__ "Updating storage for VM ${vmid} on node ${node}..."
-        if sed -i "s/$CURRENT_STORAGE/$NEW_STORAGE/g" "$config_file" 2>/dev/null; then
-            __ok__ "Storage changed from ${CURRENT_STORAGE} to ${NEW_STORAGE} for VM ${vmid} on ${node}"
-        else
-            __err__ "Failed to update storage for VM ${vmid}"
-            return 1
-        fi
-    else
-        __update__ "${CURRENT_STORAGE} not found in VM ${vmid} config, skipping"
-    fi
-}
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid current_storage:storage new_storage:storage" "$@"
 
 # --- main --------------------------------------------------------------------
-# @function main
-# @description Main script logic - iterates through VM range and changes storage.
 main() {
     __check_root__
     __check_proxmox__
-    
-    __info__ "Bulk change storage: VMs ${START_ID} to ${END_ID} (cluster-wide)"
+
+    __info__ "Bulk change storage: VMs ${START_VMID} to ${END_VMID} (cluster-wide)"
     __info__ "Changing ${CURRENT_STORAGE} to ${NEW_STORAGE}"
-        # Change storage for VMs in the specified range
-    local failed_count=0
-    local processed_count=0
-    for (( vmid=START_ID; vmid<=END_ID; vmid++ )); do
 
-        if change_storage "$vmid"; then
+    # Local callback for bulk operation
+    change_storage_callback() {
+        local vmid="$1"
+        local node
 
-            ((processed_count++))
+        node=$(__get_vm_node__ "$vmid")
 
-        else
-
-            ((failed_count++))
-
+        if [[ -z "$node" ]]; then
+            __update__ "VM ${vmid} not found in cluster"
+            return 1
         fi
 
-    done
-    
-    __info__ "Processed ${processed_count} VM(s)"
-    
-    
-    
-    if (( failed_count > 0 )); then
-        __err__ "Operation completed with ${failed_count} failure(s)"
-        exit 1
-    else
-        __ok__ "All storage updates completed successfully"
-    fi
+        local config_file="/etc/pve/nodes/${node}/qemu-server/${vmid}.conf"
+
+        if [[ ! -f "$config_file" ]]; then
+            __update__ "VM ${vmid} config does not exist"
+            return 1
+        fi
+
+        if grep -q "$CURRENT_STORAGE" "$config_file"; then
+            __update__ "Updating storage for VM ${vmid}..."
+            if sed -i "s/$CURRENT_STORAGE/$NEW_STORAGE/g" "$config_file" 2>/dev/null; then
+                return 0
+            else
+                return 1
+            fi
+        else
+            __update__ "${CURRENT_STORAGE} not found in VM ${vmid} config"
+            return 0
+        fi
+    }
+
+    # Use BulkOperations framework
+    __bulk_vm_operation__ --name "Storage Change" --report "$START_VMID" "$END_VMID" change_storage_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All storage updates completed successfully!"
 }
 
-parse_args "$@"
 main
 
 # Testing status:
-#   - 2025-10-14: Updated to follow contributing guidelines, converted to cluster-wide
+#   - Updated to use ArgumentParser and BulkOperations framework

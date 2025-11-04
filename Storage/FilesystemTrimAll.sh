@@ -7,7 +7,7 @@
 # or all hosts in the Proxmox cluster.
 #
 # Usage:
-#   ./FilesystemTrimAll.sh [all|host]
+#   FilesystemTrimAll.sh [all|host]
 #
 # Description:
 #   - If "host" is specified (or no argument is given), the script will run TRIM
@@ -20,21 +20,26 @@
 #
 # Examples:
 #   # Runs TRIM on the current node only (default behavior).
-#   ./FilesystemTrimAll.sh
+#   FilesystemTrimAll.sh
 #
 #   # Same as above, explicitly specifying "host".
-#   ./FilesystemTrimAll.sh host
+#   FilesystemTrimAll.sh host
 #
 #   # Attempts to run TRIM on every node in the cluster.
-#   ./FilesystemTrimAll.sh all
+#   FilesystemTrimAll.sh all
 #
 # Function Index:
 #   - trim_qemu_vm
 #   - trim_lxc_ct
 #   - trim_on_node
 #
+
+set -euo pipefail
+
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Queries.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Preliminary Checks

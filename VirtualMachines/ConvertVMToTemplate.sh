@@ -13,7 +13,7 @@
 #   5. Optionally sets a description for the template
 #
 # Usage:
-#   ./ConvertVMToTemplate.sh <vmid> [options]
+#   ConvertVMToTemplate.sh <vmid> [options]
 #
 # Arguments:
 #   vmid - The VM ID to convert to a template
@@ -26,16 +26,16 @@
 #
 # Examples:
 #   # Convert VM 100 to template
-#   ./ConvertVMToTemplate.sh 100
+#   ConvertVMToTemplate.sh 100
 #
 #   # Convert with backup
-#   ./ConvertVMToTemplate.sh 100 --backup --backup-storage PBS-Backup
+#   ConvertVMToTemplate.sh 100 --backup --backup-storage PBS-Backup
 #
 #   # Convert with description
-#   ./ConvertVMToTemplate.sh 100 --description "Ubuntu 22.04 Base Template"
+#   ConvertVMToTemplate.sh 100 --description "Ubuntu 22.04 Base Template"
 #
 #   # Force conversion without prompt
-#   ./ConvertVMToTemplate.sh 100 --force
+#   ConvertVMToTemplate.sh 100 --force
 #
 # Notes:
 #   - VMs must be stopped before conversion
@@ -45,11 +45,12 @@
 #
 # Function Index:
 #   - parse_args
+#   - create_backup
 #   - convert_to_template
 #   - main
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
@@ -86,17 +87,17 @@ parse_args() {
         echo "  $0 100 --backup --description 'Ubuntu 22.04 Base'"
         exit 64
     fi
-    
+
     VMID="$1"
     shift
-    
+
     # Validate VMID is numeric
     if ! [[ "$VMID" =~ ^[0-9]+$ ]]; then
         __err__ "Invalid VMID: ${VMID}"
         __info__ "VMID must be a number"
         exit 64
     fi
-    
+
     # Parse optional arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -129,7 +130,7 @@ parse_args() {
 # @description Creates a backup of the VM before conversion
 create_backup() {
     __info__ "Creating backup of VM ${VMID} to storage: ${BACKUP_STORAGE}"
-    
+
     # Validate backup storage exists
     if ! pvesm status --storage "$BACKUP_STORAGE" &>/dev/null; then
         __err__ "Backup storage '${BACKUP_STORAGE}' not found"
@@ -137,14 +138,14 @@ create_backup() {
         pvesm status | tail -n +2 | awk '{print "  - " $1}'
         exit 1
     fi
-    
+
     # Get VM name for backup
     local vm_name
     vm_name=$(qm config "$VMID" | grep -E "^name:" | awk '{print $2}')
     vm_name="${vm_name:-VM-${VMID}}"
-    
+
     __info__ "Backup name: ${vm_name}"
-    
+
     # Create backup
     if vzdump "$VMID" --storage "$BACKUP_STORAGE" --mode snapshot --compress zstd 2>&1; then
         __ok__ "Backup created successfully"
@@ -163,7 +164,7 @@ create_backup() {
 # @description Converts the VM to a template
 convert_to_template() {
     __info__ "Converting VM ${VMID} to template"
-    
+
     # Add description if provided
     if [[ -n "$DESCRIPTION" ]]; then
         __info__ "Setting template description"
@@ -173,7 +174,7 @@ convert_to_template() {
             __warn__ "Failed to set description (will continue anyway)"
         fi
     fi
-    
+
     # Perform conversion
     if qm template "$VMID" 2>&1; then
         __ok__ "VM ${VMID} successfully converted to template"
@@ -190,9 +191,9 @@ convert_to_template() {
 main() {
     __check_root__
     __check_proxmox__
-    
+
     parse_args "$@"
-    
+
     # Validate VM exists
     __info__ "Validating VMID ${VMID}"
     if ! __validate_vmid__ "$VMID"; then
@@ -202,21 +203,21 @@ main() {
         exit 1
     fi
     __ok__ "VMID ${VMID} is a valid VM"
-    
+
     # Get VM info
     __info__ "Retrieving VM information"
     local vm_name
     local vm_memory
     local vm_cores
     local vm_disk
-    
+
     vm_name=$(qm config "$VMID" | grep -E "^name:" | awk '{print $2}' || echo "VM-${VMID}")
     vm_memory=$(qm config "$VMID" | grep -E "^memory:" | awk '{print $2}' || echo "Unknown")
     vm_cores=$(qm config "$VMID" | grep -E "^cores:" | awk '{print $2}' || echo "Unknown")
     vm_disk=$(qm config "$VMID" | grep -E "^(scsi|sata|virtio)0:" | awk '{print $2}' || echo "Unknown")
-    
+
     __ok__ "VM information retrieved"
-    
+
     # Display VM details
     echo
     echo "VM Details:"
@@ -227,12 +228,12 @@ main() {
     echo "  Cores:  ${vm_cores}"
     echo "  Disk:   ${vm_disk}"
     echo
-    
+
     if [[ -n "$DESCRIPTION" ]]; then
         echo "  Template Description: ${DESCRIPTION}"
         echo
     fi
-    
+
     # Check VM status and stop if needed
     __info__ "Checking VM status"
     if $FORCE; then
@@ -247,35 +248,35 @@ main() {
         fi
     fi
     __ok__ "VM ${VMID} is stopped and ready for conversion"
-    
+
     # Confirm conversion
     if ! $FORCE; then
         echo
         __warn__ "This will convert VM ${VMID} (${vm_name}) to a template"
         __warn__ "Templates cannot be started, only cloned"
         echo
-        
+
         if ! __prompt_user_yn__ "Proceed with conversion?"; then
             __info__ "Operation cancelled"
             exit 0
         fi
     fi
-    
+
     # Create backup if requested
     if $CREATE_BACKUP; then
         echo
         create_backup
     fi
-    
+
     # Convert to template
     echo
     convert_to_template
-    
+
     # Display final status
     echo
     __info__ "Template information:"
     qm config "$VMID" | head -15
-    
+
     echo
     __ok__ "Conversion complete!"
     __info__ "Template ${VMID} (${vm_name}) is ready for cloning"
@@ -286,3 +287,7 @@ main() {
 # Script Entry Point
 ###############################################################################
 main "$@"
+
+# Testing status:
+#   - Uses utility functions
+#   - Pending validation

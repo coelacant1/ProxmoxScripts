@@ -1,32 +1,52 @@
-name: Release on .sh changes
+name: Manual Release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '**/*.sh'  # Triggers only if .sh files are changed/added on main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 2.0.0, 2.1.0, 2.1.1)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes (optional)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Create a version tag "v1.<run_number>"
-      - name: Set up release tag
-        run: echo "TAG_NAME=v1.${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Version must be in format X.Y.Z (e.g., 2.0.0)"
+            exit 1
+          fi
+          echo "TAG_NAME=v${{ inputs.version }}" >> $GITHUB_ENV
 
-      # Create the GitHub release
-      - name: Publish release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check if tag already exists
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ env.TAG_NAME }}"; then
+            echo "Error: Tag ${{ env.TAG_NAME }} already exists"
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.TAG_NAME }}
-          release_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           body: |
-            **Commit Message**: ${{ github.event.head_commit.message }}
-            **Build Number**: ${{ github.run_number }}
+            ## Release ${{ env.TAG_NAME }}
+            
+            ${{ inputs.release_notes }}
+            
+            **Commit**: ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

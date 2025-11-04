@@ -1,97 +1,104 @@
 #!/bin/bash
 #
-# DisableHAOnNode.sh
+# DisableHighAvailability.sh
 #
-# This script disables High Availability (HA) on a single Proxmox node by:
-#   1. Disabling or removing any HA resources tied to this node.
-#   2. Stopping and disabling the HA services (pve-ha-crm, pve-ha-lrm) on the node.
+# Disables High Availability on a single Proxmox node by removing HA resources
+# tied to that node and stopping HA services.
 #
 # Usage:
-#   ./DisableHAOnNode.sh <node_name>
+#   DisableHighAvailability.sh <node_name>
 #
-# Example:
-#   ./DisableHAOnNode.sh pve-node2
+# Arguments:
+#   node_name - Name of the node to disable HA on
 #
-# Notes:
-#   - If you're using a multi-node cluster, ensure that no critical HA resources rely on this node.
-#   - A single-node "cluster" does not benefit from HA, so this script effectively cleans up HA configs.
-#   - This script expects passwordless SSH or valid root credentials for the target node.
-#   - You must run this script as root on a Proxmox node that is part of the same cluster as <node_name>.
+# Examples:
+#   DisableHighAvailability.sh pve-node2
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# 1. Validate input
-if [[ -z "$1" ]]; then
-  echo "Usage: $0 <node_name>"
-  echo "Example: $0 pve-node2"
-  exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
+    __install_or_prompt__ "jq"
 
-targetNodeName="$1"
-
-# 2. Basic checks
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
-
-# 3. Ensure 'jq' is installed (not included by default in Proxmox 8)
-__install_or_prompt__ "jq"
-
-echo "=== Disabling HA on node: \"$targetNodeName\" ==="
-
-# 4. Convert node name to IP for SSH calls
-echo "=== Resolving IP address for node \"$targetNodeName\" ==="
-declare nodeIp
-if ! nodeIp="$(__get_ip_from_name__ "$targetNodeName")"; then
-  echo "Error: Could not resolve node name \"$targetNodeName\" to an IP."
-  exit 1
-fi
-echo " - Node \"$targetNodeName\" resolved to IP: \"$nodeIp\""
-echo
-
-# 5. Identify HA resources referencing this node by name
-echo "=== Checking for HA resources on node \"$targetNodeName\"... ==="
-
-haResources="$(pvesh get /cluster/ha/resources --output-format json \
-              | jq -r '.[] | select(.statePath | contains("'"$targetNodeName"'")) | .sid')"
-
-if [[ -z "$haResources" ]]; then
-  echo " - No HA resources found referencing node \"$targetNodeName\"."
-else
-  echo " - Found HA resources referencing node \"$targetNodeName\":"
-  echo "$haResources"
-  echo
-
-  # Remove these HA resources
-  declare res
-  for res in $haResources; do
-    echo "Removing HA resource \"$res\" ..."
-    if pvesh delete "/cluster/ha/resources/${res}"; then
-      echo " - Successfully removed HA resource: \"$res\""
-    else
-      echo " - Failed to remove HA resource: \"$res\""
+    if [[ $# -lt 1 ]]; then
+        __err__ "Missing required argument: node_name"
+        echo "Usage: $0 <node_name>"
+        exit 64
     fi
-    echo
-  done
-fi
 
-# 6. Stop and disable HA services on the target node
-echo "=== Stopping and disabling HA services on node \"$targetNodeName\" ==="
-echo "Stopping pve-ha-crm and pve-ha-lrm on IP: \"$nodeIp\" ..."
-ssh "root@${nodeIp}" "systemctl stop pve-ha-crm pve-ha-lrm"
+    local target_node_name="$1"
 
-echo "Disabling pve-ha-crm and pve-ha-lrm on IP: \"$nodeIp\" ..."
-ssh "root@${nodeIp}" "systemctl disable pve-ha-crm pve-ha-lrm"
+    __info__ "Disabling HA on node: ${target_node_name}"
 
-echo "=== HA has been disabled on node: \"$targetNodeName\" (IP: \"$nodeIp\") ==="
-echo "You can verify via: ssh root@${nodeIp} 'systemctl status pve-ha-crm pve-ha-lrm'"
-echo
+    # Resolve node name to IP
+    local node_ip
+    if ! node_ip=$(__get_ip_from_name__ "$target_node_name"); then
+        __err__ "Could not resolve node name '${target_node_name}' to IP"
+        exit 1
+    fi
+    __info__ "Node ${target_node_name} resolved to IP: ${node_ip}"
 
-# 7. Prompt to remove any packages installed during this session
-__prompt_keep_installed_packages__
+    # Find HA resources referencing this node
+    __info__ "Checking for HA resources on node ${target_node_name}"
+    local ha_resources
+    ha_resources=$(pvesh get /cluster/ha/resources --output-format json 2>/dev/null \
+        | jq -r '.[] | select(.statePath | contains("'"$target_node_name"'")) | .sid')
+
+    if [[ -z "$ha_resources" ]]; then
+        __info__ "No HA resources found for node ${target_node_name}"
+    else
+        __info__ "Removing HA resources:"
+        local removed=0
+        local failed=0
+
+        while IFS= read -r res; do
+            __update__ "Removing HA resource: ${res}"
+            if pvesh delete "/cluster/ha/resources/${res}" 2>&1; then
+                __ok__ "Removed ${res}"
+                ((removed++))
+            else
+                __warn__ "Failed to remove ${res}"
+                ((failed++))
+            fi
+        done <<< "$ha_resources"
+
+        echo
+        __info__ "Removed ${removed} HA resource(s)"
+        [[ $failed -gt 0 ]] && __warn__ "${failed} failed to remove"
+    fi
+
+    # Stop and disable HA services on the target node
+    __info__ "Stopping and disabling HA services on ${target_node_name}"
+    __update__ "Stopping pve-ha-crm and pve-ha-lrm"
+    ssh "root@${node_ip}" "systemctl stop pve-ha-crm pve-ha-lrm" 2>/dev/null || true
+
+    __update__ "Disabling pve-ha-crm and pve-ha-lrm on startup"
+    ssh "root@${node_ip}" "systemctl disable pve-ha-crm pve-ha-lrm" 2>/dev/null || true
+
+    __ok__ "HA disabled on node ${target_node_name} successfully!"
+    __info__ "Verify with: ssh root@${node_ip} 'systemctl status pve-ha-crm pve-ha-lrm'"
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

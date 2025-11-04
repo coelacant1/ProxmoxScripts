@@ -8,15 +8,22 @@
 # to the Windows VM, then starting it in the background via "start /b".
 #
 # Usage:
-#   ./BulkCloneSetIPWindows.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix> <interfaceName> <dns1> <dns2>
+#   BulkCloneSetIPWindows.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix> <interfaceName> <dns1> <dns2>
 #
 # Example:
-#   ./BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
+#   BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
 #
+
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"
-source "${UTILITYPATH}/Conversion.sh"
 
 ###############################################################################
 # Check prerequisites and parse arguments

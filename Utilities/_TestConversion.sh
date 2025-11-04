@@ -1,93 +1,111 @@
 #!/bin/bash
 #
-# _TestConversion.sh
-#
-# Usage:
-# ./_TestConversion.sh
-#
-# A simple test script that sources "Conversion.sh" and tests its functions.
-#
 # Function Index:
-#   - test_ip_to_int
-#   - test_int_to_ip
-#   - test_vmid_to_mac_prefix
+#   - test_ip_to_int_localhost
+#   - test_ip_to_int_private
+#   - test_ip_to_int_class_a
+#   - test_int_to_ip_localhost
+#   - test_int_to_ip_private
+#   - test_int_to_ip_class_a
+#   - test_vmid_to_mac_basic
+#   - test_vmid_to_mac_padding
+#   - test_vmid_to_mac_long
 #
 
-if [ -z "${UTILITYPATH}" ]; then
-  # UTILITYPATH is unset or empty
-  export UTILITYPATH="$(pwd)"
-fi
+set -euo pipefail
 
-# Source the library
-source "${UTILITYPATH}/Conversion.sh"
+################################################################################
+# _TestConversion.sh - Test suite for Conversion.sh
+################################################################################
+#
+# Usage: ./_TestConversion.sh
+#
+# Tests all conversion functions including IP-to-int, int-to-IP, and VMID-to-MAC
+#
 
-###############################################################################
-# Helper Functions
-###############################################################################
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/TestFramework.sh"
+source "${SCRIPT_DIR}/Conversion.sh"
 
-# Test if __ip_to_int__ outputs the expected integer
-test_ip_to_int() {
-  local ip="$1"
-  local expected="$2"
+################################################################################
+# TEST: IP TO INTEGER CONVERSIONS
+################################################################################
 
-  local result
-  result="$(__ip_to_int__ "$ip")"
-
-  if [[ "$result" == "$expected" ]]; then
-    echo "[PASS] __ip_to_int__ \"$ip\" => $result"
-  else
-    echo "[FAIL] __ip_to_int__ \"$ip\" => $result (expected $expected)"
-  fi
+test_ip_to_int_localhost() {
+    local result
+    result="$(__ip_to_int__ "127.0.0.1")"
+    assert_equals "2130706433" "$result" "Should convert 127.0.0.1 to integer"
 }
 
-# Test if __int_to_ip__ outputs the expected dotted-IP string
-test_int_to_ip() {
-  local integer="$1"
-  local expected="$2"
-
-  local result
-  result="$(__int_to_ip__ "$integer")"
-
-  if [[ "$result" == "$expected" ]]; then
-    echo "[PASS] __int_to_ip__ $integer => $result"
-  else
-    echo "[FAIL] __int_to_ip__ $integer => $result (expected $expected)"
-  fi
+test_ip_to_int_private() {
+    local result
+    result="$(__ip_to_int__ "192.168.1.10")"
+    assert_equals "3232235786" "$result" "Should convert 192.168.1.10 to integer"
 }
 
-test_vmid_to_mac_prefix() {
-  local vmid="$1"
-  local expected="$2"
-  local message="$3"
-
-  local result
-  result="$(__vmid_to_mac_prefix__ --vmid "$vmid")"
-
-  if [[ "$result" == "$expected" ]]; then
-    echo "[PASS] __vmid_to_mac_prefix__ $vmid => $result${message:+ ($message)}"
-  else
-    echo "[FAIL] __vmid_to_mac_prefix__ $vmid => $result (expected $expected)${message:+ ($message)}"
-  fi
+test_ip_to_int_class_a() {
+    local result
+    result="$(__ip_to_int__ "10.0.0.255")"
+    assert_equals "167772415" "$result" "Should convert 10.0.0.255 to integer"
 }
 
-###############################################################################
-# Test Cases
-###############################################################################
+################################################################################
+# TEST: INTEGER TO IP CONVERSIONS
+################################################################################
 
-# IP to Int tests
-test_ip_to_int "127.0.0.1" "2130706433"
-test_ip_to_int "192.168.1.10" "3232235786"
-test_ip_to_int "10.0.0.255" "167772415"
+test_int_to_ip_localhost() {
+    local result
+    result="$(__int_to_ip__ "2130706433")"
+    assert_equals "127.0.0.1" "$result" "Should convert integer to 127.0.0.1"
+}
 
-# Int to IP tests
-test_int_to_ip "2130706433" "127.0.0.1"
-test_int_to_ip "3232235786" "192.168.1.10"
-test_int_to_ip "167772415"  "10.0.0.255"
+test_int_to_ip_private() {
+    local result
+    result="$(__int_to_ip__ "3232235786")"
+    assert_equals "192.168.1.10" "$result" "Should convert integer to 192.168.1.10"
+}
 
-# VMID to MAC prefix tests
-test_vmid_to_mac_prefix "1346" "BC:13:46" "basic padding"
-test_vmid_to_mac_prefix "12" "BC:00:12" "leading zero padding"
-test_vmid_to_mac_prefix "987654" "BC:98:76:54" "longer padding"
+test_int_to_ip_class_a() {
+    local result
+    result="$(__int_to_ip__ "167772415")"
+    assert_equals "10.0.0.255" "$result" "Should convert integer to 10.0.0.255"
+}
 
-echo
-echo "All tests completed."
+################################################################################
+# TEST: VMID TO MAC PREFIX CONVERSIONS
+################################################################################
+
+test_vmid_to_mac_basic() {
+    local result
+    result="$(__vmid_to_mac_prefix__ --vmid "1346")"
+    assert_equals "BC:13:46" "$result" "Should convert VMID 1346 to MAC prefix"
+}
+
+test_vmid_to_mac_padding() {
+    local result
+    result="$(__vmid_to_mac_prefix__ --vmid "12")"
+    assert_equals "BC:00:12" "$result" "Should pad VMID 12 with leading zeros"
+}
+
+test_vmid_to_mac_long() {
+    local result
+    result="$(__vmid_to_mac_prefix__ --vmid "987654")"
+    assert_equals "BC:98:76:54" "$result" "Should handle longer VMID 987654"
+}
+
+################################################################################
+# RUN TEST SUITE
+################################################################################
+
+run_test_suite "Conversion Functions" \
+    test_ip_to_int_localhost \
+    test_ip_to_int_private \
+    test_ip_to_int_class_a \
+    test_int_to_ip_localhost \
+    test_int_to_ip_private \
+    test_int_to_ip_class_a \
+    test_vmid_to_mac_basic \
+    test_vmid_to_mac_padding \
+    test_vmid_to_mac_long
+
+exit $?

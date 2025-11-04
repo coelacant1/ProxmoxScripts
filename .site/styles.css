@@ -95,6 +95,59 @@ header p {
 }
 
 /* =====================================================
+   Search Box Styles
+   ===================================================== */
+.breadcrumb {
+    padding: 1em;
+    font-size: 0.9em;
+    color: #d0d0d0;
+}
+
+.breadcrumb-link {
+    color: #f8cbdd;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.breadcrumb-link:hover {
+    color: #ea7aaa;
+    text-decoration: underline;
+}
+
+.breadcrumb-separator {
+    margin: 0 0.5em;
+    color: #a0a0a0;
+}
+
+.search-container {
+    margin: 1.5em 0;
+    text-align: center;
+}
+
+#script-search {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.8em;
+    padding: 0.5em 1em;
+    width: 100%;
+    max-width: 500px;
+    background-color: #27293d;
+    color: #f4f4f9;
+    border: 2px solid #f8cbdd;
+    border-radius: 4px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+#script-search:focus {
+    border-color: #ea7aaa;
+    box-shadow: 0 0 8px rgba(248, 203, 221, 0.5);
+}
+
+#script-search::placeholder {
+    color: #a0a0a0;
+}
+
+/* =====================================================
    Main Content Styles
    ===================================================== */
 main {
@@ -180,6 +233,14 @@ main {
     border-bottom: 1px solid #f8cbdd; /* Separator line */
 }
 
+.file-block-table .file-name-cell .script-path {
+    font-size: 0.7rem;
+    color: #a0a0a0;
+    font-weight: normal;
+    font-style: italic;
+    margin-top: 0.3em;
+}
+
 .file-block-table .spacer-cell {
     width: 10%; /* Adjust as needed */
     border-bottom: 1px solid #f8cbdd; /* Separator line */
@@ -236,6 +297,14 @@ main {
     color: #f4f4f9; /* Text color */
 }
 
+/* Script description preview */
+.script-description {
+    color: #d0d0d0 !important;
+    font-style: italic;
+    white-space: pre-wrap;
+    background: transparent !important;
+}
+
 /* Ensure the tbody is the target for animation */
 .file-block-table tbody {
     transition: opacity 0.3s ease; /* Smooth transition effect */
@@ -254,7 +323,8 @@ main {
 /* Copy, Info, and Script Buttons */
 .copy-button,
 .info-button,
-.script-button {
+.script-button,
+.github-button {
     background: #f8cbdd;
     color: #1e1e2f;
     border: none;
@@ -266,15 +336,23 @@ main {
     transition: background 0.3s, transform 0.1s;
 }
 
+.github-link {
+    text-decoration: none;
+    display: inline-block;
+    margin-left: 0.5em;
+}
+
 .copy-button:hover,
 .info-button:hover,
-.script-button:hover {
+.script-button:hover,
+.github-button:hover {
     background: #ea7aaa;
 }
 
 .copy-button:active,
 .info-button:active,
-.script-button:active {
+.script-button:active,
+.github-button:active {
     background: #bc6b8f;
     transform: scale(0.95);
 }
@@ -365,8 +443,8 @@ main {
     font-size: 1.2rem; /* Smaller for h3 */
 }
 
-.readme-container h4, 
-.readme-container h5, 
+.readme-container h4,
+.readme-container h5,
 .readme-container h6 {
     font-size: 1rem; /* Uniform smaller sizes for h4-h6 */
 }

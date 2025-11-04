@@ -2,8 +2,6 @@
 ## Datacenter
 - [x] Add storage: SMB, NFS, PBS (For bulk CLI calls)
 
-
-
 ## Virtual Machines
 ### Operations
 - [x] Bulk Hibernate
@@ -52,7 +50,40 @@
 ### Snapshot
 - [ ] Bulk snapshot
 
+### Remote Management
+- [ ] AddGuestAgent.sh
 
+
+## Host
+- [ ] Backup Host Config
+
+## To Fix
+- [ ] VM BulkCloneCloudInit using temp global functions -> migrate to conversion utility (include it)
+- [ ] Utilities documentation/consistency
+
+
+## Script Modification
+- Use ArgumentParser.sh - create example files?
+-
 
 ## Notes
 - Change from e1000e to virtio, change nested to disable touch pointer for 110
+
+---
+
+## Not Yet Updated
+
+### Large/Complex Scripts
+- [ ] VirtualMachines/CreateFromISO.sh - Complex interactive VM creation, many configuration options
+- [ ] VirtualMachines/InteractiveRestoreVM.sh - Interactive restore with user prompts
+
+### Specialized Hardware/System Scripts
+- [ ] Host/FanControl/DellIPMIFanControl.sh - IPMI-specific, hardware dependent
+- [ ] Host/FanControl/EnablePWMFanControl.sh - PWM control, hardware dependent
+- [ ] Host/Hardware/EnableCPUScalingGoverner.sh - Kernel parameter manipulation
+- [ ] Host/Bulk/FirstTimeProxmoxSetup.sh - Complex initial setup wizard
+
+### Interactive Menu Scripts
+- [ ] BatchRunCLI.sh - Complex interactive CLI menu system
+- [ ] CCPVE.sh - Complex interactive CLI menu system
+- [ ] GUI.sh - Complex interactive GUI menu system

@@ -2,64 +2,72 @@
 #
 # BulkSetMemory.sh
 #
-# This script sets the memory (RAM) and optional swap allocation for a range of LXC containers.
+# Sets the memory (RAM) and optional swap allocation for a range of LXC containers.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkSetMemory.sh <start_ct_id> <end_ct_id> <memory_MB> [swap_MB]
+#   BulkSetMemory.sh <start_ct_id> <end_ct_id> <memory_MB> [swap_MB]
+#
+# Arguments:
+#   start_ct_id - The ID of the first container to update.
+#   end_ct_id   - The ID of the last container to update.
+#   memory_MB   - Memory allocation in MB.
+#   swap_MB     - Optional. Swap allocation in MB (default: 0).
 #
 # Examples:
-#   # Sets containers 400..402 to 2048 MB of RAM, no swap
-#   ./BulkSetMemory.sh 400 402 2048
+#   BulkSetMemory.sh 400 402 2048
+#   BulkSetMemory.sh 400 402 2048 1024
 #
-#   # Sets containers 400..402 to 2048 MB of RAM and 1024 MB of swap
-#   ./BulkSetMemory.sh 400 402 2048 1024
-#
-# Notes:
-#   - Must be run as root on a Proxmox node.
-#   - 'pct' is included by default on Proxmox 8.
+# Function Index:
+#   - main
+#   - set_memory_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Check argument count
-if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <memory_MB> [swap_MB]"
-  echo "Examples:"
-  echo "  $0 400 402 2048"
-  echo "    (Sets containers 400..402 to 2048 MB of RAM, no swap)"
-  echo "  $0 400 402 2048 1024"
-  echo "    (Sets containers 400..402 to 2048 MB of RAM and 1024 MB of swap)"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid memory_mb:int swap_mb:int:?" "$@"
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-MEMORY_MB="$3"
-SWAP_MB="${4:-0}"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-__check_root__
-__check_proxmox__
+    # Set default swap
+    SWAP_MB="${SWAP_MB:-0}"
 
-echo "=== Starting memory config update for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
-echo " - Memory (MB): \"$MEMORY_MB\""
-echo " - Swap (MB): \"$SWAP_MB\""
+    __info__ "Bulk set memory config: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Memory: ${MEMORY_MB} MB, Swap: ${SWAP_MB} MB"
 
-for (( currentCtId="$START_CT_ID"; currentCtId<="$END_CT_ID"; currentCtId++ )); do
-  if pct config "$currentCtId" &>/dev/null; then
-    echo "Updating memory for container \"$currentCtId\"..."
-    pct set "$currentCtId" -memory "$MEMORY_MB" -swap "$SWAP_MB"
-    if [[ $? -eq 0 ]]; then
-      echo " - Successfully updated memory for CT \"$currentCtId\"."
-    else
-      echo " - Failed to update memory for CT \"$currentCtId\"."
-    fi
-  else
-    echo " - Container \"$currentCtId\" does not exist. Skipping."
-  fi
-done
+    # Local callback for bulk operation
+    set_memory_callback() {
+        local vmid="$1"
+        __ct_set_memory__ "$vmid" "$MEMORY_MB" "$SWAP_MB"
+    }
 
-echo "=== Bulk memory config change process complete! ==="
+    # Use BulkOperations framework
+    __bulk_ct_operation__ --name "Set Memory" --report "$START_VMID" "$END_VMID" set_memory_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Memory configuration updated successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

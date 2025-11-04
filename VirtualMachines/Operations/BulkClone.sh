@@ -1,53 +1,107 @@
 #!/bin/bash
 #
-# This script automates the process of cloning virtual machines (VMs) within a Proxmox VE environment. It clones a source VM into
-# a specified number of new VMs, assigning them unique IDs and names based on a user-provided base name. Adding cloned VMs to a
-# designated pool is optional. This script is particularly useful for quickly deploying multiple VMs based on a standardized configuration.
+# BulkClone.sh
+#
+# Clones a source VM into multiple new VMs with sequential IDs and names.
+# All clones are created on the same node as the source VM.
 #
 # Usage:
-# ./BulkClone.sh <source_vm_id> <base_vm_name> <start_vm_id> <num_vms> [pool_name]
+#   BulkClone.sh <source_vmid> <base_name> <start_vmid> <count> [--pool <pool_name>]
 #
 # Arguments:
-#   source_vm_id - The ID of the VM that will be cloned.
-#   base_vm_name - The base name for the new VMs, which will be appended with a numerical index.
-#   start_vm_id - The starting VM ID for the first clone.
-#   num_vms - The number of VMs to clone.
-#   pool_name - Optional. The name of the pool to which the new VMs will be added. If not provided, VMs are not added to any pool.
+#   source_vmid - The ID of the VM to be cloned.
+#   base_name   - Base name for new VMs (appended with sequential number).
+#   start_vmid  - Starting VM ID for the first clone.
+#   count       - Number of VMs to clone.
+#   --pool      - Optional pool name to add cloned VMs to.
 #
-# Example:
-#   ./BulkClone.sh 110 Ubuntu-2C-20GB 400 30 PoolName
-#   ./BulkClone.sh 110 Ubuntu-2C-20GB 400 30  # Without specifying a pool
+# Examples:
+#   BulkClone.sh 110 Ubuntu-2C-20GB 400 30
+#   BulkClone.sh 110 Ubuntu-2C-20GB 400 30 --pool PoolName
+#
+# Function Index:
+#   - main
+#
 
-# Check if the minimum required parameters are provided
-if [ "$#" -lt 4 ]; then
-    echo "Usage: $0 <source_vm_id> <base_vm_name> <start_vm_id> <num_vms> [pool_name]"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-SOURCE_VM_ID=$1
-BASE_VM_NAME=$2
-START_VM_ID=$3
-NUM_VMS=$4
-POOL_NAME=${5:-}  # Optional pool name, default to an empty string if not provided
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/ProxmoxAPI.sh
+source "${UTILITYPATH}/ProxmoxAPI.sh"
 
-if ! qm status "$SOURCE_VM_ID" &>/dev/null; then
-    echo "Source VM ID $SOURCE_VM_ID not found."
-    exit 1
-fi
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Loop to create clones
-for (( i=0; i<$NUM_VMS; i++ )); do
-    TARGET_VM_ID=$((START_VM_ID + i))
-    NAME_INDEX=$((i + 1))
-    VM_NAME="${BASE_VM_NAME}${NAME_INDEX}"
+# Parse arguments using declarative API
+__parse_args__ "source_vmid:vmid base_name:string start_vmid:vmid count:number --pool:string:?" "$@"
 
-    # Check if a pool name was provided and add VM to the pool if it was
-    if [ -n "$POOL_NAME" ]; then
-        qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME --pool $POOL_NAME
-    else
-        qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    # Verify source VM exists
+    if ! __vm_exists__ "$SOURCE_VMID"; then
+        __err__ "Source VM ID ${SOURCE_VMID} not found"
+        exit 1
     fi
-done
 
-echo "Cloning completed!"
+    # Get source VM node for remote execution
+    local source_node
+    source_node=$(__get_vm_node__ "$SOURCE_VMID")
+
+    # Calculate end VMID
+    local end_vmid=$((START_VMID + COUNT - 1))
+
+    __info__ "Cloning VM ${SOURCE_VMID} (on node ${source_node}) to create ${COUNT} new VMs (${START_VMID}-${end_vmid})"
+    [[ -n "$POOL" ]] && __info__ "VMs will be added to pool: ${POOL}"
+
+    # Track success and failures
+    local success=0
+    local failed=0
+
+    # Clone VMs sequentially
+    for (( i=0; i<COUNT; i++ )); do
+        local target_vmid=$((START_VMID + i))
+        local name_index=$((i + 1))
+        local vm_name="${BASE_NAME}${name_index}"
+        local current=$((i + 1))
+
+        __update__ "Cloning VM ${target_vmid} (${current}/${COUNT})..."
+
+        # Build clone command
+        local clone_cmd="qm clone ${SOURCE_VMID} ${target_vmid} --name ${vm_name}"
+        [[ -n "$POOL" ]] && clone_cmd+=" --pool ${POOL}"
+
+        # Execute clone on source VM's node
+        if __node_exec__ "$source_node" "$clone_cmd" &>/dev/null; then
+            ((success++))
+        else
+            __warn__ "Failed to clone VM ${target_vmid}"
+            ((failed++))
+        fi
+    done
+
+    # Display summary
+    echo ""
+    __info__ "Cloning Summary:"
+    __info__ "  Total: ${COUNT}"
+    __info__ "  Success: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    if [[ $failed -gt 0 ]]; then
+        __err__ "Some clones failed. Check the messages above for details."
+        exit 1
+    fi
+
+    __ok__ "Cloning completed successfully!"
+}
+
+main
+
+# Testing status:
+#   - Pending validation on Proxmox VE cluster

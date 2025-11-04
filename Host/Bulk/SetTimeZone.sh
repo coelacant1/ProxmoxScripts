@@ -1,67 +1,85 @@
 #!/bin/bash
 #
-# SetTimeServer.sh
+# SetTimeZone.sh
 #
-# A script to set the timezone across all nodes in a Proxmox VE cluster.
-# Defaults to "America/New_York" if no argument is provided.
+# Sets timezone across all nodes in a Proxmox cluster.
+# Defaults to "America/New_York" if no timezone specified.
 #
 # Usage:
-#   ./SetTimeServer.sh <timezone>
+#   SetTimeZone.sh [timezone]
+#
+# Arguments:
+#   timezone - Optional timezone (default: America/New_York)
 #
 # Examples:
-#   ./SetTimeServer.sh
-#   ./SetTimeServer.sh "Europe/Berlin"
+#   SetTimeZone.sh
+#   SetTimeZone.sh Europe/Berlin
 #
-# This script will:
-#   1. Check if running as root (__check_root__).
-#   2. Check if on a valid Proxmox node (__check_proxmox__).
-#   3. Verify the node is part of a cluster (__check_cluster_membership__).
-#   4. Gather remote node IPs from __get_remote_node_ips__.
-#   5. Set the specified timezone on each remote node and then on the local node.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# Pre-flight checks
-###############################################################################
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main
-###############################################################################
-TIMEZONE="${1:-America/New_York}"
-echo "Selected timezone: \"${TIMEZONE}\""
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
 
-# Gather IP addresses of all remote nodes
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
+    local timezone="${1:-America/New_York}"
 
-# Set timezone on each remote node
-for nodeIp in "${REMOTE_NODES[@]}"; do
-    __info__ "Setting timezone to \"${TIMEZONE}\" on node: \"${nodeIp}\""
-    if ssh "root@${nodeIp}" "timedatectl set-timezone \"${TIMEZONE}\""; then
-        __ok__ " - Timezone set successfully on node: \"${nodeIp}\""
+    __info__ "Setting timezone: ${timezone} (cluster-wide)"
+
+    # Get remote node IPs
+    local -a remote_nodes
+    mapfile -t remote_nodes < <(__get_remote_node_ips__)
+
+    local success=0
+    local failed=0
+
+    # Set timezone on remote nodes
+    for node_ip in "${remote_nodes[@]}"; do
+        __update__ "Setting timezone on ${node_ip}"
+        if ssh "root@${node_ip}" "timedatectl set-timezone \"${timezone}\"" 2>&1; then
+            __ok__ "Timezone set on ${node_ip}"
+            ((success++))
+        else
+            __warn__ "Failed to set timezone on ${node_ip}"
+            ((failed++))
+        fi
+    done
+
+    # Set timezone on local node
+    __update__ "Setting timezone on local node"
+    if timedatectl set-timezone "${timezone}" 2>&1; then
+        __ok__ "Timezone set on local node"
+        ((success++))
     else
-        __err__ " - Failed to set timezone on node: \"${nodeIp}\""
+        __warn__ "Failed to set timezone on local node"
+        ((failed++))
     fi
-done
 
-# Finally, set the timezone on the local node
-__info__ "Setting timezone to \"${TIMEZONE}\" on local node..."
-if timedatectl set-timezone "${TIMEZONE}"; then
-    __ok__ " - Timezone set successfully on local node"
-else
-    __err__ " - Failed to set timezone on local node"
-fi
+    echo
+    __info__ "Timezone Configuration Summary:"
+    __info__ "  Successful: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
 
-echo "Timezone setup completed for all nodes!"
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "Timezone set to ${timezone} on all nodes!"
+}
 
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

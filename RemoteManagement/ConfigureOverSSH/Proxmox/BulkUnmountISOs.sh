@@ -9,10 +9,10 @@
 # 'none'. It skips entries already unset. LXC containers are unaffected.
 #
 # Usage:
-#   ./BulkUnmountISOs.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
+#   BulkUnmountISOs.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
 #
 # Example:
-#   ./BulkUnmountISOs.sh 200 210 root passw0rd
+#   BulkUnmountISOs.sh 200 210 root passw0rd
 #
 # Notes:
 #   - Must be run as root on the outer Proxmox host.
@@ -27,12 +27,14 @@
 #   - main
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Usage
 ###############################################################################
 usage() {
   cat <<USAGE
-Usage: 
+Usage:
   ${0##*/} <startVmId> <endVmId> <sshUsername> <sshPassword>
 
 Unmount (detach) all ISO media from every QEMU VM inside each nested Proxmox
@@ -52,6 +54,8 @@ USAGE
 ###############################################################################
 # Imports / Checks
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Queries.sh"

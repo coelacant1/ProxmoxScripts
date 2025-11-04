@@ -8,7 +8,7 @@
 # Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkConfigureNetwork.sh <start_id> <end_id> [options]
+#   BulkConfigureNetwork.sh <start_id> <end_id> [options]
 #
 # Arguments:
 #   start_id  - The starting VM ID in the range to be processed
@@ -31,38 +31,40 @@
 #
 # Examples:
 #   # Change bridge only
-#   ./BulkConfigureNetwork.sh 100 110 --bridge vmbr1
+#   BulkConfigureNetwork.sh 100 110 --bridge vmbr1
 #
 #   # Configure bridge with VLAN
-#   ./BulkConfigureNetwork.sh 100 110 --bridge vmbr0 --vlan 100
+#   BulkConfigureNetwork.sh 100 110 --bridge vmbr0 --vlan 100
 #
 #   # Full configuration with multiple options
-#   ./BulkConfigureNetwork.sh 400 410 --bridge vmbr1 --vlan 50 --firewall 1 --mtu 9000 --rate 1000 --queues 4 --model virtio
+#   BulkConfigureNetwork.sh 400 410 --bridge vmbr1 --vlan 50 --firewall 1 --mtu 9000 --rate 1000 --queues 4 --model virtio
 #
 #   # Set MAC address with prefix (auto-generates last 3 octets from VMID)
-#   ./BulkConfigureNetwork.sh 100 110 --mac-prefix BC:24:11
+#   BulkConfigureNetwork.sh 100 110 --mac-prefix BC:24:11
 #
 #   # Disconnect network interfaces
-#   ./BulkConfigureNetwork.sh 100 110 --link-down 1
+#   BulkConfigureNetwork.sh 100 110 --link-down 1
 #
 #   # Rate limit to 100 Mbps with multiqueue
-#   ./BulkConfigureNetwork.sh 100 110 --rate 100 --queues 8
+#   BulkConfigureNetwork.sh 100 110 --rate 100 --queues 8
 #
 # Function Index:
 #   - usage
 #   - parse_args
 #   - validate_options
 #   - generate_mac_from_vmid
-#   - configure_network
 #   - main
+#   - configure_network_callback
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -298,121 +300,26 @@ validate_options() {
 generate_mac_from_vmid() {
     local vmid="$1"
     local prefix="$MAC_PREFIX"
-    
+
     # Convert VMID to hex and pad to 6 digits
     local vmid_hex=$(printf "%06X" "$vmid")
-    
+
     # Split into 3 octets
     local octet1="${vmid_hex:0:2}"
     local octet2="${vmid_hex:2:2}"
     local octet3="${vmid_hex:4:2}"
-    
+
     echo "${prefix}:${octet1}:${octet2}:${octet3}"
 }
 
-# --- configure_network -------------------------------------------------------
-# @function configure_network
-# @description Configures network interface for a VM.
-# @param 1 VM ID
-configure_network() {
-    local vmid="$1"
-    local node
-    
-    node=$(__get_vm_node__ "$vmid")
-    
-    if [[ -z "$node" ]]; then
-        __update__ "VM ${vmid} not found in cluster, skipping"
-        return 0
-    fi
-    
-    __update__ "Configuring network for VM ${vmid} on node ${node}..."
-    
-    # Get current network configuration
-    local current_config
-    current_config=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${NET_ID}:" || true)
-    
-    if [[ -z "$current_config" ]]; then
-        __warn__ "Network interface ${NET_ID} not found on VM ${vmid}, skipping"
-        return 0
-    fi
-    
-    # Build qm set command
-    local cmd="qm set \"$vmid\" --node \"$node\""
-    local net_config=""
-    
-    # Parse existing configuration
-    local existing_model=$(echo "$current_config" | sed -n 's/.*model=\([^,]*\).*/\1/p')
-    local existing_bridge=$(echo "$current_config" | sed -n 's/.*bridge=\([^,]*\).*/\1/p')
-    local existing_mac=$(echo "$current_config" | sed -n 's/.*=\([0-9A-Fa-f:]*\),.*/\1/p')
-    
-    # Start building network configuration string
-    # Model
-    if [[ -n "$MODEL" ]]; then
-        net_config="${MODEL}"
-    elif [[ -n "$existing_model" ]]; then
-        net_config="${existing_model}"
-    else
-        net_config="virtio"
-    fi
-    
-    # MAC address
-    if [[ -n "$MAC" ]]; then
-        net_config+=",macaddr=${MAC}"
-    elif [[ -n "$MAC_PREFIX" ]]; then
-        local generated_mac=$(generate_mac_from_vmid "$vmid")
-        net_config+=",macaddr=${generated_mac}"
-    elif [[ -n "$existing_mac" ]]; then
-        net_config+=",macaddr=${existing_mac}"
-    fi
-    
-    # Bridge
-    if [[ -n "$BRIDGE" ]]; then
-        net_config+=",bridge=${BRIDGE}"
-    elif [[ -n "$existing_bridge" ]]; then
-        net_config+=",bridge=${existing_bridge}"
-    fi
-    
-    # VLAN tag
-    [[ -n "$VLAN" ]] && net_config+=",tag=${VLAN}"
-    
-    # Firewall
-    [[ -n "$FIREWALL" ]] && net_config+=",firewall=${FIREWALL}"
-    
-    # Link down (disconnect)
-    [[ -n "$LINK_DOWN" ]] && net_config+=",link_down=${LINK_DOWN}"
-    
-    # MTU
-    [[ -n "$MTU" ]] && net_config+=",mtu=${MTU}"
-    
-    # Rate limit
-    [[ -n "$RATE" ]] && net_config+=",rate=${RATE}"
-    
-    # Multiqueue
-    [[ -n "$QUEUES" ]] && net_config+=",queues=${QUEUES}"
-    
-    # Execute configuration
-    cmd+=" --${NET_ID} \"${net_config}\""
-    
-    if eval "$cmd" 2>&1; then
-        __ok__ "Network configured for VM ${vmid} on ${node}"
-        __info__ "  Config: ${net_config}"
-        return 0
-    else
-        __err__ "Failed to configure network for VM ${vmid}"
-        return 1
-    fi
-}
-
 # --- main --------------------------------------------------------------------
-# @function main
-# @description Main script logic - iterates through VM range and configures network.
 main() {
     __check_root__
     __check_proxmox__
-    
+
     # Validate options
     validate_options
-    
+
     __info__ "Bulk configure network: VMs ${START_ID} to ${END_ID} (cluster-wide)"
     __info__ "Network interface: ${NET_ID}"
     [[ -n "$BRIDGE" ]] && __info__ "  Bridge: ${BRIDGE}"
@@ -425,42 +332,112 @@ main() {
     [[ -n "$MAC" ]] && __info__ "  MAC: ${MAC}"
     [[ -n "$MAC_PREFIX" ]] && __info__ "  MAC Prefix: ${MAC_PREFIX} (auto-generate from VMID)"
     [[ -n "$MODEL" ]] && __info__ "  Model: ${MODEL}"
-    
+
     # Confirm action
-    if ! __prompt_user_yn__ "Configure network for VMs ${START_ID}-${END_ID}?"; then
+    if ! __prompt_yes_no__ "Configure network for VMs ${START_ID}-${END_ID}?"; then
         __info__ "Operation cancelled by user"
         exit 0
     fi
-    
-    # Configure network for VMs in the specified range
-    local failed_count=0
-    local processed_count=0
-    
-    for (( vmid=START_ID; vmid<=END_ID; vmid++ )); do
-        if configure_network "$vmid"; then
-            ((processed_count++))
-        else
-            ((failed_count++))
+
+    # Local callback for bulk operation
+    configure_network_callback() {
+        local vmid="$1"
+        local node
+
+        node=$(__get_vm_node__ "$vmid")
+
+        if [[ -z "$node" ]]; then
+            __update__ "VM ${vmid} not found in cluster"
+            return 1
         fi
-    done
-    
-    echo
-    __info__ "Operation complete:"
-    __info__ "  Processed: ${processed_count}"
-    if (( failed_count > 0 )); then
-        __warn__ "  Failed: ${failed_count}"
-    fi
-    
-    if (( failed_count > 0 )); then
-        __err__ "Configuration completed with ${failed_count} failure(s)"
-        exit 1
-    else
-        __ok__ "All network configurations completed successfully"
-    fi
+
+        __update__ "Configuring network for VM ${vmid}..."
+
+        # Get current network configuration
+        local current_config
+        current_config=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${NET_ID}:" || true)
+
+        if [[ -z "$current_config" ]]; then
+            __update__ "Network interface ${NET_ID} not found on VM ${vmid}"
+            return 1
+        fi
+
+        # Build qm set command
+        local cmd="qm set \"$vmid\" --node \"$node\""
+        local net_config=""
+
+        # Parse existing configuration
+        local existing_model=$(echo "$current_config" | sed -n 's/.*model=\([^,]*\).*/\1/p')
+        local existing_bridge=$(echo "$current_config" | sed -n 's/.*bridge=\([^,]*\).*/\1/p')
+        local existing_mac=$(echo "$current_config" | sed -n 's/.*=\([0-9A-Fa-f:]*\),.*/\1/p')
+
+        # Start building network configuration string
+        # Model
+        if [[ -n "$MODEL" ]]; then
+            net_config="${MODEL}"
+        elif [[ -n "$existing_model" ]]; then
+            net_config="${existing_model}"
+        else
+            net_config="virtio"
+        fi
+
+        # MAC address
+        if [[ -n "$MAC" ]]; then
+            net_config+=",macaddr=${MAC}"
+        elif [[ -n "$MAC_PREFIX" ]]; then
+            local generated_mac=$(generate_mac_from_vmid "$vmid")
+            net_config+=",macaddr=${generated_mac}"
+        elif [[ -n "$existing_mac" ]]; then
+            net_config+=",macaddr=${existing_mac}"
+        fi
+
+        # Bridge
+        if [[ -n "$BRIDGE" ]]; then
+            net_config+=",bridge=${BRIDGE}"
+        elif [[ -n "$existing_bridge" ]]; then
+            net_config+=",bridge=${existing_bridge}"
+        fi
+
+        # VLAN tag
+        [[ -n "$VLAN" ]] && net_config+=",tag=${VLAN}"
+
+        # Firewall
+        [[ -n "$FIREWALL" ]] && net_config+=",firewall=${FIREWALL}"
+
+        # Link down (disconnect)
+        [[ -n "$LINK_DOWN" ]] && net_config+=",link_down=${LINK_DOWN}"
+
+        # MTU
+        [[ -n "$MTU" ]] && net_config+=",mtu=${MTU}"
+
+        # Rate limit
+        [[ -n "$RATE" ]] && net_config+=",rate=${RATE}"
+
+        # Multiqueue
+        [[ -n "$QUEUES" ]] && net_config+=",queues=${QUEUES}"
+
+        # Execute configuration
+        cmd+=" --${NET_ID} \"${net_config}\""
+
+        if eval "$cmd" 2>&1; then
+            return 0
+        else
+            return 1
+        fi
+    }
+
+    # Use BulkOperations framework
+    __bulk_vm_operation__ --name "Network Configuration" --report "$START_ID" "$END_ID" configure_network_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All network configurations completed successfully!"
 }
 
 parse_args "$@"
 main
 
 # Testing status:
-#   - 2025-10-16: Created comprehensive network configuration script
+#   - Updated to use BulkOperations framework

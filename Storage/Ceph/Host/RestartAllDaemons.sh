@@ -10,18 +10,22 @@
 #   - ceph-osd (Object Storage Daemons)
 #
 # Usage:
-#   ./RestartAllDaemons.sh restart   # (default) Restart all detected Ceph daemons
-#   ./RestartAllDaemons.sh status    # Show status for all Ceph daemons
+#   RestartAllDaemons.sh restart   # (default) Restart all detected Ceph daemons
+#   RestartAllDaemons.sh status    # Show status for all Ceph daemons
 #
 # Function Index:
-#   - _find_units <pattern>
-#   - restartUnits <type>
-#   - statusUnits <type>
+#   - _find_units
+#   - restartUnits
+#   - statusUnits
 #
+
+set -euo pipefail
 
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 
 __check_root__
@@ -48,7 +52,7 @@ function restartUnits() {
 
     echo "Restarting ceph-${type} daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
 }

@@ -2,167 +2,210 @@
 #
 # ChangeAllMACPrefix.sh
 #
-# Updates MAC address prefixes for all VM (qemu) and LXC config files under /etc/pve
-# to match either an explicitly provided prefix or the datacenter value in
-# /etc/pve/datacenter.cfg (mac_prefix). Creates timestamped backups and optionally
-# supports a dry-run mode that reports changes without writing.
+# Updates MAC address prefixes for all VM and LXC configurations.
 #
 # Usage:
-#   ./ChangeAllMACPrefix.sh [--prefix AA:BB:CC] [--dry-run]
+#   ChangeAllMACPrefix.sh [--prefix AA:BB:CC] [--dry-run]
 #
-# Example:
-#   ./ChangeAllMACPrefix.sh --prefix DE:AD:BE --dry-run
+# Optional Arguments:
+#   --prefix <mac> - MAC prefix (AA:BB:CC format)
+#   --dry-run      - Show changes without applying
 #
-# Notes:
-#   - Must be run as root on a Proxmox node.
-#   - If --prefix is omitted, the script reads mac_prefix from /etc/pve/datacenter.cfg.
-#   - Only the first three octets are rewritten; host-specific last three octets are preserved.
+# Examples:
+#   ChangeAllMACPrefix.sh --prefix DE:AD:BE --dry-run
+#   ChangeAllMACPrefix.sh
 #
 # Function Index:
-#   - usage
 #   - rewrite_file_mac_prefix
 #   - main
 #
 
-DCFG="/etc/pve/datacenter.cfg"
+set -euo pipefail
+
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-BACKUP_DIR="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
-DRY_RUN=0
-OVERRIDE_PREFIX=""
 
-# Source shared utilities if UTILITYPATH is provided (GUI.sh exports it)
-if [[ -n "${UTILITYPATH:-}" ]]; then
-  [[ -f "${UTILITYPATH}/Prompts.sh" ]] && source "${UTILITYPATH}/Prompts.sh" # shellcheck source=/dev/null
-  [[ -f "${UTILITYPATH}/Communication.sh" ]] && source "${UTILITYPATH}/Communication.sh" # shellcheck source=/dev/null
-fi
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-usage() {
-  cat <<EOF
-Usage: $0 [--prefix XX:YY:ZZ] [--dry-run] [--help]
+DCFG="/etc/pve/datacenter.cfg"
 
-Reads datacenter mac_prefix from $DCFG (unless overridden) and rewrites
-MAC addresses in /etc/pve/qemu-server/*.conf and /etc/pve/lxc/*.conf to use
-that prefix. Creates backups under $BACKUP_DIR.
-
-Options:
-  --prefix   Override the datacenter prefix (format: AA:BB:CC)
-  --dry-run  Show what would be changed without writing files
-  --help     Show this message
-EOF
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --prefix)
-      OVERRIDE_PREFIX="$2"; shift 2;;
-    --dry-run)
-      DRY_RUN=1; shift;;
-    --help|-h)
-      usage; exit 0;;
-    *)
-      echo "Unknown arg: $1" >&2; usage; exit 2;;
-  esac
-done
-
+# --- rewrite_file_mac_prefix ------------------------------------------------
 rewrite_file_mac_prefix() {
-  local file="$1"
-  local tmp="$BACKUP_DIR/$(basename "$file")"
-  cp -a "$file" "$tmp"
+    local file="$1"
+    local prefix_upper="$2"
+    local backup_dir="$3"
+    local dry_run="$4"
 
-  sed -E \
-    -e "s/(net[0-9]+:[[:space:]]*[^=]+=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${PREFIX_UPPER}:/g" \
-    -e "s/(hwaddr=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${PREFIX_UPPER}:/g" \
-    "$tmp" > "$tmp".new
+    local tmp="$backup_dir/$(basename "$file")"
+    cp -a "$file" "$tmp"
 
-  if ! cmp -s "$file" "$tmp".new; then
-    echo "Changes in $file:" 
-    diff -u "$file" "$tmp".new || true
-    if [[ $DRY_RUN -eq 0 ]]; then
-      mv "$tmp".new "$file"
-      echo "Updated $file (backup at $tmp)"
+    sed -E \
+        -e "s/(net[0-9]+:[[:space:]]*[^=]+=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
+        -e "s/(hwaddr=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
+        "$tmp" > "$tmp".new
+
+    if ! cmp -s "$file" "$tmp".new; then
+        __info__ "Changes detected: $(basename "$file")"
+        diff -u "$file" "$tmp".new || true
+
+        if [[ $dry_run -eq 0 ]]; then
+            mv "$tmp".new "$file"
+            __ok__ "Updated: $(basename "$file")"
+        else
+            __warn__ "[DRY-RUN] Would update: $(basename "$file")"
+            rm -f "$tmp".new
+        fi
+        return 0
     else
-      echo "(dry-run) would update $file (backup at $tmp)"
-      rm -f "$tmp".new
+        rm -f "$tmp".new
+        return 1
     fi
-  else
-    rm -f "$tmp".new
-    echo "No changes for $file"
-  fi
 }
 
+# --- main --------------------------------------------------------------------
 main() {
-  # Root / environment checks
-  if [[ $EUID -ne 0 ]]; then
-    echo "This script must be run as root (or via sudo)." >&2
-    exit 1
-  fi
-  # If helper checks exist, use them (non-fatal if absent)
-  command -v __check_proxmox__ &>/dev/null && __check_proxmox__ || true
+    __check_root__
+    __check_proxmox__
 
-  if [[ -n "${OVERRIDE_PREFIX}" ]]; then
-    PREFIX="$OVERRIDE_PREFIX"
-  else
-    if [[ ! -f "$DCFG" ]]; then
-      echo "$DCFG not found; cannot determine datacenter mac_prefix. Use --prefix to override." >&2
-      exit 1
+    local override_prefix=""
+    local dry_run=0
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --prefix)
+                if [[ $# -lt 2 ]]; then
+                    __err__ "Missing value for --prefix"
+                    exit 64
+                fi
+                override_prefix="$2"
+                shift 2
+                ;;
+            --dry-run)
+                dry_run=1
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [--prefix AA:BB:CC] [--dry-run]"
+                echo "Updates MAC address prefixes for all VMs and LXCs"
+                exit 0
+                ;;
+            *)
+                __err__ "Unknown argument: $1"
+                echo "Usage: $0 [--prefix AA:BB:CC] [--dry-run]"
+                exit 64
+                ;;
+        esac
+    done
+
+    # Determine MAC prefix
+    local prefix
+    if [[ -n "$override_prefix" ]]; then
+        prefix="$override_prefix"
+        __info__ "Using provided prefix: $prefix"
+    else
+        if [[ ! -f "$DCFG" ]]; then
+            __err__ "Datacenter config not found: $DCFG"
+            echo "Use --prefix to specify MAC prefix"
+            exit 1
+        fi
+
+        prefix="$(grep -E '^mac_prefix:' "$DCFG" | cut -d: -f2- | xargs || true)"
+
+        if [[ -z "$prefix" ]]; then
+            __err__ "No mac_prefix found in $DCFG"
+            echo "Use --prefix to specify MAC prefix"
+            exit 1
+        fi
+
+        __info__ "Using datacenter prefix: $prefix"
     fi
-    PREFIX="$(grep -E '^mac_prefix:' "$DCFG" || true)"
-    PREFIX="${PREFIX#mac_prefix: }"
-  fi
 
-  PREFIX_UPPER="$(echo "$PREFIX" | tr '[:lower:]' '[:upper:]' | xargs)"
-  if [[ ! "$PREFIX_UPPER" =~ ^([0-9A-F]{2}):([0-9A-F]{2}):([0-9A-F]{2})$ ]]; then
-    echo "Invalid MAC prefix: '$PREFIX'" >&2
-    echo "Expected format: AA:BB:CC" >&2
-    exit 2
-  fi
+    # Validate and normalize prefix
+    local prefix_upper
+    prefix_upper="$(echo "$prefix" | tr '[:lower:]' '[:upper:]' | xargs)"
 
-  if command -v __info__ &>/dev/null; then
-    __info__ "Using prefix $PREFIX_UPPER; preparing backups..."
-  else
-    echo "Using MAC prefix: $PREFIX_UPPER"
-    echo "Creating backup directory: $BACKUP_DIR"
-  fi
-  mkdir -p "$BACKUP_DIR"
+    if [[ ! "$prefix_upper" =~ ^([0-9A-F]{2}):([0-9A-F]{2}):([0-9A-F]{2})$ ]]; then
+        __err__ "Invalid MAC prefix: $prefix"
+        echo "Expected format: AA:BB:CC"
+        exit 64
+    fi
 
-  shopt -s nullglob
-  local changed=0
-  for f in /etc/pve/qemu-server/*.conf; do
-    [[ -f "$f" ]] || continue
-    rewrite_file_mac_prefix "$f"
-    changed=1
-  done
-  for f in /etc/pve/lxc/*.conf; do
-    [[ -f "$f" ]] || continue
-    rewrite_file_mac_prefix "$f"
-    changed=1
-  done
+    # Setup backup directory
+    local backup_dir="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
 
-  if [[ $changed -eq 0 ]]; then
-    echo "No VM/LXC config files found under /etc/pve/qemu-server or /etc/pve/lxc"
-  fi
+    if [[ $dry_run -eq 1 ]]; then
+        __warn__ "DRY-RUN MODE - No changes will be applied"
+    fi
 
-  if [[ $DRY_RUN -eq 0 ]]; then
-    echo "Reloading pvedaemon to apply datacenter changes..."
-    systemctl reload pvedaemon 2>/dev/null || true
-  else
-    echo "Dry-run: skipping pvedaemon reload"
-  fi
+    __info__ "MAC prefix: $prefix_upper"
+    __info__ "Backup directory: $backup_dir"
 
-  if command -v __ok__ &>/dev/null; then
-    __ok__ "Completed MAC prefix update"
-  else
-    echo "Done. Backups are in $BACKUP_DIR"
-  fi
+    echo
+    if ! __prompt_yes_no__ "Update all VM/LXC MAC addresses to use prefix $prefix_upper?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+
+    # Process config files
+    shopt -s nullglob
+    local -a qemu_files=(/etc/pve/qemu-server/*.conf)
+    local -a lxc_files=(/etc/pve/lxc/*.conf)
+    shopt -u nullglob
+
+    local total_files=$((${#qemu_files[@]} + ${#lxc_files[@]}))
+
+    if [[ $total_files -eq 0 ]]; then
+        __warn__ "No VM/LXC config files found"
+        exit 0
+    fi
+
+    __info__ "Processing ${#qemu_files[@]} VM(s) and ${#lxc_files[@]} LXC(s)"
+    echo
+
+    local changed=0
+    local processed=0
+
+    for file in "${qemu_files[@]}" "${lxc_files[@]}"; do
+        [[ -f "$file" ]] || continue
+        ((processed++))
+
+        if rewrite_file_mac_prefix "$file" "$prefix_upper" "$backup_dir" "$dry_run"; then
+            ((changed++))
+        fi
+    done
+
+    echo
+    __info__ "Summary:"
+    __info__ "  Files processed: $processed"
+    __info__ "  Files changed: $changed"
+    __info__ "  Files unchanged: $((processed - changed))"
+
+    if [[ $dry_run -eq 0 ]]; then
+        if [[ $changed -gt 0 ]]; then
+            __update__ "Reloading pvedaemon"
+            if systemctl reload pvedaemon 2>/dev/null; then
+                __ok__ "pvedaemon reloaded"
+            else
+                __warn__ "Failed to reload pvedaemon"
+            fi
+        fi
+
+        echo
+        __ok__ "MAC prefix update completed!"
+        __info__ "Backups saved to: $backup_dir"
+    else
+        echo
+        __warn__ "DRY-RUN: No changes applied"
+        __info__ "Run without --dry-run to apply changes"
+    fi
 }
 
 main "$@"
 
-###############################################################################
-# Testing status
-###############################################################################
-# Tested: (pending) Single-node environment, dry-run validation.
-# Add real test notes after first production run.
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

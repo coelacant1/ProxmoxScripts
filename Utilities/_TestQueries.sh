@@ -1,74 +1,103 @@
 #!/bin/bash
 #
-# _TestQueries.sh
-#
-# Usage:
-# ./_TestQueries.sh
-#
-# A quick test script that sources "Queries.sh" and exercises
-# some of its functions to demonstrate usage.
-#
-# 1) Source the Queries.sh script (assuming it's in the same directory).
-#    Adjust the path if it's located elsewhere.
+# Function Index:
+#   - pvecm
+#   - pvesh
+#   - test_check_cluster_membership
+#   - test_get_number_of_nodes
+#   - test_init_node_mappings
+#   - test_get_cluster_lxc
+#   - test_get_server_vms
 #
 
-if [ -z "${UTILITYPATH}" ]; then
-  # UTILITYPATH is unset or empty
-  export UTILITYPATH="$(pwd)"
-fi
+set -euo pipefail
 
-source "${UTILITYPATH}/Queries.sh"
+################################################################################
+# _TestQueries.sh - Test suite for Queries.sh
+################################################################################
+#
+# Test suite for Queries.sh cluster and VM/CT query functions.
+#
+# Usage: ./_TestQueries.sh
+#
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
 
-echo "==============================="
-echo " TESTING: __check_cluster_membership__"
-echo "==============================="
-__check_cluster_membership__
+source "${SCRIPT_DIR}/TestFramework.sh"
 
-echo
-echo "==============================="
-echo " TESTING: __get_number_of_cluster_nodes__"
-echo "==============================="
-NUM_NODES="$(__get_number_of_cluster_nodes__)"
-echo "Cluster nodes detected: $NUM_NODES"
+###############################################################################
+# MOCK FUNCTIONS
+###############################################################################
 
-echo
-echo "==============================="
-echo " TESTING: __init_node_mappings__ and __get_ip_from_name__, __get_name_from_ip__"
-echo "==============================="
-__init_node_mappings__
-echo "Initialization done. Checking a sample node name/IP..."
+pvecm() {
+    case "$1" in
+        status)
+            echo "Cluster status"
+            return 0
+            ;;
+        nodes)
+            echo "node1"
+            echo "node2"
+            return 0
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
+pvesh() {
+    echo '{"data":[{"vmid":100},{"vmid":200}]}'
+    return 0
+}
 
-if [ -z "${NODE_NAME}" ]; then
-read -rp "Enter node name: " NODE_NAME
-fi
+export -f pvecm
+export -f pvesh
 
-if [ -z "${NODE_IP}" ]; then
-read -rp "Enter node IP: " NODE_IP
-fi
+source "${SCRIPT_DIR}/Queries.sh"
 
-# Example usage of node name and IP
-echo "Manually checking your provided node name and IP via the node mapping:"
-echo "Node '${NODE_NAME}' => IP: $(__get_ip_from_name__ "${NODE_NAME}")"
-echo "IP   '${NODE_IP}'   => Node: $(__get_name_from_ip__ "${NODE_IP}")"
+################################################################################
+# TEST: QUERIES FUNCTIONS
+################################################################################
 
-echo
-echo "==============================="
-echo " TESTING: __get_cluster_lxc__"
-echo "==============================="
-echo "All LXC containers in the cluster:"
-readarray -t ALL_CLUSTER_LXC < <( __get_cluster_lxc__ )
-printf '  %s\n' "${ALL_CLUSTER_LXC[@]}"
+test_check_cluster_membership() {
+    __check_cluster_membership__ 2>/dev/null
+    assert_exit_code 0 $? "Should check cluster"
+}
 
-echo
-echo "==============================="
-echo " TESTING: __get_server_vms__ (QEMU) for 'local'"
-echo "==============================="
-echo "QEMU VMs on local server:"
-readarray -t LOCAL_VMS < <( __get_server_vms__ "local" )
-printf '  %s\n' "${LOCAL_VMS[@]}"
+test_get_number_of_nodes() {
+    local count
+    count=$(__get_number_of_cluster_nodes__ 2>/dev/null)
+    assert_exit_code 0 $? "Should get node count"
+}
 
-echo
-echo "Done with tests."
-exit 0
+test_init_node_mappings() {
+    __init_node_mappings__ 2>/dev/null
+    assert_exit_code 0 $? "Should init mappings"
+}
+
+test_get_cluster_lxc() {
+    local lxcs
+    lxcs=$(__get_cluster_lxc__ 2>/dev/null)
+    assert_exit_code 0 $? "Should get LXC containers"
+}
+
+test_get_server_vms() {
+    local vms
+    vms=$(__get_server_vms__ "local" 2>/dev/null)
+    assert_exit_code 0 $? "Should get server VMs"
+}
+
+################################################################################
+# RUN TEST SUITE
+################################################################################
+
+run_test_suite "Queries Functions" \
+    test_check_cluster_membership \
+    test_get_number_of_nodes \
+    test_init_node_mappings \
+    test_get_cluster_lxc \
+    test_get_server_vms
+
+exit $?

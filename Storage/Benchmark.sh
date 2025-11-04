@@ -7,10 +7,10 @@
 # runs a series of read/write benchmarks, displays key results, and can export them to CSV.
 #
 # Usage:
-#   ./Benchmark.sh <test-directory>
+#   Benchmark.sh <test-directory>
 #
 # Example:
-#   ./Benchmark.sh /tmp/fio_test
+#   Benchmark.sh /tmp/fio_test
 #
 # Notes:
 #   - Requires root (for package installation and accurate results).
@@ -22,7 +22,11 @@
 #   - parseFioOutput
 #
 
+set -euo pipefail
+
 source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Environment and Privilege Checks

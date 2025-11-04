@@ -2,112 +2,149 @@
 #
 # BulkDeleteConnectionGuacamole.sh
 #
-# Deletes all Guacamole connections containing a given keyword in the connection
-# name. Uses Guacamole's REST API to list and delete matching connections.
+# Deletes Guacamole connections matching keyword in connection name.
 #
 # Usage:
-#   ./BulkDeleteConnectionGuacamole.sh GUAC_SERVER_URL KEYWORD [DATA_SOURCE]
+#   BulkDeleteConnectionGuacamole.sh <server_url> <keyword> [data_source]
 #
-# Example:
-#   # Defaults to 'mysql' data source
-#   ./BulkDeleteConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" "RDP-"
+# Arguments:
+#   server_url  - Guacamole server URL
+#   keyword     - Keyword to match (case-insensitive)
+#   data_source - Database type (default: mysql)
 #
-#   # Specify a different data source (e.g., 'postgresql')
-#   ./BulkDeleteConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" "RDP-" "postgresql"
+# Examples:
+#   BulkDeleteConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" "RDP-"
+#   BulkDeleteConnectionGuacamole.sh "http://guac.example.com:8080/guacamole" "RDP-" "postgresql"
 #
-# Notes:
-#   - This script expects a valid Guacamole auth token in /tmp/cc_pve/guac_token.
-#   - Run GetGuacToken.sh beforehand to store the auth token for the Guacamole server.
-#   - The script matches the KEYWORD case-insensitively in the connection name.
-#   - Data source argument defaults to 'mysql' if not provided.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-__check_root__
-__check_proxmox__
-__install_or_prompt__ "jq"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-GUAC_URL="$1"
-KEYWORD="$2"
-GUAC_DATA_SOURCE="${3:-mysql}"
+TOKEN_PATH="/tmp/cc_pve/guac_token"
 
-if [[ -z "$GUAC_URL" || -z "$KEYWORD" ]]; then
-  echo "Error: Missing required arguments."
-  echo "Usage: $0 GUAC_SERVER_URL KEYWORD [DATA_SOURCE]"
-  echo "Example: $0 \"http://guac.example.com:8080/guacamole\" \"RDP-\" \"mysql\""
-  exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __install_or_prompt__ "jq"
 
-if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
-  echo "Error: No Guacamole auth token found in /tmp/cc_pve/guac_token."
-  echo "Please run GetGuacToken.sh first."
-  exit 1
-fi
+    if [[ $# -lt 2 ]]; then
+        __err__ "Missing required arguments"
+        echo "Usage: $0 <server_url> <keyword> [data_source]"
+        exit 64
+    fi
 
-AUTH_TOKEN="$(cat /tmp/cc_pve/guac_token)"
+    local guac_url="$1"
+    local keyword="$2"
+    local data_source="${3:-mysql}"
 
-###############################################################################
-# Retrieve All Connections Under "ROOT"
-###############################################################################
-# The connection tree includes childConnections[] for top-level connections
-# and childGroups[] for nested groups. If your Guacamole setup uses nested
-# groups, you may need to recurse through each group's .childConnections as well.
-connectionsJson="$(curl -s -X GET \
-  "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
+    if [[ ! -f "$TOKEN_PATH" ]]; then
+        __err__ "No Guacamole auth token found: $TOKEN_PATH"
+        echo "Run GetGuacamoleAuthenticationToken.sh first"
+        exit 1
+    fi
 
-if [[ -z "$connectionsJson" ]]; then
-  echo "Error: Could not retrieve connection tree from Guacamole."
-  exit 1
-fi
+    local auth_token
+    auth_token="$(cat "$TOKEN_PATH")"
 
-###############################################################################
-# Parse All Connection Identifiers Where Name Matches KEYWORD
-###############################################################################
-# The 'test($KEYWORD; "i")' performs a case-insensitive regex match against KEYWORD.
-mapfile -t matchingConnections < <(echo "$connectionsJson" | jq -r \
-  --arg KEYWORD "$KEYWORD" \
-  '.childConnections[]
-   | select(.name | test($KEYWORD; "i"))
-   | .identifier')
+    __info__ "Retrieving connections from Guacamole"
+    __info__ "  Server: $guac_url"
+    __info__ "  Data source: $data_source"
+    __info__ "  Keyword: $keyword"
 
-if [[ "${#matchingConnections[@]}" -eq 0 ]]; then
-  echo "No connections found matching '$KEYWORD'."
-  __prompt_keep_installed_packages__
-  exit 0
-fi
+    # Retrieve connection tree
+    local connections_json
+    if ! connections_json=$(curl -s -X GET \
+        "${guac_url}/api/session/data/${data_source}/connectionGroups/ROOT/tree?token=${auth_token}" 2>&1); then
+        __err__ "Failed to retrieve connection tree"
+        exit 1
+    fi
 
-echo "Found ${#matchingConnections[@]} matching connection(s) with keyword '$KEYWORD':"
-for connId in "${matchingConnections[@]}"; do
-  connName="$(echo "$connectionsJson" | jq -r \
-    --arg ID "$connId" '.childConnections[]
-    | select(.identifier == $ID)
-    | .name')"
-  echo "- [$connId] '$connName'"
-done
+    if [[ -z "$connections_json" ]]; then
+        __err__ "Empty response from Guacamole"
+        exit 1
+    fi
 
-###############################################################################
-# Confirmation Prompt
-###############################################################################
-read -r -p "Are you sure you want to DELETE all connections above? [y/N] " confirm
-if [[ "$confirm" != [yY]* ]]; then
-  echo "Aborting deletion."
-  __prompt_keep_installed_packages__
-  exit 0
-fi
+    # Parse matching connections
+    local -a matching_connections
+    mapfile -t matching_connections < <(echo "$connections_json" | jq -r \
+        --arg KEYWORD "$keyword" \
+        '.childConnections[]
+         | select(.name | test($KEYWORD; "i"))
+         | .identifier' 2>/dev/null || true)
 
-###############################################################################
-# Bulk Delete
-###############################################################################
-for connId in "${matchingConnections[@]}"; do
-  delResponse="$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-    "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")"
+    if [[ ${#matching_connections[@]} -eq 0 ]]; then
+        __warn__ "No connections found matching: $keyword"
+        __prompt_keep_installed_packages__
+        exit 0
+    fi
 
-  if [[ "$delResponse" -eq 204 ]]; then
-    echo "Deleted connection ID '$connId'."
-  else
-    echo "Failed to delete connection ID '$connId' (HTTP status $delResponse)."
-  fi
-done
+    # Display matching connections
+    __ok__ "Found ${#matching_connections[@]} matching connection(s):"
+    echo
 
-__prompt_keep_installed_packages__
+    for conn_id in "${matching_connections[@]}"; do
+        local conn_name
+        conn_name="$(echo "$connections_json" | jq -r \
+            --arg ID "$conn_id" \
+            '.childConnections[] | select(.identifier == $ID) | .name' 2>/dev/null)"
+        echo "  - [$conn_id] $conn_name"
+    done
+
+    # Confirmation
+    echo
+    __warn__ "DESTRUCTIVE OPERATION: This will permanently delete all listed connections"
+
+    if ! __prompt_yes_no__ "Delete all ${#matching_connections[@]} connection(s)?"; then
+        __info__ "Operation cancelled"
+        __prompt_keep_installed_packages__
+        exit 0
+    fi
+
+    # Bulk delete
+    __info__ "Deleting connections"
+    echo
+
+    local deleted=0
+    local failed=0
+
+    for conn_id in "${matching_connections[@]}"; do
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            "${guac_url}/api/session/data/${data_source}/connections/${conn_id}?token=${auth_token}" 2>/dev/null || echo "000")
+
+        if [[ "$http_code" -eq 204 ]]; then
+            __ok__ "Deleted: $conn_id"
+            ((deleted++))
+        else
+            __err__ "Failed to delete: $conn_id (HTTP $http_code)"
+            ((failed++))
+        fi
+    done
+
+    echo
+    __info__ "Summary:"
+    __info__ "  Total connections: ${#matching_connections[@]}"
+    __info__ "  Deleted: $deleted"
+    __info__ "  Failed: $failed"
+
+    __prompt_keep_installed_packages__
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "Bulk deletion completed successfully!"
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

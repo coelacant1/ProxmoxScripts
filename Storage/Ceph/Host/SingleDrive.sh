@@ -7,20 +7,24 @@
 # freed space.
 #
 # Usage:
-#   ./CephSingleDrive.sh <create_osd|clear_local_lvm>
+#   CephSingleDrive.sh <create_osd|clear_local_lvm>
 #
 # Steps:
 #   create_osd      - Bootstrap Ceph auth, create LVs, and prepare an OSD
 #   clear_local_lvm - Delete the local-lvm (pve/data) volume (Destructive!)
 #
 # Examples:
-#   ./CephSingleDrive.sh create_osd
-#   ./CephSingleDrive.sh clear_local_lvm
+#   CephSingleDrive.sh create_osd
+#   CephSingleDrive.sh clear_local_lvm
 #
 # Function Index:
 #   - clear_local_lvm
 #   - create_osd
 #
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 

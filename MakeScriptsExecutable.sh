@@ -1,13 +1,19 @@
 #!/bin/bash
 #
-# This script enables execute permissions (chmod +x) on all scripts in the current folder and its subfolders.
+# MakeScriptsExecutable.sh
+#
+# Adds execute permissions to all .sh files in current and subdirectories.
 #
 # Usage:
-# ./MakeScriptsExecutable.sh
+#   ./MakeScriptsExecutable.sh
+#
+# Examples:
+#   ./MakeScriptsExecutable.sh
 #
 
-# Find all files with a .sh extension in the current directory and subdirectories
-# and add execute permissions to them.
+set -euo pipefail
+
+# Find and make executable
 find . -type f -name "*.sh" -exec chmod +x {} \;
 
-echo "All scripts in the current folder and subfolders are now executable."
+echo "All .sh files are now executable"

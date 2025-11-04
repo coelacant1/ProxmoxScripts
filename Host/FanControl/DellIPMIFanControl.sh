@@ -7,15 +7,15 @@
 # store them in /etc/dell_fan_control.conf, and create a background control script.
 #
 # Usage:
-#   ./DellServerFanControl.sh install
-#   ./DellServerFanControl.sh remove
+#   DellServerFanControl.sh install
+#   DellServerFanControl.sh remove
 #
 # Examples:
 #   # Install all components and enable the service
-#   ./DellServerFanControl.sh install
+#   DellServerFanControl.sh install
 #
 #   # Remove everything (service, config, run script)
-#   ./DellServerFanControl.sh remove
+#   DellServerFanControl.sh remove
 #
 # This script requires IPMI utilities, which will be installed if missing.
 #
@@ -32,6 +32,8 @@
 #   - remove_service_and_files
 #   - show_usage
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 

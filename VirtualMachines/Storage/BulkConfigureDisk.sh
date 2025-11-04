@@ -8,7 +8,7 @@
 # Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkConfigureDisk.sh <start_id> <end_id> <disk> [options]
+#   BulkConfigureDisk.sh <start_id> <end_id> <disk> [options]
 #
 # Arguments:
 #   start_id  - The starting VM ID in the range to be processed
@@ -27,19 +27,19 @@
 #
 # Examples:
 #   # Enable discard and SSD emulation
-#   ./BulkConfigureDisk.sh 100 110 scsi0 --discard on --ssd 1
+#   BulkConfigureDisk.sh 100 110 scsi0 --discard on --ssd 1
 #
 #   # Configure for performance with writeback cache and IO threads
-#   ./BulkConfigureDisk.sh 100 110 virtio0 --cache writeback --iothread 1 --aio native
+#   BulkConfigureDisk.sh 100 110 virtio0 --cache writeback --iothread 1 --aio native
 #
 #   # Set disk as read-only and exclude from backups
-#   ./BulkConfigureDisk.sh 100 110 scsi0 --ro 1 --backup 0
+#   BulkConfigureDisk.sh 100 110 scsi0 --ro 1 --backup 0
 #
 #   # Full performance configuration
-#   ./BulkConfigureDisk.sh 400 410 scsi0 --cache writeback --discard on --iothread 1 --ssd 1 --aio native
+#   BulkConfigureDisk.sh 400 410 scsi0 --cache writeback --discard on --iothread 1 --ssd 1 --aio native
 #
 #   # Exclude from backups and replication
-#   ./BulkConfigureDisk.sh 100 110 scsi1 --backup 0 --replicate 0
+#   BulkConfigureDisk.sh 100 110 scsi1 --backup 0 --replicate 0
 #
 # Cache Modes:
 #   - none:        No caching (safest, slowest)
@@ -52,16 +52,19 @@
 #   - usage
 #   - parse_args
 #   - validate_options
-#   - configure_disk
+#   - get_existing_option
 #   - main
+#   - configure_disk_callback
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -232,7 +235,7 @@ validate_options() {
             __err__ "Valid modes: ${valid_cache}"
             exit 64
         fi
-        
+
         if [[ "$CACHE" == "unsafe" ]]; then
             __warn__ "WARNING: 'unsafe' cache mode can cause data loss!"
         fi
@@ -290,146 +293,21 @@ validate_options() {
     fi
 }
 
-# --- configure_disk ----------------------------------------------------------
-# @function configure_disk
-# @description Configures disk options for a VM.
-# @param 1 VM ID
-configure_disk() {
-    local vmid="$1"
-    local node
-    
-    node=$(__get_vm_node__ "$vmid")
-    
-    if [[ -z "$node" ]]; then
-        __update__ "VM ${vmid} not found in cluster, skipping"
-        return 0
-    fi
-    
-    __update__ "Configuring disk ${DISK} for VM ${vmid} on node ${node}..."
-    
-    # Get current disk configuration
-    local current_config
-    current_config=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${DISK}:" || true)
-    
-    if [[ -z "$current_config" ]]; then
-        __warn__ "Disk ${DISK} not found on VM ${vmid}, skipping"
-        return 0
-    fi
-    
-    # Extract the storage path/volume (everything before the first comma or the whole string)
-    local disk_volume
-    disk_volume=$(echo "$current_config" | sed 's/^[^:]*: *//' | sed 's/,.*//')
-    
-    # Build disk configuration string
-    local disk_config="${disk_volume}"
-    
-    # Parse and preserve existing options, then apply new ones
-    local existing_options
-    existing_options=$(echo "$current_config" | sed 's/^[^:]*:[^,]*,*//')
-    
-    # Function to get existing option value
-    get_existing_option() {
-        local opt="$1"
-        echo "$existing_options" | grep -oP "${opt}=\K[^,]+" || true
-    }
-    
-    # Build options string, using new values or preserving existing ones
-    
-    # Cache
-    if [[ -n "$CACHE" ]]; then
-        disk_config+=",cache=${CACHE}"
-    else
-        local existing_cache=$(get_existing_option "cache")
-        [[ -n "$existing_cache" ]] && disk_config+=",cache=${existing_cache}"
-    fi
-    
-    # Discard
-    if [[ -n "$DISCARD" ]]; then
-        disk_config+=",discard=${DISCARD}"
-    else
-        local existing_discard=$(get_existing_option "discard")
-        [[ -n "$existing_discard" ]] && disk_config+=",discard=${existing_discard}"
-    fi
-    
-    # IO Thread
-    if [[ -n "$IOTHREAD" ]]; then
-        disk_config+=",iothread=${IOTHREAD}"
-    else
-        local existing_iothread=$(get_existing_option "iothread")
-        [[ -n "$existing_iothread" ]] && disk_config+=",iothread=${existing_iothread}"
-    fi
-    
-    # Read-only
-    if [[ -n "$READONLY" ]]; then
-        disk_config+=",ro=${READONLY}"
-    else
-        local existing_ro=$(get_existing_option "ro")
-        [[ -n "$existing_ro" ]] && disk_config+=",ro=${existing_ro}"
-    fi
-    
-    # SSD
-    if [[ -n "$SSD" ]]; then
-        disk_config+=",ssd=${SSD}"
-    else
-        local existing_ssd=$(get_existing_option "ssd")
-        [[ -n "$existing_ssd" ]] && disk_config+=",ssd=${existing_ssd}"
-    fi
-    
-    # Backup
-    if [[ -n "$BACKUP" ]]; then
-        disk_config+=",backup=${BACKUP}"
-    else
-        local existing_backup=$(get_existing_option "backup")
-        [[ -n "$existing_backup" ]] && disk_config+=",backup=${existing_backup}"
-    fi
-    
-    # Replicate
-    if [[ -n "$REPLICATE" ]]; then
-        disk_config+=",replicate=${REPLICATE}"
-    else
-        local existing_replicate=$(get_existing_option "replicate")
-        [[ -n "$existing_replicate" ]] && disk_config+=",replicate=${existing_replicate}"
-    fi
-    
-    # AIO
-    if [[ -n "$AIO" ]]; then
-        disk_config+=",aio=${AIO}"
-    else
-        local existing_aio=$(get_existing_option "aio")
-        [[ -n "$existing_aio" ]] && disk_config+=",aio=${existing_aio}"
-    fi
-    
-    # Preserve other existing options that we don't manage
-    local other_options=$(echo "$existing_options" | grep -oP '(size|format|media|snapshot|mbps|mbps_rd|mbps_wr|iops|iops_rd|iops_wr)=[^,]+' || true)
-    if [[ -n "$other_options" ]]; then
-        while IFS= read -r opt; do
-            [[ -n "$opt" ]] && disk_config+=",${opt}"
-        done <<< "$other_options"
-    fi
-    
-    # Execute configuration
-    local cmd="qm set \"$vmid\" --node \"$node\" --${DISK} \"${disk_config}\""
-    
-    if eval "$cmd" 2>&1; then
-        __ok__ "Disk ${DISK} configured for VM ${vmid} on ${node}"
-        __info__ "  Config: ${disk_config}"
-        return 0
-    else
-        __err__ "Failed to configure disk ${DISK} for VM ${vmid}"
-        return 1
-    fi
+# --- get_existing_option -----------------------------------------------------
+get_existing_option() {
+    local existing_options="$1"
+    local opt="$2"
+    echo "$existing_options" | grep -oP "${opt}=\K[^,]+" || true
 }
 
 # --- main --------------------------------------------------------------------
-# @function main
-# @description Main script logic - iterates through VM range and configures disks.
 main() {
     __check_root__
     __check_proxmox__
-    
+
     # Validate options
     validate_options
-    
+
     __info__ "Bulk configure disk: VMs ${START_ID} to ${END_ID} (cluster-wide)"
     __info__ "Disk: ${DISK}"
     [[ -n "$CACHE" ]] && __info__ "  Cache: ${CACHE}"
@@ -440,52 +318,151 @@ main() {
     [[ -n "$BACKUP" ]] && __info__ "  Backup: ${BACKUP}"
     [[ -n "$REPLICATE" ]] && __info__ "  Replicate: ${REPLICATE}"
     [[ -n "$AIO" ]] && __info__ "  Async I/O: ${AIO}"
-    
+
     # Special warning for dangerous settings
     if [[ "$CACHE" == "unsafe" ]]; then
         __warn__ "WARNING: Using 'unsafe' cache mode!"
         __warn__ "This can cause DATA LOSS on host crash or power failure!"
     fi
-    
+
     if [[ "$READONLY" == "1" ]]; then
         __warn__ "Setting disk to READ-ONLY mode"
     fi
-    
+
     # Confirm action
-    if ! __prompt_user_yn__ "Configure disk ${DISK} for VMs ${START_ID}-${END_ID}?"; then
+    if ! __prompt_yes_no__ "Configure disk ${DISK} for VMs ${START_ID}-${END_ID}?"; then
         __info__ "Operation cancelled by user"
         exit 0
     fi
-    
-    # Configure disks for VMs in the specified range
-    local failed_count=0
-    local processed_count=0
-    
-    for (( vmid=START_ID; vmid<=END_ID; vmid++ )); do
-        if configure_disk "$vmid"; then
-            ((processed_count++))
-        else
-            ((failed_count++))
+
+    # Local callback for bulk operation
+    configure_disk_callback() {
+        local vmid="$1"
+        local node
+
+        node=$(__get_vm_node__ "$vmid")
+
+        if [[ -z "$node" ]]; then
+            __update__ "VM ${vmid} not found in cluster"
+            return 1
         fi
-    done
-    
-    echo
-    __info__ "Operation complete:"
-    __info__ "  Processed: ${processed_count}"
-    if (( failed_count > 0 )); then
-        __warn__ "  Failed: ${failed_count}"
-    fi
-    
-    if (( failed_count > 0 )); then
-        __err__ "Configuration completed with ${failed_count} failure(s)"
-        exit 1
-    else
-        __ok__ "All disk configurations completed successfully"
-    fi
+
+        __update__ "Configuring disk ${DISK} for VM ${vmid}..."
+
+        # Get current disk configuration
+        local current_config
+        current_config=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${DISK}:" || true)
+
+        if [[ -z "$current_config" ]]; then
+            __update__ "Disk ${DISK} not found on VM ${vmid}"
+            return 1
+        fi
+
+        # Extract the storage path/volume
+        local disk_volume
+        disk_volume=$(echo "$current_config" | sed 's/^[^:]*: *//' | sed 's/,.*//')
+
+        # Build disk configuration string
+        local disk_config="${disk_volume}"
+
+        # Parse and preserve existing options
+        local existing_options
+        existing_options=$(echo "$current_config" | sed 's/^[^:]*:[^,]*,*//')
+
+        # Cache
+        if [[ -n "$CACHE" ]]; then
+            disk_config+=",cache=${CACHE}"
+        else
+            local existing_cache=$(get_existing_option "$existing_options" "cache")
+            [[ -n "$existing_cache" ]] && disk_config+=",cache=${existing_cache}"
+        fi
+
+        # Discard
+        if [[ -n "$DISCARD" ]]; then
+            disk_config+=",discard=${DISCARD}"
+        else
+            local existing_discard=$(get_existing_option "$existing_options" "discard")
+            [[ -n "$existing_discard" ]] && disk_config+=",discard=${existing_discard}"
+        fi
+
+        # IO Thread
+        if [[ -n "$IOTHREAD" ]]; then
+            disk_config+=",iothread=${IOTHREAD}"
+        else
+            local existing_iothread=$(get_existing_option "$existing_options" "iothread")
+            [[ -n "$existing_iothread" ]] && disk_config+=",iothread=${existing_iothread}"
+        fi
+
+        # Read-only
+        if [[ -n "$READONLY" ]]; then
+            disk_config+=",ro=${READONLY}"
+        else
+            local existing_ro=$(get_existing_option "$existing_options" "ro")
+            [[ -n "$existing_ro" ]] && disk_config+=",ro=${existing_ro}"
+        fi
+
+        # SSD
+        if [[ -n "$SSD" ]]; then
+            disk_config+=",ssd=${SSD}"
+        else
+            local existing_ssd=$(get_existing_option "$existing_options" "ssd")
+            [[ -n "$existing_ssd" ]] && disk_config+=",ssd=${existing_ssd}"
+        fi
+
+        # Backup
+        if [[ -n "$BACKUP" ]]; then
+            disk_config+=",backup=${BACKUP}"
+        else
+            local existing_backup=$(get_existing_option "$existing_options" "backup")
+            [[ -n "$existing_backup" ]] && disk_config+=",backup=${existing_backup}"
+        fi
+
+        # Replicate
+        if [[ -n "$REPLICATE" ]]; then
+            disk_config+=",replicate=${REPLICATE}"
+        else
+            local existing_replicate=$(get_existing_option "$existing_options" "replicate")
+            [[ -n "$existing_replicate" ]] && disk_config+=",replicate=${existing_replicate}"
+        fi
+
+        # AIO
+        if [[ -n "$AIO" ]]; then
+            disk_config+=",aio=${AIO}"
+        else
+            local existing_aio=$(get_existing_option "$existing_options" "aio")
+            [[ -n "$existing_aio" ]] && disk_config+=",aio=${existing_aio}"
+        fi
+
+        # Preserve other existing options
+        local other_options=$(echo "$existing_options" | grep -oP '(size|format|media|snapshot|mbps|mbps_rd|mbps_wr|iops|iops_rd|iops_wr)=[^,]+' || true)
+        if [[ -n "$other_options" ]]; then
+            while IFS= read -r opt; do
+                [[ -n "$opt" ]] && disk_config+=",${opt}"
+            done <<< "$other_options"
+        fi
+
+        # Execute configuration
+        local cmd="qm set \"$vmid\" --node \"$node\" --${DISK} \"${disk_config}\""
+
+        if eval "$cmd" 2>&1; then
+            return 0
+        else
+            return 1
+        fi
+    }
+
+    # Use BulkOperations framework
+    __bulk_vm_operation__ --name "Disk Configuration" --report "$START_ID" "$END_ID" configure_disk_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All disk configurations completed successfully!"
 }
 
 parse_args "$@"
 main
 
 # Testing status:
-#   - 2025-10-16: Created comprehensive disk configuration script
+#   - Updated to use BulkOperations framework

@@ -16,14 +16,22 @@
 #   - "sftp-port"
 #
 # Usage:
-#   ./BulkRemoveSFTPServer.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
+#   BulkRemoveSFTPServer.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
 #
 # Example:
-#   ./BulkRemoveSFTPServer.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+#   BulkRemoveSFTPServer.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
 #
 
-# Optionally load utility functions (if available)
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 __install_or_prompt__ "jq"
 
@@ -32,7 +40,7 @@ GUAC_URL="$1"
 SEARCH_SUBSTRING="$2"
 GUAC_DATA_SOURCE="${3:-mysql}"
 
-if [[ -z "$GUAC_URL"  -z "$SEARCH_SUBSTRING" ]]; then
+if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
     echo "Error: Missing required arguments."
     echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
     exit 1
@@ -66,7 +74,7 @@ fi
 echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
   --arg SUBSTR "$SEARCH_SUBSTRING" '
-    [ (.childConnections // [])[] 
+    [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | { id: .identifier, name: .name } ]
   ')
@@ -88,15 +96,15 @@ echo "Removing SFTP parameters for matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
-    
+
     echo "---------------------------------------------"
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
-    
+
     # Retrieve the full connection JSON.
     connectionInfo=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ -z "$connectionInfo" ]]; then
       echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
       continue
@@ -105,13 +113,13 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     # Retrieve existing parameters.
     existingParams=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
-    
+
     # Default to an empty object if no parameters are returned.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
-    
+
     # Remove SFTP-related keys.
     newParams=$(echo "$existingParams" | jq 'del(.["sftp-directory"], .["sftp-root-directory"], .["sftp-hostname"], .["sftp-password"], .["sftp-username"], .["enable-sftp"], .["sftp-port"])')
-    
+
     # Build the updated connection JSON payload.
     updatedJson=$(echo "$connectionInfo" | jq --argjson params "$newParams" '
         {
@@ -122,14 +130,14 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
           parameters: $params
         }
     ')
-    
+
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       -H "Content-Type: application/json" \
       -d "$updatedJson" \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
-    if [[ "$updateResponse" -eq 200  "$updateResponse" -eq 204 ]]; then
+
+    if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully removed SFTP parameters for connection '$connId'."
     else
         echo "  Failed to update connection '$connId' (HTTP status $updateResponse)."

@@ -2,59 +2,62 @@
 #
 # BulkStartAtBoot.sh
 #
-# This script bulk-sets multiple LXC containers to start automatically at boot
-# within a Proxmox VE environment. It iterates over a specified range of container
-# IDs and enables the onboot parameter for each. This is useful for ensuring that
-# a group of containers starts automatically after a system reboot.
+# Enables automatic start at boot for a range of LXC containers.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkStartAtBoot.sh <start_ct_id> <num_cts>
+#   BulkStartAtBoot.sh <start_ct_id> <end_ct_id>
 #
-# Example:
-#   ./BulkStartAtBoot.sh 400 30
-#   This command sets containers with IDs from 400 to 429 to start at boot.
+# Arguments:
+#   start_ct_id - Starting container ID
+#   end_ct_id   - Ending container ID
+#
+# Examples:
+#   BulkStartAtBoot.sh 400 430
+#
+# Function Index:
+#   - main
+#   - set_onboot_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# Dependencies and environment checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument validation
-###############################################################################
-if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 <start_ct_id> <num_cts>"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
 
-START_CT_ID="$1"
-NUM_CTS="$2"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-if ! [[ "$START_CT_ID" =~ ^[0-9]+$ ]] || ! [[ "$NUM_CTS" =~ ^[0-9]+$ ]]; then
-  echo "Error: start_ct_id and num_cts must be positive integers."
-  exit 1
-fi
+    __info__ "Bulk enable start at boot: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
 
-###############################################################################
-# Main logic
-###############################################################################
-for (( i=0; i<NUM_CTS; i++ )); do
-  TARGET_CT_ID=$((START_CT_ID + i))
-  if pct status "$TARGET_CT_ID" &>/dev/null; then
-    echo "Setting onboot=1 for container ID '$TARGET_CT_ID'..."
-    pct set "$TARGET_CT_ID" -onboot 1
-    if [ $? -eq 0 ]; then
-      echo "Successfully set onboot for container ID '$TARGET_CT_ID'."
-    else
-      echo "Failed to set onboot for container ID '$TARGET_CT_ID'."
-    fi
-  else
-    echo "Container ID '$TARGET_CT_ID' does not exist. Skipping."
-  fi
-done
+    set_onboot_callback() {
+        local vmid="$1"
+        __ct_set_onboot__ "$vmid" 1
+    }
 
-echo "Bulk onboot configuration completed!"
+    __bulk_ct_operation__ --name "Enable Start at Boot" --report "$START_VMID" "$END_VMID" set_onboot_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Start at boot enabled successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

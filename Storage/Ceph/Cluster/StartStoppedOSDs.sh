@@ -2,44 +2,59 @@
 #
 # StartStoppedOSDs.sh
 #
-# This script starts all stopped Ceph OSDs in a Proxmox VE environment.
+# Starts all stopped Ceph OSDs in the cluster.
 #
 # Usage:
-#   ./StartStoppedOSDs.sh
+#   StartStoppedOSDs.sh
 #
-# This script:
-#  - Checks for root privileges.
-#  - Verifies it is running in a Proxmox environment.
-#  - Checks or installs the 'ceph' package if needed.
-#  - Lists all OSDs that are down and attempts to start them.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main Logic
-###############################################################################
-STOPPED_OSDS="$(ceph osd tree | awk '/down/ {print $4}')"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-if [ -z "$STOPPED_OSDS" ]; then
-  echo "No OSD is reported as down. Exiting."
-  exit 0
-fi
+    local stopped_osds
+    stopped_osds="$(ceph osd tree | awk '/down/ {print $4}')"
 
-for osdId in $STOPPED_OSDS; do
-  echo "Starting OSD ID: $osdId"
-  ceph osd start "osd.${osdId}"
-  if [ $? -eq 0 ]; then
-    echo " - OSD ID: $osdId started successfully."
-  else
-    echo " - Failed to start OSD ID: $osdId."
-  fi
-done
+    if [[ -z "$stopped_osds" ]]; then
+        __info__ "No OSDs reported as down"
+        exit 0
+    fi
 
-echo "OSD start process completed!"
+    local started=0
+    local failed=0
+
+    while IFS= read -r osd_id; do
+        [[ -z "$osd_id" ]] && continue
+
+        __update__ "Starting OSD ID: $osd_id"
+        if ceph osd start "osd.${osd_id}" &>/dev/null; then
+            __ok__ "OSD $osd_id started successfully"
+            ((started++))
+        else
+            __warn__ "Failed to start OSD $osd_id"
+            ((failed++))
+        fi
+    done <<< "$stopped_osds"
+
+    __info__ "Started: $started, Failed: $failed"
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "All stopped OSDs started successfully"
+}
+
+main
+
+# Testing status:
+#   - Pending validation

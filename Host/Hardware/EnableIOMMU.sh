@@ -2,98 +2,105 @@
 #
 # EnableIOMMU.sh
 #
-# Ensures VT-d/AMD-Vi (IOMMU) is enabled on a Proxmox host, preparing it for
-# PCI passthrough. Specifically:
-#   1. Detects if CPU is Intel or AMD.
-#   2. Updates /etc/default/grub to include the appropriate IOMMU parameter
-#      ("intel_iommu=on" or "amd_iommu=on").
-#   3. Optionally blacklists the nouveau driver if desired.
-#   4. Updates initramfs and Grub configuration.
+# Enables VT-d/AMD-Vi (IOMMU) for PCI passthrough on Proxmox.
+# Detects CPU vendor and configures GRUB accordingly.
 #
 # Usage:
-#   ./EnableIOMMU.sh
+#   EnableIOMMU.sh
 #
-# Example:
-#   ./EnableIOMMU.sh
+# Examples:
+#   EnableIOMMU.sh
 #
-# Note:
-#   - You must reboot after running this script for changes to take effect.
-#   - For GPU passthrough, consider loading VFIO modules at boot and mapping
-#     specific PCI device IDs as needed.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
-__install_or_prompt__ "update-grub"  # Provided by grub-common
-__install_or_prompt__ "update-initramfs"  # Provided by initramfs-tools
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Detect CPU Vendor
-###############################################################################
-CPU_VENDOR="$(awk -F: '/vendor_id/ {print $2; exit}' /proc/cpuinfo | tr -d '[:space:]')"
-if [[ "${CPU_VENDOR}" =~ "GenuineIntel" ]]; then
-  IOMMU_PARAM="intel_iommu=on"
-elif [[ "${CPU_VENDOR}" =~ "AuthenticAMD" ]]; then
-  IOMMU_PARAM="amd_iommu=on"
-else
-  echo "Warning: Could not detect Intel or AMD CPU. Defaulting to intel_iommu=on."
-  IOMMU_PARAM="intel_iommu=on"
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "Detected CPU vendor: \"${CPU_VENDOR}\""
-echo "Will enable IOMMU parameter: \"${IOMMU_PARAM}\""
+    __info__ "Enabling IOMMU for PCI passthrough"
 
-###############################################################################
-# Update /etc/default/grub
-###############################################################################
-GRUB_FILE="/etc/default/grub"
-if [[ ! -f "${GRUB_FILE}" ]]; then
-  echo "Error: \"${GRUB_FILE}\" not found. Cannot update grub configuration."
-  exit 1
-fi
+    # Detect CPU vendor
+    local cpu_vendor
+    cpu_vendor=$(awk -F: '/vendor_id/ {print $2; exit}' /proc/cpuinfo | tr -d '[:space:]')
 
-if grep -q "${IOMMU_PARAM}" "${GRUB_FILE}"; then
-  echo "IOMMU parameter (\"${IOMMU_PARAM}\") already present in \"${GRUB_FILE}\"."
-else
-  echo "Adding \"${IOMMU_PARAM}\" to GRUB_CMDLINE_LINUX_DEFAULT..."
-  sed -i "s/\(^GRUB_CMDLINE_LINUX_DEFAULT=\".*\)\"/\1 ${IOMMU_PARAM}\"/" "${GRUB_FILE}"
-fi
+    local iommu_param
+    if [[ "${cpu_vendor}" =~ GenuineIntel ]]; then
+        iommu_param="intel_iommu=on"
+        __info__ "Detected Intel CPU"
+    elif [[ "${cpu_vendor}" =~ AuthenticAMD ]]; then
+        iommu_param="amd_iommu=on"
+        __info__ "Detected AMD CPU"
+    else
+        __warn__ "Could not detect CPU vendor, defaulting to intel_iommu=on"
+        iommu_param="intel_iommu=on"
+    fi
 
-###############################################################################
-# Optional: Blacklist nouveau Driver
-###############################################################################
-read -r -p "Do you want to blacklist the 'nouveau' driver for NVIDIA GPU passthrough? [y/N] " USER_CHOICE
-if [[ "${USER_CHOICE}" =~ ^[Yy]$ ]]; then
-  MODPROBE_BLACKLIST="/etc/modprobe.d/blacklist.conf"
-  if ! grep -q "blacklist nouveau" "${MODPROBE_BLACKLIST}" 2>/dev/null; then
-    {
-      echo "blacklist nouveau"
-      echo "options nouveau modeset=0"
-    } >> "${MODPROBE_BLACKLIST}"
-    echo "NVIDIA 'nouveau' driver has been blacklisted in \"${MODPROBE_BLACKLIST}\"."
-  else
-    echo "'nouveau' driver is already blacklisted."
-  fi
-fi
+    # Update GRUB configuration
+    local grub_file="/etc/default/grub"
+    if [[ ! -f "$grub_file" ]]; then
+        __err__ "GRUB configuration file not found: $grub_file"
+        exit 1
+    fi
 
-###############################################################################
-# Update initramfs and Grub
-###############################################################################
-echo "Updating initramfs..."
-update-initramfs -u -k all
+    if grep -q "$iommu_param" "$grub_file"; then
+        __ok__ "IOMMU parameter already present in GRUB"
+    else
+        __info__ "Adding $iommu_param to GRUB_CMDLINE_LINUX_DEFAULT"
+        sed -i "s/\(^GRUB_CMDLINE_LINUX_DEFAULT=\".*\)\"/\1 ${iommu_param}\"/" "$grub_file"
+        __ok__ "GRUB configuration updated"
+    fi
 
-echo "Updating Grub configuration..."
-update-grub
+    # Optional: Blacklist nouveau driver
+    if __prompt_yes_no__ "Blacklist nouveau driver for NVIDIA GPU passthrough?"; then
+        local blacklist_file="/etc/modprobe.d/blacklist.conf"
+        if ! grep -q "blacklist nouveau" "$blacklist_file" 2>/dev/null; then
+            {
+                echo "blacklist nouveau"
+                echo "options nouveau modeset=0"
+            } >> "$blacklist_file"
+            __ok__ "Nouveau driver blacklisted"
+        else
+            __info__ "Nouveau driver already blacklisted"
+        fi
+    fi
 
-echo "-----------------------------------------------------------------------"
-echo "IOMMU has been enabled with parameter: \"${IOMMU_PARAM}\""
-echo "If you chose to blacklist nouveau, that change has been applied."
-echo "Please reboot the system for changes to take effect."
-echo "-----------------------------------------------------------------------"
+    # Update initramfs and GRUB
+    __info__ "Updating initramfs"
+    if update-initramfs -u -k all 2>&1; then
+        __ok__ "Initramfs updated"
+    else
+        __err__ "Failed to update initramfs"
+        exit 1
+    fi
 
-__prompt_keep_installed_packages__
+    __info__ "Updating GRUB configuration"
+    if update-grub 2>&1; then
+        __ok__ "GRUB updated"
+    else
+        __err__ "Failed to update GRUB"
+        exit 1
+    fi
+
+    echo
+    __ok__ "IOMMU enabled successfully!"
+    __warn__ "REBOOT REQUIRED for changes to take effect"
+    __info__ "Verify after reboot with: dmesg | grep -i iommu"
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

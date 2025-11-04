@@ -1,43 +1,90 @@
 #!/bin/bash
 #
-# _TestPrompts.sh
-# 
-# Usage:
-# ./_TestPrompts.sh
+# Function Index:
+#   - __check_root__
+#   - __check_proxmox__
+#   - __require_root_and_proxmox__
+#   - __install_or_prompt__
+#   - __prompt_keep_installed_packages__
+#   - __ensure_dependencies__
+#   - test_check_root_executes
+#   - test_check_proxmox_executes
+#   - test_require_checks
+#   - test_install_or_prompt
+#   - test_ensure_dependencies
 #
-# Demonstrates usage of Prompts.sh by sourcing it and calling each function.
+
+set -euo pipefail
+
+################################################################################
+# _TestPrompts.sh - Test suite for Prompts.sh
+################################################################################
+#
+# Test suite for Prompts.sh validation and prompting functions.
+#
+# Usage: ./_TestPrompts.sh
 #
 
-if [ -z "${UTILITYPATH}" ]; then
-  # UTILITYPATH is unset or empty
-  export UTILITYPATH="$(pwd)"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
 
-# 1) Source the script
-source "${UTILITYPATH}/Prompts.sh"
+source "${SCRIPT_DIR}/TestFramework.sh"
 
-echo "=== TEST: __check_root__ ==="
-__check_root__
+# Mock functions to avoid actual system checks
+__check_root__() { return 0; }
+__check_proxmox__() { return 0; }
+__require_root_and_proxmox__() { return 0; }
+__install_or_prompt__() { return 0; }
+__prompt_keep_installed_packages__() { return 0; }
+__ensure_dependencies__() { return 0; }
 
-echo
-echo "=== TEST: __check_proxmox__ ==="
-__check_proxmox__
+export -f __check_root__
+export -f __check_proxmox__
+export -f __require_root_and_proxmox__
+export -f __install_or_prompt__
+export -f __prompt_keep_installed_packages__
+export -f __ensure_dependencies__
 
-echo
-echo "=== TEST: __require_root_and_proxmox__ ==="
-__require_root_and_proxmox__
+source "${SCRIPT_DIR}/Prompts.sh"
 
-echo
-echo "=== TEST: __install_or_prompt__ (curl) ==="
-__install_or_prompt__ "curl"
+################################################################################
+# TEST: PROMPTS FUNCTIONS
+################################################################################
 
-echo
-echo "=== TEST: __prompt_keep_installed_packages__ ==="
-__prompt_keep_installed_packages__
+test_check_root_executes() {
+    __check_root__ 2>/dev/null
+    assert_exit_code 0 $? "Should execute check_root"
+}
 
-echo
-echo "=== TEST: __ensure_dependencies__ (noop) ==="
-__ensure_dependencies__ --quiet bash
+test_check_proxmox_executes() {
+    __check_proxmox__ 2>/dev/null
+    assert_exit_code 0 $? "Should execute check_proxmox"
+}
 
-echo
-echo "All tests completed successfully."
+test_require_checks() {
+    __require_root_and_proxmox__ 2>/dev/null
+    assert_exit_code 0 $? "Should execute combined checks"
+}
+
+test_install_or_prompt() {
+    __install_or_prompt__ "curl" 2>/dev/null
+    assert_exit_code 0 $? "Should execute install_or_prompt"
+}
+
+test_ensure_dependencies() {
+    __ensure_dependencies__ --quiet bash 2>/dev/null
+    assert_exit_code 0 $? "Should execute ensure_dependencies"
+}
+
+################################################################################
+# RUN TEST SUITE
+################################################################################
+
+run_test_suite "Prompts Functions" \
+    test_check_root_executes \
+    test_check_proxmox_executes \
+    test_require_checks \
+    test_install_or_prompt \
+    test_ensure_dependencies
+
+exit $?

@@ -4,10 +4,10 @@
 #
 # Examples:
 #   # Using password:
-#   ./AdaptMacPrefixByVMID.sh 1300 1310 root 'Sup3rSecret!'
+#   AdaptMacPrefixByVMID.sh 1300 1310 root 'Sup3rSecret!'
 #
 #   # Using SSH key (pass '-' for password):
-#   ./AdaptMacPrefixByVMID.sh 1300 1310 root - /root/.ssh/id_rsa
+#   AdaptMacPrefixByVMID.sh 1300 1310 root - /root/.ssh/id_rsa
 #
 # Notes:
 # - Runs on the OUTER Proxmox host.
@@ -16,8 +16,15 @@
 #   and rewrite MACs in /etc/pve/qemu-server/*.conf and /etc/pve/lxc/*.conf.
 #
 # Usage:
-#   ./AdaptMacPrefixByVMID.sh <startVMID> <endVMID> <sshUser> <sshPasswordOrDash> [sshKeyPath]
+#   AdaptMacPrefixByVMID.sh <startVMID> <endVMID> <sshUser> <sshPasswordOrDash> [sshKeyPath]
 #
+# Function Index:
+#   - rewrite_file_mac_prefix
+#
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"

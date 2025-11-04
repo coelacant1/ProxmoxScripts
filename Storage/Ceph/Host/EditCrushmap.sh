@@ -7,20 +7,27 @@
 # map into a human-readable format or recompile it for use in the cluster.
 #
 # Usage:
-#   ./CephEditCrushmap.sh <command>
+#   CephEditCrushmap.sh <command>
 #
 # Examples:
 #   # Decompile the CRUSH map
-#   ./CephEditCrushmap.sh decompile
+#   CephEditCrushmap.sh decompile
 #
 #   # Recompile the CRUSH map
-#   ./CephEditCrushmap.sh compile
+#   CephEditCrushmap.sh compile
 #
 # Function Index:
 #   - decompileCrushMap
 #   - recompileCrushMap
 #
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
+
+set -u
 
 ###############################################################################
 # Environment Checks

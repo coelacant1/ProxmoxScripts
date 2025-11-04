@@ -9,15 +9,23 @@
 #   3. Optionally overwrite the disk with zeroes.
 #
 # Usage:
-#   ./CephWipeDisk.sh /dev/sdX
+#   CephWipeDisk.sh /dev/sdX
 #
 # Example:
-#   ./CephWipeDisk.sh /dev/sdb
+#   CephWipeDisk.sh /dev/sdb
 #
 # Notes:
 # - This script must be run as root (sudo).
 # - Make sure you specify the correct disk. This operation is destructive!
 #
+
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 

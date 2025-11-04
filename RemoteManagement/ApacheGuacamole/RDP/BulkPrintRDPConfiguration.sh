@@ -2,111 +2,120 @@
 #
 # BulkPrintRDPConfiguration.sh
 #
-# This script searches for Guacamole connections whose name contains a given substring
-# and whose protocol is RDP, retrieves the complete configuration for each (connection
-# details and parameters), and then prints the full JSON configuration.
+# Searches for Guacamole RDP connections by name substring and prints their full configuration.
 #
 # Usage:
-#   ./BulkPrintRDPConfiguration.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
+#   BulkPrintRDPConfiguration.sh <guac_url> <search_substring> [data_source]
 #
-# Example:
-#   ./BulkPrintRDPConfiguration.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+# Arguments:
+#   guac_url         - Guacamole server URL (e.g., http://172.20.192.10:8080/guacamole)
+#   search_substring - Substring to match in connection names (case-insensitive)
+#   data_source      - Optional data source (default: mysql)
+#
+# Examples:
+#   BulkPrintRDPConfiguration.sh "http://172.20.192.10:8080/guacamole" "Clone"
+#   BulkPrintRDPConfiguration.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+#
+# Function Index:
+#   - main
 #
 
-# Optionally load utility functions (if you have them available)
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-__install_or_prompt__ "jq"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
-# Assign input parameters
-GUAC_URL="$1"
-SEARCH_SUBSTRING="$2"
-GUAC_DATA_SOURCE="${3:-mysql}"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
-    echo "Error: Missing required arguments."
-    echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
-    exit 1
-fi
+__parse_args__ "guac_url:url search_substring:string data_source:string=mysql" "$@"
 
-# Ensure a Guacamole auth token exists
-if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
-    echo "Error: No Guacamole auth token found in /tmp/cc_pve/guac_token."
-    echo "Please run GetGuacToken.sh first."
-    exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __install_or_prompt__ "jq"
 
-AUTH_TOKEN="$(cat /tmp/cc_pve/guac_token)"
-echo "Using data source: '$GUAC_DATA_SOURCE'"
-
-###############################################################################
-# Retrieve the connection tree from Guacamole
-###############################################################################
-echo "Retrieving connection tree from Guacamole..."
-connectionsJson="$(curl -s -X GET \
-  "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
-
-if [[ -z "$connectionsJson" ]]; then
-  echo "Error: Could not retrieve connection tree from Guacamole."
-  exit 1
-fi
-
-###############################################################################
-# Filter matching RDP connections (by partial name match)
-###############################################################################
-echo "Searching for RDP connections with names containing '$SEARCH_SUBSTRING'..."
-matchingConnections=$(echo "$connectionsJson" | jq -r \
-  --arg SUBSTR "$SEARCH_SUBSTRING" '
-    [ (.childConnections // [])[] 
-      | select(.name | test($SUBSTR; "i"))
-      | select(.protocol == "rdp")
-      | { id: .identifier, name: .name } ]
-  ')
-
-# Check if any matches were found.
-if [[ "$(echo "$matchingConnections" | jq 'length')" -eq 0 ]]; then
-  echo "No RDP connections found matching '$SEARCH_SUBSTRING'."
-  exit 0
-fi
-
-echo "Found matching RDP connections:"
-echo "$matchingConnections" | jq .
-
-###############################################################################
-# For each matching connection, print the entire configuration
-###############################################################################
-echo "---------------------------------------------"
-echo "Printing complete configuration for matching RDP connections..."
-echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
-    connId=$(echo "$conn" | jq -r '.id')
-    connName=$(echo "$conn" | jq -r '.name')
-    
-    echo "---------------------------------------------"
-    echo "Configuration for Connection ID: $connId"
-    echo "Connection Name: $connName"
-    
-    # Retrieve the full connection JSON using the identifier.
-    connectionInfo=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
-    if [[ -z "$connectionInfo" ]]; then
-      echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
-      continue
+    # Check for auth token
+    if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
+        __err__ "No Guacamole auth token found in /tmp/cc_pve/guac_token. Run GetGuacamoleAuthenticationToken.sh first"
     fi
 
-    # Retrieve existing parameters from the dedicated endpoint.
-    existingParams=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
-    
-    # Default to an empty object if no parameters are returned.
-    existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
-    
-    # Merge the connection info with its parameters.
-    fullConfig=$(echo "$connectionInfo" | jq --argjson params "$existingParams" '
-        . + { parameters: $params }
-    ')
-    
-    # Print the full configuration in a pretty format.
-    echo "$fullConfig" | jq .
-done
+    local auth_token
+    auth_token="$(cat /tmp/cc_pve/guac_token)"
 
-echo "Completed printing configurations for all matching RDP connections."
+    __info__ "Using data source: '$DATA_SOURCE'"
+    __update__ "Retrieving connection tree from Guacamole..."
+
+    local connections_json
+    connections_json="$(curl -s -X GET \
+      "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connectionGroups/ROOT/tree?token=${auth_token}")"
+
+    if [[ -z "$connections_json" ]]; then
+        __err__ "Could not retrieve connection tree from Guacamole"
+    fi
+
+    __update__ "Searching for RDP connections with names containing '$SEARCH_SUBSTRING'..."
+    local matching_connections
+    matching_connections=$(echo "$connections_json" | jq -r \
+      --arg SUBSTR "$SEARCH_SUBSTRING" '
+        [ (.childConnections // [])[]
+          | select(.name | test($SUBSTR; "i"))
+          | select(.protocol == "rdp")
+          | { id: .identifier, name: .name } ]
+      ')
+
+    local match_count
+    match_count=$(echo "$matching_connections" | jq 'length')
+
+    if [[ "$match_count" -eq 0 ]]; then
+        __info__ "No RDP connections found matching '$SEARCH_SUBSTRING'"
+        exit 0
+    fi
+
+    __info__ "Found $match_count matching RDP connection(s)"
+    echo "$matching_connections" | jq .
+
+    echo "---------------------------------------------"
+    __info__ "Printing complete configuration for matching RDP connections..."
+
+    echo "$matching_connections" | jq -c '.[]' | while read -r conn; do
+        local conn_id conn_name
+        conn_id=$(echo "$conn" | jq -r '.id')
+        conn_name=$(echo "$conn" | jq -r '.name')
+
+        echo "---------------------------------------------"
+        echo "Configuration for Connection ID: $conn_id"
+        echo "Connection Name: $conn_name"
+
+        local connection_info
+        connection_info=$(curl -s -X GET \
+          "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}?token=${auth_token}")
+
+        if [[ -z "$connection_info" ]]; then
+            __warn__ "Could not retrieve details for connection ID '$conn_id'. Skipping."
+            continue
+        fi
+
+        local existing_params
+        existing_params=$(curl -s -X GET \
+          "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}/parameters?token=${auth_token}")
+
+        existing_params=$(echo "$existing_params" | jq 'if . == null then {} else . end')
+
+        local full_config
+        full_config=$(echo "$connection_info" | jq --argjson params "$existing_params" '
+            . + { parameters: $params }
+        ')
+
+        echo "$full_config" | jq .
+    done
+
+    __ok__ "Completed printing configurations for all matching RDP connections"
+}
+
+main
+
+# Testing status:
+#   - Pending validation

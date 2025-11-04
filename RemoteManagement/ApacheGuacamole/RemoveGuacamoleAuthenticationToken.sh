@@ -2,31 +2,49 @@
 #
 # RemoveGuacamoleAuthenticationToken.sh
 #
-# This script deletes the locally saved Guacamole authentication token
-# stored in /tmp/cc_pve/guac_token.
+# Deletes the locally saved Guacamole authentication token.
 #
 # Usage:
-#   ./RemoveGuacamoleAuthenticationToken.sh
+#   RemoveGuacamoleAuthenticationToken.sh
 #
-# Example:
-#   ./RemoveGuacamoleAuthenticationToken.sh
+# Examples:
+#   RemoveGuacamoleAuthenticationToken.sh
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main Logic
-###############################################################################
 TOKEN_PATH="/tmp/cc_pve/guac_token"
 
-if [[ ! -f "$TOKEN_PATH" ]]; then
-  echo "No Guacamole auth token found at '$TOKEN_PATH'. Nothing to delete."
-else
-  rm -f "$TOKEN_PATH"
-  echo "Guacamole auth token deleted from '$TOKEN_PATH'."
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-__prompt_keep_installed_packages__
+    if [[ ! -f "$TOKEN_PATH" ]]; then
+        __warn__ "No Guacamole auth token found"
+        __info__ "Expected location: $TOKEN_PATH"
+        exit 0
+    fi
+
+    rm -f "$TOKEN_PATH"
+    __ok__ "Guacamole auth token deleted"
+    __info__ "Location: $TOKEN_PATH"
+
+    __prompt_keep_installed_packages__
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

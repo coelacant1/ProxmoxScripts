@@ -7,8 +7,8 @@
 # units and restarts them safely with systemd.
 #
 # Usage:
-#   ./RestartManager.sh restart     # (default) Restart mgr daemons
-#   ./RestartManager.sh status      # Show mgr daemon status only
+#   RestartManager.sh restart     # (default) Restart mgr daemons
+#   RestartManager.sh status      # Show mgr daemon status only
 #
 # Function Index:
 #   - _find_mgr_units
@@ -16,9 +16,13 @@
 #   - statusMgr
 #
 
+set -euo pipefail
+
 # ---------------------------------------------------------------------------
 # Prerequisites
 # ---------------------------------------------------------------------------
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 
 __check_root__
@@ -44,7 +48,7 @@ function restartMgr() {
 
     echo "Restarting Ceph Manager daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-mgr daemons have been restarted."

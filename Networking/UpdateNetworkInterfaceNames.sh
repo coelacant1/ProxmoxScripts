@@ -1,120 +1,140 @@
 #!/bin/bash
 #
-# UpdateInterfaceNames.sh
+# UpdateNetworkInterfaceNames.sh
 #
-# This script updates /etc/network/interfaces to match new network interface names as found in `ip a`.
-# It creates a backup, attempts to map old names to new names, and handles multiple occurrences
-# of the same interface (e.g., bond-slaves).
+# Updates /etc/network/interfaces to match current interface names from 'ip a'.
 #
 # Usage:
-#   ./UpdateInterfaceNames.sh
+#   UpdateNetworkInterfaceNames.sh
 #
-# No arguments are required.
+# Examples:
+#   UpdateNetworkInterfaceNames.sh
 #
 # Function Index:
-#   - updateInterfaceNames
+#   - update_interface_name
+#   - main
 #
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# PRE-CHECKS
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-__check_root__
-__check_proxmox__
+# --- update_interface_name ---------------------------------------------------
+update_interface_name() {
+    local old_name="$1"
+    local new_name="$2"
+    local config_file="$3"
 
-###############################################################################
-# CONFIG / CONSTANTS
-###############################################################################
-
-CONFIG_FILE="/etc/network/interfaces"
-BACKUP_FILE="/etc/network/interfaces.bak-$(date +%Y%m%d%H%M%S)"
-
-###############################################################################
-# BACKUP ORIGINAL FILE
-###############################################################################
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "ERROR: \"$CONFIG_FILE\" not found. Exiting."
-  exit 1
-fi
-
-cp "$CONFIG_FILE" "$BACKUP_FILE"
-echo "Backed up \"$CONFIG_FILE\" to \"$BACKUP_FILE\"."
-
-###############################################################################
-# HELPER FUNCTIONS
-###############################################################################
-
-updateInterfaceNames() {
-  local oldName="$1"
-  local newName="$2"
-
-  if grep -q "\b${oldName}\b" "$CONFIG_FILE"; then
-    sed -i "s/\b${oldName}\b/${newName}/g" "$CONFIG_FILE"
-    echo " - Updated interface name: \"$oldName\" => \"$newName\""
-  else
-    echo " - Skipping: \"$oldName\" not found in \"$CONFIG_FILE\""
-  fi
+    if grep -q "\b${old_name}\b" "$config_file"; then
+        sed -i "s/\b${old_name}\b/${new_name}/g" "$config_file"
+        __ok__ "Updated: $old_name => $new_name"
+        return 0
+    else
+        __info__ "Skipped: $old_name not found"
+        return 1
+    fi
 }
 
-###############################################################################
-# MAIN LOGIC
-###############################################################################
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-declare -A INTERFACE_MAP
-declare -A BASE_NAME_COUNT
+    local config_file="/etc/network/interfaces"
+    local backup_file="${config_file}.bak-$(date +%Y%m%d%H%M%S)"
 
-echo
-echo "=== Scanning current interfaces via 'ip a' ==="
-
-while read -r ipLine; do
-  if [[ $ipLine =~ ^[0-9]+:\ ([^:]+): ]]; then
-    interface="${BASH_REMATCH[1]}"
-
-    # Skip loopback, tunnels, or other special interfaces
-    if [[ "$interface" == "lo" ]] || [[ "$interface" == *"tap"* ]] || [[ "$interface" == *"veth"* ]]; then
-      continue
+    if [[ ! -f "$config_file" ]]; then
+        __err__ "Network interfaces file not found: $config_file"
+        exit 1
     fi
 
-    # Derive base name from the new interface name (example logic)
-    baseName=$(echo "$interface" | sed -E 's/^en?p[0-9]//; s/[0-9]+$//')
+    __info__ "Updating network interface names"
 
-    if [ -n "$baseName" ]; then
-      if [ -z "${INTERFACE_MAP[$baseName]}" ]; then
-        INTERFACE_MAP[$baseName]="$interface"
-        BASE_NAME_COUNT[$baseName]=1
-      else
-        count="${BASE_NAME_COUNT[$baseName]}"
-        newCount=$((count + 1))
-        BASE_NAME_COUNT[$baseName]="$newCount"
-        echo "WARNING: Multiple new interfaces share the base name \"$baseName\" => \"$interface\" and \"${INTERFACE_MAP[$baseName]}\""
-      fi
+    # Create backup
+    if cp "$config_file" "$backup_file" 2>&1; then
+        __ok__ "Backed up to: $backup_file"
+    else
+        __err__ "Failed to create backup"
+        exit 1
     fi
-  fi
-done < <(ip a)
 
-if [ ${#INTERFACE_MAP[@]} -eq 0 ]; then
-  echo "No usable network interfaces found via 'ip a' (excluding lo/tap/veth). Exiting."
-  exit 0
-fi
+    # Scan interfaces
+    __info__ "Scanning current interfaces"
 
-echo
-echo "=== Updating \"$CONFIG_FILE\" based on derived mappings ==="
+    declare -A interface_map
+    declare -A base_name_count
 
-for baseName in "${!INTERFACE_MAP[@]}"; do
-  oldName="$baseName"
-  newName="${INTERFACE_MAP[$baseName]}"
+    while read -r ip_line; do
+        if [[ $ip_line =~ ^[0-9]+:\ ([^:]+): ]]; then
+            local interface="${BASH_REMATCH[1]}"
 
-  if [ "$oldName" == "$newName" ]; then
-    continue
-  fi
-  updateInterfaceNames "$oldName" "$newName"
-done
+            # Skip special interfaces
+            if [[ "$interface" == "lo" ]] || [[ "$interface" == *"tap"* ]] || \
+               [[ "$interface" == *"veth"* ]] || [[ "$interface" == *"fwbr"* ]]; then
+                continue
+            fi
 
-echo
-echo "=== Done! ==="
-echo "Your network interfaces file has been updated."
-echo "Original backup: \"$BACKUP_FILE\""
-echo "Please review \"$CONFIG_FILE\" for correctness, then manually restart networking."
-echo
+            # Derive base name
+            local base_name
+            base_name=$(echo "$interface" | sed -E 's/^en?p[0-9]//; s/[0-9]+$//')
+
+            if [[ -n "$base_name" ]]; then
+                if [[ -z "${interface_map[$base_name]:-}" ]]; then
+                    interface_map[$base_name]="$interface"
+                    base_name_count[$base_name]=1
+                else
+                    local count="${base_name_count[$base_name]}"
+                    base_name_count[$base_name]=$((count + 1))
+                    __warn__ "Multiple interfaces for base: $base_name"
+                fi
+            fi
+        fi
+    done < <(ip a)
+
+    if [[ ${#interface_map[@]} -eq 0 ]]; then
+        __warn__ "No usable network interfaces found"
+        exit 0
+    fi
+
+    __info__ "Found ${#interface_map[@]} interface mapping(s)"
+
+    # Update interface names
+    local updated=0
+    for base_name in "${!interface_map[@]}"; do
+        local old_name="$base_name"
+        local new_name="${interface_map[$base_name]}"
+
+        if [[ "$old_name" == "$new_name" ]]; then
+            continue
+        fi
+
+        if update_interface_name "$old_name" "$new_name" "$config_file"; then
+            ((updated++))
+        fi
+    done
+
+    echo
+    if [[ $updated -gt 0 ]]; then
+        __ok__ "Updated $updated interface name(s)"
+        __warn__ "Network restart required to apply changes"
+        __info__ "Commands:"
+        __info__ "  systemctl restart networking"
+        __info__ "  OR ifreload -a"
+    else
+        __info__ "No interface names needed updating"
+    fi
+
+    __info__ "Review configuration: $config_file"
+    __info__ "Backup available: $backup_file"
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

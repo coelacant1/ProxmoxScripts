@@ -1,39 +1,49 @@
 #!/bin/bash
 #
-# CephSetPoolMinSize1.sh
+# SetPoolMinSize1.sh
 #
-# This script sets the 'min_size' parameter of a specified Ceph storage pool to 1.
-# This allows the pool to operate with a single replica in degraded mode when necessary.
+# Sets the min_size parameter of a Ceph pool to 1, allowing degraded mode operation.
 #
 # Usage:
-#   ./CephSetPoolMinSize1.sh <pool_name>
+#   SetPoolMinSize1.sh <pool_name>
 #
-# Example:
-#   # Sets the min_size to 1 for the 'mypool' storage pool
-#   ./CephSetPoolMinSize1.sh mypool
+# Arguments:
+#   pool_name - Name of the Ceph storage pool
 #
+# Examples:
+#   SetPoolMinSize1.sh mypool
+#
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
-###############################################################################
-# Main
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [ -z "$1" ]; then
-  echo "Error: No pool name provided."
-  echo "Usage: $0 <pool_name>"
-  exit 1
-fi
+__parse_args__ "pool_name:string" "$@"
 
-POOL_NAME="$1"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "Setting min_size of pool '$POOL_NAME' to 1..."
-ceph osd pool set "$POOL_NAME" min_size 1 --yes-i-really-mean-it
+    __update__ "Setting min_size=1 for pool '$POOL_NAME'"
+    if ceph osd pool set "$POOL_NAME" min_size 1 --yes-i-really-mean-it &>/dev/null; then
+        __ok__ "min_size set to 1 for pool '$POOL_NAME'"
+    else
+        __err__ "Failed to set min_size for pool '$POOL_NAME'"
+    fi
+}
 
-if [ $? -eq 0 ]; then
-  echo "min_size has been set to 1 for pool '$POOL_NAME'."
-else
-  echo "Error: Failed to set min_size for pool '$POOL_NAME'."
-  exit 1
-fi
+main
+
+# Testing status:
+#   - Pending validation

@@ -2,116 +2,142 @@
 #
 # AddNetworkBond.sh
 #
-# This script configures network interfaces for bonding and VLAN bridging on a
-# Proxmox 8 environment. It checks if the necessary inputs are provided, creates
-# configuration entries for a specified bond and VLAN ID, and inserts these
-# entries into the network configuration file in a sorted order based on
-# interface names. The script ensures that duplicate entries are not added, then
-# prompts the user to manually restart the network services to apply changes.
+# Configures network bonding and VLAN bridging in Proxmox network interfaces.
 #
 # Usage:
-#   ./AddNetworkBond.sh <bond_base> <vlan_id>
+#   AddNetworkBond.sh <bond_base> <vlan_id>
+#
+# Arguments:
+#   bond_base - Base bond name (e.g., bond0)
+#   vlan_id - VLAN ID to configure
 #
 # Examples:
-#   # Configure VLAN 10 for bond0
-#   ./AddNetworkBond.sh bond0 10
-#
-#   # Configure VLAN 20 for bond1
-#   ./AddNetworkBond.sh bond1 20
-#
-# Where:
-#   bond_base - The base name of the network bond (e.g., "bond0")
-#   vlan_id   - The VLAN ID to configure with the bond
+#   AddNetworkBond.sh bond0 10
+#   AddNetworkBond.sh bond1 20
 #
 # Function Index:
 #   - insert_sorted_config
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Environment Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Dependency Checks (if needed for bonding)
-###############################################################################
-__install_or_prompt__ "ifenslave"
-
-###############################################################################
-# Usage Check
-###############################################################################
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <bond_base> <vlan_id>"
-  exit 1
-fi
-
-###############################################################################
-# Variable Initialization
-###############################################################################
-CONFIG_FILE="/etc/network/interfaces"
-BOND_BASE="$1"
-VLAN_ID="$2"
-BOND_NAME="${BOND_BASE}.${VLAN_ID}"
-VMBR_NAME="vmbr${VLAN_ID}"
-
-###############################################################################
-# Insert Configuration in Sorted Order
-###############################################################################
+# --- insert_sorted_config ----------------------------------------------------
 insert_sorted_config() {
-  local insertName="$1"
-  local insertConfig="$2"
-  local configType="$3"
+    local insert_name="$1"
+    local insert_config="$2"
+    local config_type="$3"
+    local config_file="$4"
 
-  local pattern="iface ${configType}[0-9]+"
-  local configBlock
-  configBlock=$(awk "/^auto $pattern/,/^\$/" RS= "$CONFIG_FILE")
+    local pattern="iface ${config_type}[0-9]+"
+    local config_block
+    config_block=$(awk "/^auto $pattern/,/^\$/" RS= "$config_file")
 
-  if echo "$configBlock" | grep -q "^auto $insertName\$"; then
-    echo "\"$insertName\" already exists in \"$CONFIG_FILE\"."
-    return 1
-  fi
+    if echo "$config_block" | grep -q "^auto $insert_name\$"; then
+        __warn__ "$insert_name already exists in configuration"
+        return 1
+    fi
 
-  local sortedBlock
-  sortedBlock=$(echo -e "$configBlock\nauto $insertName\n$insertConfig" | sort -V)
+    local sorted_block
+    sorted_block=$(echo -e "$config_block\nauto $insert_name\n$insert_config" | sort -V)
 
-  awk -v pat="^auto $pattern\$" -v sorted="$sortedBlock" '
-    /^auto '"$configType"'[0-9]+/,/^$/ {
-      if (!p) {
-        print sorted
-        p=1
+    awk -v pat="^auto $pattern\$" -v sorted="$sorted_block" '
+      /^auto '"$config_type"'[0-9]+/,/^$/ {
+        if (!p) {
+          print sorted
+          p=1
+        }
+        next
       }
-      next
-    }
-    { print }
-  ' RS= ORS='\n\n' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+      { print }
+    ' RS= ORS='\n\n' "$config_file" > "${config_file}.tmp"
 
-  mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    mv "${config_file}.tmp" "$config_file"
+    return 0
 }
 
-###############################################################################
-# Create Config Blocks
-###############################################################################
-bondConfig="auto $BOND_NAME
-iface $BOND_NAME inet manual
-    vlan-raw-device $BOND_BASE"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-vmbrConfig="auto $VMBR_NAME
-iface $VMBR_NAME inet manual
-    bridge_ports $BOND_NAME
+    __install_or_prompt__ "ifenslave"
+
+    if [[ $# -lt 2 ]]; then
+        __err__ "Missing required arguments"
+        echo "Usage: $0 <bond_base> <vlan_id>"
+        exit 64
+    fi
+
+    local bond_base="$1"
+    local vlan_id="$2"
+    local bond_name="${bond_base}.${vlan_id}"
+    local vmbr_name="vmbr${vlan_id}"
+    local config_file="/etc/network/interfaces"
+
+    if [[ ! -f "$config_file" ]]; then
+        __err__ "Network interfaces file not found: $config_file"
+        exit 1
+    fi
+
+    __info__ "Configuring network bond"
+    __info__ "  Bond: $bond_name"
+    __info__ "  VLAN ID: $vlan_id"
+    __info__ "  Bridge: $vmbr_name"
+
+    # Backup config file
+    local backup_file="${config_file}.bak-$(date +%Y%m%d%H%M%S)"
+    if cp "$config_file" "$backup_file" 2>&1; then
+        __ok__ "Backed up to: $backup_file"
+    else
+        __err__ "Failed to create backup"
+        exit 1
+    fi
+
+    # Create configuration blocks
+    local bond_config
+    bond_config="auto $bond_name
+iface $bond_name inet manual
+    vlan-raw-device $bond_base"
+
+    local vmbr_config
+    vmbr_config="auto $vmbr_name
+iface $vmbr_name inet manual
+    bridge_ports $bond_name
     bridge_stp off
     bridge_fd 0"
 
-###############################################################################
-# Insert Bond & Bridge Configuration
-###############################################################################
-insert_sorted_config "$BOND_NAME" "$bondConfig" "$BOND_BASE"
-insert_sorted_config "$VMBR_NAME" "$vmbrConfig" "vmbr"
+    # Insert configurations
+    __update__ "Adding bond configuration"
+    if insert_sorted_config "$bond_name" "$bond_config" "$bond_base" "$config_file"; then
+        __ok__ "Bond configuration added"
+    fi
 
-echo "Configuration potentially added to \"$CONFIG_FILE\". Please review for accuracy."
-echo "Manually restart networking or the interfaces to apply changes."
+    __update__ "Adding bridge configuration"
+    if insert_sorted_config "$vmbr_name" "$vmbr_config" "vmbr" "$config_file"; then
+        __ok__ "Bridge configuration added"
+    fi
 
-__prompt_keep_installed_packages__
+    echo
+    __ok__ "Network bond configuration completed!"
+    __warn__ "Network restart required to apply changes"
+    __info__ "Commands:"
+    __info__ "  systemctl restart networking"
+    __info__ "  OR ifreload -a"
+    __info__ "Review configuration: $config_file"
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

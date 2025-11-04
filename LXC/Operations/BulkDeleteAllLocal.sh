@@ -2,56 +2,105 @@
 #
 # BulkDeleteAllLocal.sh
 #
-# This script deletes all LXC containers on the local Proxmox node.
-# It enumerates container IDs and stops/destroys each one.
+# Deletes all LXC containers on the local Proxmox node.
+# WARNING: This permanently deletes ALL containers on the current node.
 #
 # Usage:
-#   ./BulkDeleteAllLocal.sh
+#   BulkDeleteAllLocal.sh [--force]
 #
-# Warning:
-#   This will remove ALL LXC containers on this node. Use with caution!
+# Arguments:
+#   --force - Skip confirmation prompt
+#
+# Examples:
+#   BulkDeleteAllLocal.sh
+#   BulkDeleteAllLocal.sh --force
+#
+# Function Index:
+#   - main
+#   - delete_ct_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/ProxmoxAPI.sh
+source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# Environment Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main Logic
-###############################################################################
-echo "=== Listing all containers on this node ==="
-readarray -t CONTAINER_IDS < <( __get_server_lxc__ "local" )
+# Parse arguments
+__parse_args__ "--force:flag" "$@"
 
-if [ -z "${CONTAINER_IDS[*]}" ]; then
-  echo "No LXC containers found on this node."
-  exit 0
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "The following containers will be deleted:"
-printf '%s\n' "${CONTAINER_IDS[@]}"
-read -p "Are you sure you want to delete ALL of these containers? (yes/no) " confirm
-if [ "$confirm" != "yes" ]; then
-  echo "Aborting."
-  exit 1
-fi
+    # Get list of all local container IDs
+    local ct_ids
+    ct_ids=$(pct list | awk 'NR>1 {print $1}')
 
-for ctId in "${CONTAINER_IDS[@]}"; do
-  echo "Stopping CT \"$ctId\" ..."
-  pct stop "$ctId" &>/dev/null
+    if [[ -z "$ct_ids" ]]; then
+        __info__ "No containers found on this Proxmox node"
+        exit 0
+    fi
 
-  echo "Destroying CT \"$ctId\" ..."
-  pct destroy "$ctId" &>/dev/null
+    # Convert to array
+    local -a ct_array
+    read -r -a ct_array <<< "$ct_ids"
 
-  if [ $? -eq 0 ]; then
-    echo " - Successfully deleted CT \"$ctId\""
-  else
-    echo " - Failed to delete CT \"$ctId\""
-  fi
-done
+    __warn__ "This will permanently delete ${#ct_array[@]} container(s) on this node:"
+    echo "$ct_ids"
 
-echo "=== All LXC containers on this node have been deleted. ==="
+    # Confirm unless --force
+    if [[ -z "${FORCE:-}" ]]; then
+        if ! __prompt_yes_no__ "Are you sure you want to delete all containers?"; then
+            __info__ "Operation canceled"
+            exit 0
+        fi
+    fi
+
+    # Local callback for bulk operation
+    delete_ct_callback() {
+        local vmid="$1"
+
+        # Disable protection
+        __ct_set_protection__ "$vmid" 0
+
+        # Stop container
+        __ct_stop__ "$vmid"
+
+        # Delete container
+        __ct_delete__ "$vmid" --purge
+    }
+
+    # Process each container
+    BULK_OPERATION_NAME="Delete"
+    for vmid in "${ct_array[@]}"; do
+        if delete_ct_callback "$vmid"; then
+            ((BULK_SUCCESS++))
+        else
+            ((BULK_FAILED++))
+            BULK_FAILED_IDS+=("$vmid")
+        fi
+    done
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All containers deleted successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

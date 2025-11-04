@@ -6,17 +6,17 @@
 # or sequentially across all nodes in the cluster, then report the results.
 #
 # Usage:
-#   ./UplinkSpeedTest.sh [all|<node1> <node2> ...]
+#   UplinkSpeedTest.sh [all|<node1> <node2> ...]
 #
 # Examples:
 #   # Run speed test on the local node
-#   ./UplinkSpeedTest.sh
+#   UplinkSpeedTest.sh
 #
 #   # Run speed test on all nodes in the cluster
-#   ./UplinkSpeedTest.sh all
+#   UplinkSpeedTest.sh all
 #
 #   # Run speed test on specific remote nodes (by name or IP)
-#   ./UplinkSpeedTest.sh pve02 172.20.83.23
+#   UplinkSpeedTest.sh pve02 172.20.83.23
 #
 # This script requires:
 #   - 'speedtest' (or 'speedtest-cli') on each node
@@ -24,144 +24,130 @@
 #   - A Proxmox environment (pvecm, etc.) if using cluster features
 #
 # Function Index:
-#   - usage
 #   - run_speedtest_on_node
 #   - resolve_node_argument_to_ip
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# Global Variables
-###############################################################################
-LOCAL_NODE_NAME="$(hostname)"    # OS-level hostname
-LOCAL_NODE_IP=""                 # Populated after __init_node_mappings__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Usage Display
-###############################################################################
-usage() {
-  echo "Usage: $0 [all|<node1> <node2> ...]"
-  echo
-  echo "Examples:"
-  echo "  # Test speed locally only"
-  echo "  $0"
-  echo
-  echo "  # Test speed on all nodes in the cluster"
-  echo "  $0 all"
-  echo
-  echo "  # Test speed on specific nodes (by name or IP)"
-  echo "  $0 pve02 172.20.83.23"
-  exit 1
-}
-
-###############################################################################
-# Verify 'speedtest' is Installed (Prompt to Install if Missing)
-###############################################################################
-__install_or_prompt__ "speedtest-cli"
-
-###############################################################################
-# Run Speedtest on Single Node (Local or Remote)
-# Parameters:
-#   1 -> IP Address of the Node
-###############################################################################
+# --- run_speedtest_on_node --------------------------------------------------
 run_speedtest_on_node() {
-  local nodeIp="$1"
+    local node_ip="$1"
+    local local_node_ip="$2"
 
-  # If the node IP matches our local IP, run locally
-  if [[ "$nodeIp" == "$LOCAL_NODE_IP" ]]; then
-    echo "Running speed test locally on IP: \"$nodeIp\""
-    speedtest
-  else
-    echo "Running speed test on remote node with IP: \"$nodeIp\""
-    ssh "root@$nodeIp" "speedtest"
-  fi
+    if [[ "$node_ip" == "$local_node_ip" ]]; then
+        __info__ "Running speed test locally on IP: $node_ip"
+        speedtest-cli
+    else
+        __info__ "Running speed test on remote node with IP: $node_ip"
+        ssh "root@${node_ip}" "speedtest-cli"
+    fi
 }
 
-###############################################################################
-# Resolve a Node Argument to an IP
-# - If the argument is already an IP, return it
-# - Otherwise, attempt to resolve via __get_ip_from_name__
-###############################################################################
+# --- resolve_node_argument_to_ip ---------------------------------------------
 resolve_node_argument_to_ip() {
-  local arg="$1"
+    local arg="$1"
 
-  # Simple check if arg looks like an IPv4 address
-  if [[ "$arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "$arg"
-  else
-    # Attempt to resolve name -> IP
-    __get_ip_from_name__ "$arg"
-  fi
+    # Simple check if arg looks like an IPv4 address
+    if [[ "$arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "$arg"
+    else
+        # Attempt to resolve name -> IP
+        __get_ip_from_name__ "$arg"
+    fi
 }
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-__check_root__          # Ensure running as root
-__check_proxmox__       # Ensure running on a Proxmox node
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-# Make sure speedtest is installed locally (remote nodes also need it)
-verify_speedtest_installed
+    # Check for help flag
+    if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+        echo "Usage: $0 [all|<node1> <node2> ...]"
+        echo
+        echo "Examples:"
+        echo "  # Test speed locally only"
+        echo "  $0"
+        echo
+        echo "  # Test speed on all nodes in the cluster"
+        echo "  $0 all"
+        echo
+        echo "  # Test speed on specific nodes (by name or IP)"
+        echo "  $0 pve02 172.20.83.23"
+        exit 0
+    fi
 
-# If user asked for help
-if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-  usage
-fi
+    __install_or_prompt__ "speedtest-cli"
 
-# If no arguments, test speed on local node only
-if [[ $# -eq 0 ]]; then
-  # Initialize node mappings to find local node IP
-  __init_node_mappings__
-  LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
-    echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
-    exit 1
-  }
-  run_speedtest_on_node "$LOCAL_NODE_IP"
-  exit 0
-fi
+    local local_node_name
+    local_node_name="$(hostname)"
 
-# If "all" was specified, we run on local + remote cluster nodes
-if [[ "$1" == "all" ]]; then
-  __check_cluster_membership__
-  __init_node_mappings__
+    # If no arguments, test speed on local node only
+    if [[ $# -eq 0 ]]; then
+        __init_node_mappings__
+        local local_node_ip
+        local_node_ip="$(__get_ip_from_name__ "$local_node_name")"
 
-  # Get local IP from name
-  LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
-    echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
-    exit 1
-  }
+        run_speedtest_on_node "$local_node_ip" "$local_node_ip"
+        __prompt_keep_installed_packages__
+        exit 0
+    fi
 
-  # Run local test first
-  echo "Running speed test on local node..."
-  run_speedtest_on_node "$LOCAL_NODE_IP"
-  echo "-----------------------------------------------------"
+    # If "all" was specified, run on local + remote cluster nodes
+    if [[ "$1" == "all" ]]; then
+        __check_cluster_membership__
+        __init_node_mappings__
 
-  # Then run on remote nodes
-  echo "Gathering remote node IPs..."
-  readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
-  for nodeIp in "${REMOTE_NODES[@]}"; do
-    run_speedtest_on_node "$nodeIp"
-    echo "-----------------------------------------------------"
-  done
-  exit 0
-fi
+        local local_node_ip
+        local_node_ip="$(__get_ip_from_name__ "$local_node_name")"
 
-# Otherwise, treat each argument as a node name or IP
-__init_node_mappings__
-LOCAL_NODE_IP="$(__get_ip_from_name__ "$LOCAL_NODE_NAME")" || {
-  echo "Error: Could not determine IP for local node \"$LOCAL_NODE_NAME\"."
-  exit 1
+        # Run local test first
+        __info__ "Running speed test on local node..."
+        run_speedtest_on_node "$local_node_ip" "$local_node_ip"
+        echo "-----------------------------------------------------"
+
+        # Then run on remote nodes
+        __info__ "Gathering remote node IPs..."
+        local -a remote_nodes
+        mapfile -t remote_nodes < <(__get_remote_node_ips__)
+
+        for node_ip in "${remote_nodes[@]}"; do
+            run_speedtest_on_node "$node_ip" "$local_node_ip"
+            echo "-----------------------------------------------------"
+        done
+
+        __prompt_keep_installed_packages__
+        exit 0
+    fi
+
+    # Otherwise, treat each argument as a node name or IP
+    __init_node_mappings__
+    local local_node_ip
+    local_node_ip="$(__get_ip_from_name__ "$local_node_name")"
+
+    for arg in "$@"; do
+        local node_ip
+        node_ip="$(resolve_node_argument_to_ip "$arg")"
+        run_speedtest_on_node "$node_ip" "$local_node_ip"
+        echo "-----------------------------------------------------"
+    done
+
+    __prompt_keep_installed_packages__
 }
 
-for arg in "$@"; do
-  nodeIp="$(resolve_node_argument_to_ip "$arg")" || {
-    echo "Error: Could not resolve \"$arg\" to an IP. Exiting."
-    exit 1
-  }
-  run_speedtest_on_node "$nodeIp"
-  echo "-----------------------------------------------------"
-done
+main "$@"
 
-__prompt_keep_installed_packages__
+# Testing status:
+#   - Updated to use utility functions and ArgumentParser standards
+#   - Pending validation

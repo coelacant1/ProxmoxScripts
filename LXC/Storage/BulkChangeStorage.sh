@@ -1,62 +1,67 @@
 #!/bin/bash
 #
-# BulkChangeStorageLXC.sh
+# BulkChangeStorage.sh
 #
-# This script automates the process of updating the storage location specified in
-# the configuration files of LXC containers on a Proxmox server.
-# It is designed to bulk-update the storage paths for a range of LXC IDs
-# from one storage identifier to another.
+# Updates storage configuration in LXC container config files.
+# Changes storage identifiers (e.g., local-lvm to local-zfs).
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeStorageLXC.sh <start_id> <end_id> <hostname> <current_storage> <new_storage>
+#   BulkChangeStorage.sh <start_ct_id> <end_ct_id> <current_storage> <new_storage>
 #
 # Arguments:
-#   start_id         - The starting LXC ID for the operation.
-#   end_id           - The ending LXC ID for the operation.
-#   hostname         - The hostname of the Proxmox node where the LXCs are configured.
-#   current_storage  - The current identifier of the storage used in the LXC config (e.g., 'local-lvm').
-#   new_storage      - The new identifier of the storage to replace the current one (e.g., 'local-zfs').
+#   start_ct_id      - Starting container ID
+#   end_ct_id        - Ending container ID
+#   current_storage  - Current storage identifier (e.g., 'local-lvm')
+#   new_storage      - New storage identifier (e.g., 'local-zfs')
 #
-# Example:
-#   ./BulkChangeStorageLXC.sh 100 200 pve-node1 local-lvm local-zfs
+# Examples:
+#   BulkChangeStorage.sh 100 105 local-lvm local-zfs
+#
+# Function Index:
+#   - main
+#   - change_storage_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# Check environment and parse arguments
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [ $# -lt 5 ]; then
-    echo "Error: Missing arguments."
-    echo "Usage: ./BulkChangeStorageLXC.sh <start_id> <end_id> <hostname> <current_storage> <new_storage>"
-    exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid current_storage:string new_storage:string" "$@"
 
-START_ID="$1"
-END_ID="$2"
-HOST_NAME="$3"
-CURRENT_STORAGE="$4"
-NEW_STORAGE="$5"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-###############################################################################
-# Bulk update storage configuration in LXC containers
-###############################################################################
-for CT_ID in $(seq "$START_ID" "$END_ID"); do
-    CONFIG_FILE="/etc/pve/nodes/${HOST_NAME}/lxc/${CT_ID}.conf"
-    if [ -f "${CONFIG_FILE}" ]; then
-        echo "Processing LXC ID: '${CT_ID}'"
-        if grep -q "${CURRENT_STORAGE}" "${CONFIG_FILE}"; then
-            sed -i "s/${CURRENT_STORAGE}/${NEW_STORAGE}/g" "${CONFIG_FILE}"
-            echo " - Storage location changed from '${CURRENT_STORAGE}' to '${NEW_STORAGE}'."
-        else
-            echo " - '${CURRENT_STORAGE}' not found in config. No changes made."
-        fi
-    else
-        echo "LXC ID: '${CT_ID}' does not exist (no config file). Skipping..."
-    fi
-done
+    __info__ "Bulk change storage: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "From: ${CURRENT_STORAGE} -> To: ${NEW_STORAGE}"
 
-echo "Bulk storage identifier update complete."
+    change_storage_callback() {
+        local vmid="$1"
+        __ct_change_storage__ "$vmid" "$CURRENT_STORAGE" "$NEW_STORAGE"
+    }
+
+    __bulk_ct_operation__ --name "Change Storage" --report "$START_VMID" "$END_VMID" change_storage_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Storage configuration updated successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

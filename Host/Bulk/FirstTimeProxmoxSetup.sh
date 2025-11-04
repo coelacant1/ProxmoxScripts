@@ -9,10 +9,10 @@
 #   3. Disables the subscription nag for all nodes in the cluster.
 #
 # Usage:
-#   ./FirstTimeProxmoxSetup.sh
+#   FirstTimeProxmoxSetup.sh
 #
 # Example:
-#   ./FirstTimeProxmoxSetup.sh
+#   FirstTimeProxmoxSetup.sh
 #
 # Further details:
 #   This script will attempt to gather the IP addresses of all remote nodes in
@@ -25,6 +25,8 @@
 #   - setup_repositories
 #   - disable_subscription_nag
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Queries.sh"

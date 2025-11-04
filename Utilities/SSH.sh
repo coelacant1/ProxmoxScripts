@@ -11,11 +11,18 @@
 # Function Index:
 #   - __wait_for_ssh__
 #   - __ssh_exec__
-#   - __ssh_exec_script__
 #   - __scp_send__
 #   - __scp_fetch__
+#   - __ssh_exec_script__
+#   - __ssh_exec_function__
+#   - __ssh_exec__
+#   - __scp_send__
+#   - __scp_fetch__
+#   - __ssh_exec_script__
 #   - __ssh_exec_function__
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -41,7 +48,7 @@ __wait_for_ssh__() {
     local sshPassword="$3"
     local maxAttempts=20
     local delay=3
-    
+
     for attempt in $(seq 1 "$maxAttempts"); do
         if sshpass -p "$sshPassword" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
         "$sshUsername@$host" exit 2>/dev/null; then
@@ -51,7 +58,7 @@ __wait_for_ssh__() {
         echo "Attempt $attempt/$maxAttempts: SSH not ready on \"$host\"; waiting $delay seconds..."
         sleep "$delay"
     done
-    
+
     echo "Error: Could not connect to SSH on \"$host\" after $maxAttempts attempts."
     exit 1
 }
@@ -90,7 +97,7 @@ __ssh_exec__() {
     local useStrict=0
     local commandProvided=0
     local -a extraSshArgs=()
-    
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --host)
@@ -155,50 +162,50 @@ __ssh_exec__() {
             ;;
         esac
     done
-    
+
     if [ -z "$host" ] || [ -z "$user" ]; then
         echo "Error: __ssh_exec__ requires --host and --user." >&2
         return 1
     fi
-    
+
     if [ -z "$command" ] && [ "$commandProvided" -eq 0 ]; then
         echo "Error: __ssh_exec__ requires --command or -- followed by a command." >&2
         return 1
     fi
-    
+
     if [ -n "$identity" ] && [ ! -f "$identity" ]; then
         echo "Error: Identity file '$identity' not found." >&2
         return 1
     fi
-    
+
     local remoteCommand="$command"
     if [ -n "$shell" ]; then
         local shellWrapped=""
         printf -v shellWrapped '%s -lc %q' "$shell" "$remoteCommand"
         remoteCommand="$shellWrapped"
     fi
-    
+
     if [ "$useSudo" -eq 1 ]; then
         remoteCommand="sudo -H $remoteCommand"
     fi
-    
+
     local -a sshCmd=()
     if [ -n "$password" ]; then
         sshCmd+=(sshpass -p "$password")
     fi
-    
+
     sshCmd+=(ssh)
-    
+
     if [ -n "$identity" ]; then
         sshCmd+=(-i "$identity")
     fi
-    
+
     if [ -n "$port" ]; then
         sshCmd+=(-p "$port")
     fi
-    
+
     sshCmd+=(-o "BatchMode=no" -o "ConnectTimeout=$connectTimeout")
-    
+
     if [ "$useStrict" -eq 0 ]; then
         sshCmd+=(-o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null")
     else
@@ -206,13 +213,13 @@ __ssh_exec__() {
             sshCmd+=(-o "UserKnownHostsFile=$knownHosts")
         fi
     fi
-    
+
     if [ ${#extraSshArgs[@]} -gt 0 ]; then
         sshCmd+=("${extraSshArgs[@]}")
     fi
-    
+
     sshCmd+=("$user@$host" "$remoteCommand")
-    
+
     "${sshCmd[@]}"
 }
 
@@ -239,7 +246,7 @@ __scp_send__() {
     local recursive=0
     local -a sources=()
     local -a extraScpArgs=()
-    
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --host)
@@ -300,48 +307,48 @@ __scp_send__() {
             ;;
         esac
     done
-    
+
     if [ -z "$host" ] || [ -z "$user" ]; then
         echo "Error: __scp_send__ requires --host and --user." >&2
         return 1
     fi
-    
+
     if [ -z "$destination" ]; then
         echo "Error: __scp_send__ requires --destination." >&2
         return 1
     fi
-    
+
     if [ ${#sources[@]} -eq 0 ]; then
         echo "Error: __scp_send__ requires at least one --source." >&2
         return 1
     fi
-    
+
     if [ -n "$identity" ] && [ ! -f "$identity" ]; then
         echo "Error: Identity file '$identity' not found." >&2
         return 1
     fi
-    
+
     local -a scpCmd=()
     if [ -n "$password" ]; then
         scpCmd+=(sshpass -p "$password")
     fi
-    
+
     scpCmd+=(scp -q)
-    
+
     if [ "$recursive" -eq 1 ]; then
         scpCmd+=(-r)
     fi
-    
+
     if [ -n "$identity" ]; then
         scpCmd+=(-i "$identity")
     fi
-    
+
     if [ -n "$port" ]; then
         scpCmd+=(-P "$port")
     fi
-    
+
     scpCmd+=(-o "ConnectTimeout=$connectTimeout")
-    
+
     if [ "$useStrict" -eq 0 ]; then
         scpCmd+=(-o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null")
     else
@@ -349,13 +356,13 @@ __scp_send__() {
             scpCmd+=(-o "UserKnownHostsFile=$knownHosts")
         fi
     fi
-    
+
     if [ ${#extraScpArgs[@]} -gt 0 ]; then
         scpCmd+=("${extraScpArgs[@]}")
     fi
-    
+
     scpCmd+=("${sources[@]}" "$user@$host:$destination")
-    
+
     "${scpCmd[@]}"
 }
 
@@ -376,7 +383,7 @@ __scp_fetch__() {
     local recursive=0
     local -a sources=()
     local -a extraScpArgs=()
-    
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --host)
@@ -437,48 +444,48 @@ __scp_fetch__() {
             ;;
         esac
     done
-    
+
     if [ -z "$host" ] || [ -z "$user" ]; then
         echo "Error: __scp_fetch__ requires --host and --user." >&2
         return 1
     fi
-    
+
     if [ -z "$destination" ]; then
         echo "Error: __scp_fetch__ requires --destination." >&2
         return 1
     fi
-    
+
     if [ ${#sources[@]} -eq 0 ]; then
         echo "Error: __scp_fetch__ requires at least one --source." >&2
         return 1
     fi
-    
+
     if [ -n "$identity" ] && [ ! -f "$identity" ]; then
         echo "Error: Identity file '$identity' not found." >&2
         return 1
     fi
-    
+
     local -a scpCmd=()
     if [ -n "$password" ]; then
         scpCmd+=(sshpass -p "$password")
     fi
-    
+
     scpCmd+=(scp -q)
-    
+
     if [ "$recursive" -eq 1 ]; then
         scpCmd+=(-r)
     fi
-    
+
     if [ -n "$identity" ]; then
         scpCmd+=(-i "$identity")
     fi
-    
+
     if [ -n "$port" ]; then
         scpCmd+=(-P "$port")
     fi
-    
+
     scpCmd+=(-o "ConnectTimeout=$connectTimeout")
-    
+
     if [ "$useStrict" -eq 0 ]; then
         scpCmd+=(-o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null")
     else
@@ -486,19 +493,19 @@ __scp_fetch__() {
             scpCmd+=(-o "UserKnownHostsFile=$knownHosts")
         fi
     fi
-    
+
     if [ ${#extraScpArgs[@]} -gt 0 ]; then
         scpCmd+=("${extraScpArgs[@]}")
     fi
-    
+
     local -a remoteSources=()
     local remotePath
     for remotePath in "${sources[@]}"; do
         remoteSources+=("$user@$host:$remotePath")
     done
-    
+
     scpCmd+=("${remoteSources[@]}" "$destination")
-    
+
     "${scpCmd[@]}"
 }
 
@@ -522,7 +529,7 @@ __ssh_exec_script__() {
     local knownHosts=""
     local -a scriptArgs=()
     local -a extraSshArgs=()
-    
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --host)
@@ -595,22 +602,22 @@ __ssh_exec_script__() {
             ;;
         esac
     done
-    
+
     if [ -z "$host" ] || [ -z "$user" ]; then
         echo "Error: __ssh_exec_script__ requires --host and --user." >&2
         return 1
     fi
-    
+
     if [ -z "$scriptPath" ] && [ -z "$scriptContent" ]; then
         echo "Error: __ssh_exec_script__ requires --script-path or --script-content." >&2
         return 1
     fi
-    
+
     if [ -n "$identity" ] && [ ! -f "$identity" ]; then
         echo "Error: Identity file '$identity' not found." >&2
         return 1
     fi
-    
+
     local tempFile=""
     local cleanupNeeded=0
     if [ -n "$scriptContent" ]; then
@@ -620,7 +627,7 @@ __ssh_exec_script__() {
         scriptPath="$tempFile"
         cleanupNeeded=1
     fi
-    
+
     if [ ! -f "$scriptPath" ]; then
         echo "Error: Script path '$scriptPath' not found." >&2
         if [ "$cleanupNeeded" -eq 1 ]; then
@@ -628,13 +635,13 @@ __ssh_exec_script__() {
         fi
         return 1
     fi
-    
+
     if [ -z "$remotePath" ]; then
         local baseName
         baseName="$(basename "$scriptPath")"
         remotePath="/tmp/${baseName}.$(date +%s).$$"
     fi
-    
+
     local -a connectionFlags=(--host "$host" --user "$user" --connect-timeout "$connectTimeout")
     if [ -n "$password" ]; then
         connectionFlags+=(--password "$password")
@@ -657,34 +664,34 @@ __ssh_exec_script__() {
             connectionFlags+=(--extra-ssh-arg "$arg")
         done
     fi
-    
+
     __scp_send__ "${connectionFlags[@]}" --source "$scriptPath" --destination "$remotePath"
-    
+
     local chmodCommand=""
     printf -v chmodCommand 'chmod +x %q' "$remotePath"
     __ssh_exec__ "${connectionFlags[@]}" --command "$chmodCommand"
-    
+
     local -a remoteParts=("$remotePath")
     if [ ${#scriptArgs[@]} -gt 0 ]; then
         remoteParts+=("${scriptArgs[@]}")
     fi
-    
+
     local remoteRunCommand=""
     printf -v remoteRunCommand '%q ' "${remoteParts[@]}"
     remoteRunCommand="${remoteRunCommand%% }"
-    
+
     if [ "$useSudo" -eq 1 ]; then
         __ssh_exec__ "${connectionFlags[@]}" --sudo --command "$remoteRunCommand"
     else
         __ssh_exec__ "${connectionFlags[@]}" --command "$remoteRunCommand"
     fi
-    
+
     if [ "$keepRemote" -eq 0 ]; then
         local cleanupCommand=""
         printf -v cleanupCommand 'rm -f %q' "$remotePath"
         __ssh_exec__ "${connectionFlags[@]}" --command "$cleanupCommand"
     fi
-    
+
     if [ "$cleanupNeeded" -eq 1 ] && [ -n "$tempFile" ]; then
         rm -f "$tempFile"
     fi
@@ -719,7 +726,7 @@ __ssh_exec_function__() {
     local callName=""
     local -a callArgs=()
     local -A seenFunctions=()
-    
+
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --host)
@@ -794,22 +801,22 @@ __ssh_exec_function__() {
             ;;
         esac
     done
-    
+
     if [ -z "$host" ] || [ -z "$user" ]; then
         echo "Error: __ssh_exec_function__ requires --host and --user." >&2
         return 1
     fi
-    
+
     if [ ${#functionNames[@]} -eq 0 ]; then
         echo "Error: __ssh_exec_function__ requires at least one --function." >&2
         return 1
     fi
-    
+
     if [ -z "$callName" ]; then
         local lastIndex=$(( ${#functionNames[@]} - 1 ))
         callName="${functionNames[$lastIndex]}"
     fi
-    
+
     local -a functionDefs=()
     local fname
     for fname in "${functionNames[@]}"; do
@@ -823,20 +830,20 @@ __ssh_exec_function__() {
         functionDefs+=("$(declare -f "$fname")")
         seenFunctions[$fname]=1
     done
-    
+
     if ! declare -f "$callName" >/dev/null 2>&1; then
         echo "Error: Call target '$callName' is not defined." >&2
         return 1
     fi
-    
+
     if [[ -z "${seenFunctions[$callName]:-}" ]]; then
         functionDefs+=("$(declare -f "$callName")")
         seenFunctions[$callName]=1
     fi
-    
+
     local scriptFile
     scriptFile="$(mktemp)"
-    
+
     {
         echo "#!/bin/bash"
         echo "set -euo pipefail"
@@ -846,7 +853,7 @@ __ssh_exec_function__() {
         done
         printf '%s\n' "$callName \"\$@\""
     } >"$scriptFile"
-    
+
     local -a connectionFlags=(--host "$host" --user "$user" --connect-timeout "$connectTimeout")
     if [ -n "$password" ]; then
         connectionFlags+=(--password "$password")
@@ -874,7 +881,7 @@ __ssh_exec_function__() {
             connectionFlags+=(--extra-ssh-arg "$arg")
         done
     fi
-    
+
     local -a scriptArgs=("${connectionFlags[@]}" --script-path "$scriptFile")
     if [ -n "$remotePath" ]; then
         scriptArgs+=(--remote-path "$remotePath")
@@ -885,16 +892,16 @@ __ssh_exec_function__() {
     if [ "$useSudo" -eq 1 ]; then
         scriptArgs+=(--sudo)
     fi
-    
+
     local argValue
     for argValue in "${callArgs[@]}"; do
         scriptArgs+=(--arg "$argValue")
     done
-    
+
     local rc
     __ssh_exec_script__ "${scriptArgs[@]}"
     rc=$?
-    
+
     rm -f "$scriptFile"
     return "$rc"
 }

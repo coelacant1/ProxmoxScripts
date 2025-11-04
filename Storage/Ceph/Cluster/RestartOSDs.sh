@@ -5,131 +5,147 @@
 # Restarts every Ceph OSD on the cluster one at a time.
 #
 # Usage:
-#   ./RestartOSDs.sh
+#   RestartOSDs.sh
 #
 # This script iterates over all the Ceph OSDs in the cluster,
 # restarting each OSD service sequentially. It handles both local
 # and remote OSD restarts via SSH.
 #
+# Function Index:
+#   - wait_for_osd_active
+#   - main
+#
 
-source "${UTILITYPATH}/Communication.sh"
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Check for root privileges and Proxmox environment
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Ensure required packages/commands are available
-###############################################################################
-__install_or_prompt__ "jq"
-
-###############################################################################
-# Retrieve list of Ceph OSD IDs
-###############################################################################
-OSD_IDS=$(ceph osd ls 2>/dev/null)
-if [ $? -ne 0 ]; then
-    __err__ "Failed to retrieve Ceph OSD list. Ensure Ceph is running."
-    exit 1
-fi
-
-if [ -z "$OSD_IDS" ]; then
-    __info__ "No Ceph OSDs found. Exiting."
-    exit 0
-fi
-
-totalOSDs=$(echo "$OSD_IDS" | wc -w)
-__info__ "Found ${totalOSDs} Ceph OSD(s). Restarting them one at a time."
-
-###############################################################################
-# Function: wait_for_osd_active
-# Waits until the specified Ceph OSD service is active or a timeout is reached.
-###############################################################################
-wait_for_osd_active(){
-    local targetHost="$1"
-    local osdId="$2"
+# --- wait_for_osd_active -----------------------------------------------------
+wait_for_osd_active() {
+    local target_host="$1"
+    local osd_id="$2"
     local timeout=60
     local elapsed=0
     local status=""
+
     while true; do
-        if [ "$targetHost" = "local" ]; then
-            status=$(systemctl is-active "ceph-osd@${osdId}")
+        if [[ "$target_host" == "local" ]]; then
+            status=$(systemctl is-active "ceph-osd@${osd_id}")
         else
-            status=$(ssh root@"${targetHost}" "systemctl is-active ceph-osd@${osdId}" 2>/dev/null)
+            status=$(ssh "root@${target_host}" "systemctl is-active ceph-osd@${osd_id}" 2>/dev/null)
         fi
-        if [ "$status" = "active" ]; then
+
+        if [[ "$status" == "active" ]]; then
             break
         fi
+
         sleep 5
-        elapsed=$((elapsed+5))
-        if [ $elapsed -ge $timeout ]; then
-            __err__ "OSD ceph-osd@${osdId} did not become active after restart."
+        elapsed=$((elapsed + 5))
+
+        if [[ $elapsed -ge $timeout ]]; then
+            __err__ "OSD ceph-osd@${osd_id} did not become active after restart"
             break
         fi
     done
 }
 
-###############################################################################
-# Loop through each OSD ID and restart the corresponding service
-###############################################################################
-currentOSD=1
-for osdId in $OSD_IDS; do
-    __update__ "Processing OSD ${currentOSD} of ${totalOSDs}: ceph-osd@${osdId}"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-    # Retrieve JSON details for the current OSD
-    osdJson=$(ceph osd find "${osdId}" 2>/dev/null)
-    if [ $? -ne 0 ] || [ -z "$osdJson" ]; then
-         __err__ "Failed to retrieve details for ceph-osd@${osdId}."
-         currentOSD=$((currentOSD+1))
-         continue
+    __install_or_prompt__ "jq"
+
+    # Retrieve list of Ceph OSD IDs
+    local osd_ids
+    if ! osd_ids=$(ceph osd ls 2>/dev/null); then
+        __err__ "Failed to retrieve Ceph OSD list. Ensure Ceph is running."
+        exit 1
     fi
 
-    # Parse the host name from the JSON data
-    osdHost=$(echo "$osdJson" | jq -r '.crush_location.host')
-    if [ -z "$osdHost" ] || [ "$osdHost" = "null" ]; then
-         __err__ "Host information for ceph-osd@${osdId} not found."
-         currentOSD=$((currentOSD+1))
-         continue
+    if [[ -z "$osd_ids" ]]; then
+        __info__ "No Ceph OSDs found"
+        exit 0
     fi
 
-    # Determine if the OSD is running locally or on a remote host
-    localHost=$(hostname)
-    if [ "$osdHost" = "$localHost" ]; then
-         targetHost="local"
-    else
-         targetHost=$(__get_ip_from_name__ "$osdHost")
-         if [ -z "$targetHost" ]; then
-             __err__ "Failed to resolve IP for host '${osdHost}'."
-             currentOSD=$((currentOSD+1))
-             continue
-         fi
-    fi
+    local -a osd_array
+    read -r -a osd_array <<< "$osd_ids"
+    local total_osds=${#osd_array[@]}
 
-    # Restart the Ceph OSD service on the appropriate host
-    if [ "$targetHost" = "local" ]; then
-         systemctl restart "ceph-osd@${osdId}"
-         if [ $? -eq 0 ]; then
-             __ok__ "Successfully restarted ceph-osd@${osdId} on local."
-         else
-             __err__ "Failed to restart ceph-osd@${osdId} on local."
-         fi
-    else
-         ssh root@"${targetHost}" "systemctl restart ceph-osd@${osdId}"
-         if [ $? -eq 0 ]; then
-             __ok__ "Successfully restarted ceph-osd@${osdId} on ${osdHost} (${targetHost})."
-         else
-             __err__ "Failed to restart ceph-osd@${osdId} on ${osdHost} (${targetHost})."
-         fi
-    fi
+    __info__ "Found ${total_osds} Ceph OSD(s). Restarting them one at a time."
 
-    # Wait until the OSD service becomes active
-    wait_for_osd_active "${targetHost}" "${osdId}"
+    local current_osd=1
+    local local_host
+    local_host=$(hostname)
 
-    # Pause briefly before processing the next OSD
-    sleep 5
-    currentOSD=$((currentOSD+1))
-done
+    for osd_id in "${osd_array[@]}"; do
+        __update__ "Processing OSD ${current_osd} of ${total_osds}: ceph-osd@${osd_id}"
 
-__ok__ "All Ceph OSDs processed."
+        # Retrieve JSON details for the current OSD
+        local osd_json
+        if ! osd_json=$(ceph osd find "${osd_id}" 2>/dev/null) || [[ -z "$osd_json" ]]; then
+            __err__ "Failed to retrieve details for ceph-osd@${osd_id}"
+            ((current_osd++))
+            continue
+        fi
+
+        # Parse the host name from the JSON data
+        local osd_host
+        osd_host=$(echo "$osd_json" | jq -r '.crush_location.host')
+
+        if [[ -z "$osd_host" ]] || [[ "$osd_host" == "null" ]]; then
+            __err__ "Host information for ceph-osd@${osd_id} not found"
+            ((current_osd++))
+            continue
+        fi
+
+        # Determine if the OSD is running locally or on a remote host
+        local target_host
+        if [[ "$osd_host" == "$local_host" ]]; then
+            target_host="local"
+        else
+            target_host=$(__get_ip_from_name__ "$osd_host")
+            if [[ -z "$target_host" ]]; then
+                __err__ "Failed to resolve IP for host '${osd_host}'"
+                ((current_osd++))
+                continue
+            fi
+        fi
+
+        # Restart the Ceph OSD service on the appropriate host
+        if [[ "$target_host" == "local" ]]; then
+            if systemctl restart "ceph-osd@${osd_id}"; then
+                __ok__ "Successfully restarted ceph-osd@${osd_id} on local"
+            else
+                __err__ "Failed to restart ceph-osd@${osd_id} on local"
+            fi
+        else
+            if ssh "root@${target_host}" "systemctl restart ceph-osd@${osd_id}"; then
+                __ok__ "Successfully restarted ceph-osd@${osd_id} on ${osd_host} (${target_host})"
+            else
+                __err__ "Failed to restart ceph-osd@${osd_id} on ${osd_host} (${target_host})"
+            fi
+        fi
+
+        # Wait until the OSD service becomes active
+        wait_for_osd_active "${target_host}" "${osd_id}"
+
+        # Pause briefly before processing the next OSD
+        sleep 5
+        ((current_osd++))
+    done
+
+    __ok__ "All Ceph OSDs processed"
+    __prompt_keep_installed_packages__
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions and modern standards
+#   - Pending validation

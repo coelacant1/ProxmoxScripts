@@ -6,16 +6,16 @@
 #
 # Usage:
 #   # Install locally:
-#   ./CephScrubScheduler.sh local install <pool_name> <schedule_type> [time]
+#   CephScrubScheduler.sh local install <pool_name> <schedule_type> [time]
 #
 #   # Uninstall locally:
-#   ./CephScrubScheduler.sh local uninstall <pool_name>
+#   CephScrubScheduler.sh local uninstall <pool_name>
 #
 #   # Install on a remote node (must provide a valid Proxmox cluster node name, not DNS):
-#   ./CephScrubScheduler.sh remote install <node_name> <vm_user> <vm_pass> <pool_name> <schedule_type> [time]
+#   CephScrubScheduler.sh remote install <node_name> <vm_user> <vm_pass> <pool_name> <schedule_type> [time]
 #
 #   # Uninstall on a remote node:
-#   ./CephScrubScheduler.sh remote uninstall <node_name> <vm_user> <vm_pass> <pool_name>
+#   CephScrubScheduler.sh remote uninstall <node_name> <vm_user> <vm_pass> <pool_name>
 #
 # Example schedule_type/time combos:
 #   - daily 02:30
@@ -39,10 +39,28 @@
 #   - remote_install
 #   - remote_uninstall
 #
+
+set -euo pipefail
+
+#   - usage
+#   - derive_oncalendar_expression
+#   - local_disable_scrubbing
+#   - local_revert_scrubbing
+#   - local_create_scrub_script
+#   - local_create_systemd_units
+#   - local_enable_and_start_timer
+#   - local_remove_systemd_units
+#   - remote_install
+#   - remote_uninstall
+#
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Queries.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+
+set -u
 
 ###############################################################################
 # ENVIRONMENT CHECKS

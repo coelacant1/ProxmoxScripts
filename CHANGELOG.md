@@ -5,6 +5,111 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-11-03
+
+### Overview
+Version 2.0 introduces new utility frameworks that standardize script behavior across the codebase. Key additions include ArgumentParser for consistent argument handling, BulkOperations for unified bulk operations, ProxmoxAPI for centralized Proxmox interactions, and TestFramework for automated testing. All scripts have been refactored to use these utilities and follow consistent error handling patterns.
+
+### Added
+- **Utilities/ArgumentParser.sh** - New comprehensive argument parsing framework
+  - Standardized argument handling across all scripts
+  - Built-in validation for common types (vmid, string, integer, boolean, range)
+  - Automatic help text generation and error messages
+  - Support for optional and required parameters
+- **Utilities/BulkOperations.sh** - Unified framework for bulk VM/LXC operations
+  - Standardized operation patterns with consistent error handling
+  - Built-in progress reporting and operation summaries
+  - Automatic success/failure tracking with detailed statistics
+  - Support for both range and pool-based operations
+- **Utilities/ProxmoxAPI.sh** - Centralized Proxmox API wrapper functions
+  - Consistent VM/LXC operations (start, stop, reset, migrate, etc.)
+  - Standardized disk and hardware management functions
+  - Pool and node management utilities
+  - Improved error handling and validation
+- **Utilities/NetworkHelper.sh** - Network utility functions for IP and network operations
+  - IP address validation and manipulation
+  - Network configuration helpers
+  - DNS and network interface utilities
+- **Utilities/StateManager.sh** - State management system for complex operations
+  - Transaction-like state tracking for multi-step operations
+  - Rollback capabilities for failed operations
+  - Persistent state storage and recovery
+- **Utilities/TestFramework.sh** - Comprehensive testing framework for shell scripts
+  - Unit testing capabilities for utility functions
+  - Integration testing support
+  - Test assertion functions and result reporting
+  - Automated test discovery and execution
+- **Utilities/_TestArgumentParser.sh** - Test suite for ArgumentParser functionality
+- **Utilities/_TestBulkOperations.sh** - Test suite for BulkOperations framework
+- **Utilities/_TestNetworkHelper.sh** - Test suite for NetworkHelper utilities
+- **Utilities/_TestProxmoxAPI.sh** - Test suite for ProxmoxAPI functions
+- **Utilities/_TestRemoteExec.sh** - Test suite for remote execution utilities
+- **Utilities/_TestStateManager.sh** - Test suite for StateManager functionality
+- **Utilities/_TestIntegrationExample.sh** - Example integration test demonstrating framework usage
+- **Utilities/RunAllTests.sh** - Automated test runner for all utility test suites
+- **Utilities/_ScriptComplianceChecklist.md** - Comprehensive script compliance and quality checklist
+- **VirtualMachines/Operations/BulkHibernate.sh** - New script for bulk VM hibernation
+- **VirtualMachines/Operations/BulkSuspend.sh** - New script for bulk VM suspend operations
+- **VirtualMachines/Operations/BulkResume.sh** - New script for bulk VM resume operations
+- **VirtualMachines/Hardware/BulkToggleTabletPointer.sh** - New script for bulk tablet pointer device configuration
+- **VirtualMachines/Storage/BulkConfigureDisk.sh** - New comprehensive disk configuration script
+
+### Changed
+- **Standardized script headers across entire codebase** - Fixed malformed headers
+  - All scripts now follow consistent format: shebang -> documentation -> Function Index -> `set -euo pipefail` -> code
+  - Removed duplicate `set -` commands that were scattered throughout script headers
+  - Removed misplaced early `set -` commands that appeared before documentation blocks
+  - Changed `set -u` to `set -euo pipefail` for proper error handling with pipefail and errexit
+  - Fixed scripts where Function Index and documentation blocks were duplicated
+  - Scripts with heredocs containing `set -euo pipefail` for remote execution are intentionally preserved
+  - Affected all major script directories: Cluster/, Firewall/, HighAvailability/, Host/, LXC/, Networking/, RemoteManagement/, Security/, Storage/, VirtualMachines/
+  - Improved consistency, maintainability, and error handling across all scripts
+- **Refactored scripts to use new ArgumentParser and BulkOperations frameworks**
+  - All bulk operation scripts now use consistent argument parsing
+  - Unified error handling and reporting across all bulk operations
+  - Standardized output format with operation summaries
+  - Improved validation and user feedback
+  - Scripts automatically generate consistent help text
+- **Major refactoring of VM/LXC bulk operation scripts** - Converted to use new frameworks
+  - VirtualMachines/Operations/: BulkMigrate.sh, BulkStart.sh, BulkStop.sh, BulkReset.sh, BulkDelete.sh, BulkClone.sh, BulkUnlock.sh, BulkRemoteMigrate.sh, BulkCloneCloudInit.sh
+  - VirtualMachines/CloudInit/: BulkAddSSHKey.sh, BulkChangeDNS.sh, BulkChangeIP.sh, BulkChangeUserPass.sh, BulkMoveCloudInit.sh, BulkTogglePackageUpgrade.sh
+  - VirtualMachines/Hardware/: BulkConfigureCPU.sh, BulkConfigureNetwork.sh, BulkSetCPUTypeCoreCount.sh, BulkSetMemoryConfig.sh, BulkUnmountISOs.sh
+  - VirtualMachines/Options/: BulkEnableGuestAgent.sh, BulkToggleProtectionMode.sh, BulkToggleStartAtBoot.sh
+  - VirtualMachines/Storage/: BulkChangeStorage.sh, BulkMoveDisk.sh, BulkResizeStorage.sh
+  - VirtualMachines/Backup/: BulkBackup.sh
+  - LXC/Operations/: BulkClone.sh, BulkStart.sh, BulkStop.sh, BulkReset.sh, BulkDelete.sh, BulkDeleteAllLocal.sh
+  - LXC/Hardware/: BulkSetCPU.sh, BulkSetMemory.sh
+  - LXC/Networking/: BulkAddSSHKey.sh, BulkChangeDNS.sh, BulkChangeIP.sh, BulkChangeNetwork.sh, BulkChangeUserPass.sh
+  - LXC/Options/: BulkToggleProtectionMode.sh, BulkToggleStartAtBoot.sh
+- **Enhanced Utilities/Communication.sh** - Improved messaging functions and formatting
+- **Enhanced Utilities/Prompts.sh** - Better user interaction and input validation
+- **Enhanced Utilities/Queries.sh** - Extended query capabilities for VM/LXC/node information
+- **Enhanced Utilities/Conversion.sh** - Additional conversion and formatting utilities
+- **Enhanced Utilities/Colors.sh** - Improved color output and terminal formatting
+- **Enhanced Utilities/SSH.sh** - Better SSH connection handling and remote execution
+- **Improved .check/_RunChecks.sh** - Enhanced validation and automated checking with better reporting
+- **Updated .check/UpdateUtilityDocumentation.py** - Enhanced documentation generation for utilities
+- **Updated .check/VerifySourceCalls.py** - Improved source dependency verification
+- **Enhanced GUI.sh** - Better menu organization and user interface
+- **Improved CONTRIBUTING.md** - Expanded contribution guidelines with framework usage documentation
+- **Major expansion of Utilities/_Utilities.md** - Comprehensive documentation for all utility functions
+  - Detailed function documentation with examples
+  - Framework usage guides
+  - Best practices and patterns
+
+### Fixed
+- **Consistent error handling** - All scripts now properly use `set -euo pipefail` for robust error detection
+- **Source dependency issues** - Resolved missing or incorrect utility dependencies across all scripts
+- **Function index accuracy** - All scripts now have accurate function index listings
+- **Line ending consistency** - Normalized CRLF to LF across all scripts for Unix compatibility
+- **Validation improvements** - Better input validation and error messages across all scripts
+
+### Testing
+- **Comprehensive test coverage** - Added test suites covering all major utility frameworks
+- **Automated test execution** - RunAllTests.sh provides one-command testing for all utilities
+- **Integration testing** - Example integration tests demonstrate proper framework usage
+- **Test framework infrastructure** - New TestFramework.sh enables systematic testing of shell scripts
+
 ## [Unreleased] - 2025-10-16
 
 ### Added
@@ -35,7 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Line ending normalization** - Converted CRLF to LF across all modified scripts for Unix compatibility
 - **Utilities/Communication.sh** - Added new utility functions for better script communication
 - **Utilities/Prompts.sh** - Enhanced prompt utilities with additional functionality
-- **Utilities/Utilities.md** - Expanded documentation for utility functions
+- **Utilities/_Utilities.md** - Expanded documentation for utility functions
 - **Resources/ChangeAllMACPrefix.sh** - Fixed missing source dependencies
 - Updated multiple VM management scripts:
   - VirtualMachines/BulkAddIPToNote.sh - Removed unused dependencies
@@ -53,8 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RemoteManagement/ConfigureOverSSH/** - Dependency cleanup in SSH configuration scripts
 
 ### Fixed
-- **Storage/AddStorage.sh** - Fixed line ending formatting (CRLF → LF)
-- **Storage/RemoveStorage.sh** - Fixed line ending formatting (CRLF → LF)
+- **Storage/AddStorage.sh** - Fixed line ending formatting (CRLF -> LF)
+- **Storage/RemoveStorage.sh** - Fixed line ending formatting (CRLF -> LF)
 - **Storage/Ceph/SetScrubInterval.sh** - Added missing source dependencies and fixed formatting
 - All scripts now have proper shellcheck source directives for IDE integration
 
@@ -225,7 +330,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CephStartStoppedOSDs.sh -> StartStoppedOSDs.sh
   - CephWipeDisk.sh -> WipeDisk.sh
 - Enhanced Queries.sh utility with improved functionality
-- Updated Utilities.md documentation
+- Updated _Utilities.md documentation
 
 ### Fixed
 - Fixed pool setting issues with bulk VM clone operations
@@ -264,7 +369,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **UpdateUtilityDocumentation.py** - Python script for automatic utility function documentation generation
 - Automated documentation system for utility functions
-- Enhanced documentation in Utilities.md with comprehensive function breakdowns
+- Enhanced documentation in _Utilities.md with comprehensive function breakdowns
 
 ### Changed
 - Refactored utility libraries for better Linux compatibility:
@@ -275,7 +380,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Queries.sh
   - SSH.sh
 - Updated VerifySourceCalls.py for better cross-platform support
-- Enhanced GUI.sh 
+- Enhanced GUI.sh
 - Improved UplinkSpeedTest.sh networking script
 
 ### Fixed

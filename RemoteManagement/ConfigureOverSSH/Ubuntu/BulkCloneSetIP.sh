@@ -12,7 +12,7 @@
 #      the new IP/gateway lines in the netplan YAML configuration.
 #
 # Usage:
-#   ./BulkCloneSetIPUbuntu.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId>
+#   BulkCloneSetIPUbuntu.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId>
 #
 # Arguments:
 #   templateIp   : The template VM’s IP address (e.g. 192.168.1.50).
@@ -27,11 +27,19 @@
 #   # The template is at 192.168.1.50, the first cloned IP is 192.168.1.10/24,
 #   # the gateway is set to 192.168.1.1, and each subsequent clone increments
 #   # the final octet by 1.
-#   ./BulkCloneSetIPUbuntu.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010
+#   BulkCloneSetIPUbuntu.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010
 #
 # Another Example:
-#   ./BulkCloneSetIPUbuntu.sh 192.168.10.50 192.168.10.100/24 192.168.10.1 3 800 810
+#   BulkCloneSetIPUbuntu.sh 192.168.10.50 192.168.10.100/24 192.168.10.1 3 800 810
 #
+
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Conversion.sh"
 source "${UTILITYPATH}/Prompts.sh"

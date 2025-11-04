@@ -5,15 +5,21 @@
 # Restarts every Ceph Monitor (mon) on the cluster one at a time.
 #
 # Usage:
-#   ./RestartMonitors.sh
+#   RestartMonitors.sh
 #
 # This script retrieves the Ceph monitor information from the cluster and
 # restarts each monitor service sequentially from the main node. The service
 # names use the format ceph-mon@<nodeName>.
 #
+# Function Index:
+#   - wait_for_mon_active
+#
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -67,23 +73,6 @@ fi
 __info__ "Found ${totalMons} Ceph monitor(s). Restarting them one at a time."
 
 ###############################################################################
-# Function: is_local_ip
-# Checks if the provided IP address is one of the local system's IPs.
-###############################################################################
-is_local_ip(){
-    local ipToCheck="$1"
-    local localIPs
-    local ip
-    localIPs=$(hostname -I)
-    for ip in $localIPs; do
-        if [ "$ip" = "$ipToCheck" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-###############################################################################
 # Function: wait_for_mon_active
 # Waits until the ceph-mon@<monName> service is active on the given target host
 # (either local or remote) or a timeout is reached.
@@ -125,7 +114,7 @@ for index in "${!monNames[@]}"; do
     __update__ "Processing monitor ${currentMon} of ${totalMons}: ceph-mon@${monName}"
 
     # Determine the target host for the monitor service.
-    if is_local_ip "$monIP"; then
+    if __is_local_ip__ "$monIP"; then
         targetHost="local"
     else
         # Resolve remote monitor IP using the initialized node mapping.

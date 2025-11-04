@@ -8,13 +8,13 @@
 # fan speeds for interpolation.
 #
 # Usage:
-#   ./EnablePWMFanControl.sh install [<min-temp> <max-temp> <min-pwm> <max-pwm>]
-#   ./EnablePWMFanControl.sh uninstall
+#   EnablePWMFanControl.sh install [<min-temp> <max-temp> <min-pwm> <max-pwm>]
+#   EnablePWMFanControl.sh uninstall
 #
 # Examples:
-#   ./EnablePWMFanControl.sh install      # Installs fancontrol with default thresholds
-#   ./EnablePWMFanControl.sh install 35 80 50 255
-#   ./EnablePWMFanControl.sh uninstall    # Uninstalls fancontrol and reverts to default
+#   EnablePWMFanControl.sh install      # Installs fancontrol with default thresholds
+#   EnablePWMFanControl.sh install 35 80 50 255
+#   EnablePWMFanControl.sh uninstall    # Uninstalls fancontrol and reverts to default
 #
 # This script:
 #   1) Installs the 'fancontrol' package if needed (prompts before installing).
@@ -30,6 +30,8 @@
 #   - install_fancontrol
 #   - uninstall_fancontrol
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 

@@ -1,88 +1,89 @@
 #!/bin/bash
 #
-# _TestColors.sh
+# Function Index:
+#   - test_gradient_print_executes
+#   - test_gradient_print_multiline
+#   - test_line_rgb_executes
+#   - test_line_rgb_output
+#   - test_line_gradient_executes
+#   - test_line_gradient_output
 #
-# Usage:
-# ./_TestColors.sh
+
+set -euo pipefail
+
+################################################################################
+# _TestColors.sh - Test suite for Colors.sh
+################################################################################
 #
-# Demo script to test Colors.sh functions
+# Test suite for Colors.sh color and gradient functions.
+#
+# Usage: ./_TestColors.sh
 #
 
-if [ -z "${UTILITYPATH}" ]; then
-  # UTILITYPATH is unset or empty
-  export UTILITYPATH="$(pwd)"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
 
-source "${UTILITYPATH}/Colors.sh"
+source "${SCRIPT_DIR}/TestFramework.sh"
+source "${SCRIPT_DIR}/Colors.sh"
 
-# 1) Test __gradient_print__
-echo "===== Gradient Print Test ====="
-SMALL_ASCII=$(cat <<'EOF'
---------------------------------------------
- █▀▀ █▀█ █▀▀ █   █▀█    █▀▀ █▀█ █▀█ ▀ ▀█▀ █ 
- █   █ █ █▀▀ █   █▀█    █   █▀█ █ █    █  ▀ 
- ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀    ▀▀▀ ▀ ▀ ▀ ▀    ▀  ▀ 
-                                            
- █▀█ █ █ █▀▀    █▀▀ █▀▀ █▀▄ ▀█▀ █▀█ ▀█▀ █▀▀ 
- █▀▀ ▀▄▀ █▀▀    ▀▀█ █   █▀▄  █  █▀▀  █  ▀▀█ 
- ▀    ▀  ▀▀▀    ▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀    ▀  ▀▀▀ 
---------------------------------------------
-  ProxmoxScripts UI                         
-  Author: Coela Can't! (coelacant1)         
---------------------------------------------
-EOF
-)
+################################################################################
+# TEST: GRADIENT PRINT
+################################################################################
 
-# Gradient from Purple(128,0,128) to Cyan(0,255,255)
-__gradient_print__ "$SMALL_ASCII" 38 2 128 0 255 255
+test_gradient_print_executes() {
+    local text="Test Line"
+    __gradient_print__ "$text" 38 2 128 0 255 255 2>/dev/null
+    assert_exit_code 0 $? "Should execute gradient print"
+}
 
+test_gradient_print_multiline() {
+    local text=$'Line 1\nLine 2\nLine 3'
+    __gradient_print__ "$text" 38 2 128 0 255 255 2>/dev/null
+    assert_exit_code 0 $? "Should handle multiline text"
+}
 
-# 2) Test exclude __gradient_print__
-LARGE_ASCII=$(cat <<'EOF'
------------------------------------------------------------------------------------------
-                                                                                         
-    ██████╗ ██████╗ ███████╗██╗      █████╗      ██████╗ █████╗ ███╗   ██╗████████╗██╗   
-   ██╔════╝██╔═══██╗██╔════╝██║     ██╔══██╗    ██╔════╝██╔══██╗████╗  ██║╚══██╔══╝██║   
-   ██║     ██║   ██║█████╗  ██║     ███████║    ██║     ███████║██╔██╗ ██║   ██║   ██║   
-   ██║     ██║   ██║██╔══╝  ██║     ██╔══██║    ██║     ██╔══██║██║╚██╗██║   ██║   ╚═╝   
-   ╚██████╗╚██████╔╝███████╗███████╗██║  ██║    ╚██████╗██║  ██║██║ ╚████║   ██║   ██╗   
-    ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝   
-                                                                                         
-    ██████╗ ██╗   ██║███████╗    ███████╗ ██████╗██████╗ ██║██████╗ ████████╗███████╗    
-    ██╔══██╗██║   ██║██╔════╝    ██╔════╝██╔════╝██╔══██╗██║██╔══██╗╚══██╔══╝██╔════╝    
-    ██████╔╝██║   ██║█████╗      ███████╗██║     ██████╔╝██║██████╔╝   ██║   ███████╗    
-    ██╔═══╝ ╚██╗ ██╔╝██╔══╝      ╚════██║██║     ██╔══██╗██║██╔═══╝    ██║   ╚════██║    
-    ██║      ╚████╔╝ ███████╗    ███████║╚██████╗██║  ██║██║██║        ██║   ███████║    
-    ╚═╝       ╚═══╝  ╚══════╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ╚══════╝    
-                                                                                         
------------------------------------------------------------------------------------------
-   User Interface for ProxmoxScripts                                                     
-   Author: Coela Can't! (coelacant1)                                                     
------------------------------------------------------------------------------------------
-EOF
-)
+################################################################################
+# TEST: LINE RGB
+################################################################################
 
-__gradient_print__ "$LARGE_ASCII" 38 2 128 0 255 255 "█"
+test_line_rgb_executes() {
+    __line_rgb__ "Test message" 255 128 0 2>/dev/null
+    assert_exit_code 0 $? "Should execute line RGB"
+}
 
-echo "=== Testing single_line_solid ==="
-__line_rgb__ "Hello from a solid color line" 255 128 0   # orange
+test_line_rgb_output() {
+    local output=$(__line_rgb__ "Test" 255 0 0 2>&1)
+    assert_contains "$output" "Test" "Should contain text"
+}
 
-echo
-echo "=== Testing single___line_gradient__ (left to right) ==="
-__line_gradient__ "Left-to-right gradient" 255 0 0 0 255 0  # red => green
+################################################################################
+# TEST: LINE GRADIENT
+################################################################################
 
-echo
-echo "=== Testing __gradient_print__ (multiline, top to bottom) ==="
-ASCII_ART=$(cat <<'EOF'
-Line 1
-Line 2
-Line 3
-EOF
-)
+test_line_gradient_executes() {
+    __line_gradient__ "Test gradient" 255 0 0 0 255 0 2>/dev/null
+    assert_exit_code 0 $? "Should execute line gradient"
+}
 
-# Purple => Teal
-__gradient_print__ "$ASCII_ART" 128 0 128 0 255 255
+test_line_gradient_output() {
+    local output=$(__line_gradient__ "Gradient" 255 0 0 0 0 255 2>&1)
+    assert_contains "$output" "Gradient" "Should contain text"
+}
 
-echo
-echo "Done. Press Enter to exit."
-read -r
+################################################################################
+# RUN TEST SUITE
+################################################################################
+
+run_test_suite "Colors - Gradient Print" \
+    test_gradient_print_executes \
+    test_gradient_print_multiline
+
+run_test_suite "Colors - Line RGB" \
+    test_line_rgb_executes \
+    test_line_rgb_output
+
+run_test_suite "Colors - Line Gradient" \
+    test_line_gradient_executes \
+    test_line_gradient_output
+
+exit $?

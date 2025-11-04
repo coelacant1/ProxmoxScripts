@@ -1,72 +1,106 @@
 #!/bin/bash
 #
-# CephCreateOSDsAllNodes.sh
+# CreateOSDs.sh
 #
-# This script runs on all nodes in the Proxmox cluster to automatically create 
-# Ceph OSDs on all unused block devices (e.g., /dev/sd*, /dev/nvme*, /dev/hd*).
+# Creates Ceph OSDs on all unused block devices across all nodes in the Proxmox cluster.
+# Automatically detects and provisions /dev/sd*, /dev/nvme*, /dev/hd* devices.
 #
 # Usage:
-#   ./CephCreateOSDsAllNodes.sh
+#   CreateOSDs.sh
 #
-# Requirements/Assumptions:
-#   1. Passwordless SSH or valid SSH keys for root on all nodes.
-#   2. Each node is in a functioning Proxmox cluster (pvecm available).
-#   3. Each node has Ceph installed and configured sufficiently to run 'ceph-volume'.
-#   4. Devices that need to be skipped are either already mounted or in pvs.
+# Requirements:
+#   - Passwordless SSH or valid SSH keys for root on all nodes
+#   - Functioning Proxmox cluster (pvecm available)
+#   - Ceph installed and configured on each node
+#   - Unused devices are not mounted or in LVM pvs
 #
 # Function Index:
 #   - create_osds
+#   - main
 #
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# FUNCTION: create_osds
-# Iterates over block devices (/dev/sd*, /dev/nvme*, /dev/hd*) and:
-#   - Checks if the device is valid (-b)
-#   - Ensures the device is unused (not mounted, not in pvs)
-#   - Creates a Ceph OSD via ceph-volume
-###############################################################################
+# --- create_osds -------------------------------------------------------------
+# Iterates over block devices and creates Ceph OSDs on unused devices.
+# Checks if devices are valid, not mounted, and not in pvs before creating.
 create_osds() {
-  echo "=== Checking for devices on node: $(hostname) ==="
-  for device in /dev/sd* /dev/nvme* /dev/hd* 2>/dev/null; do
-    [ -e "$device" ] || continue
-    if [ -b "$device" ]; then
-      if lsblk -no MOUNTPOINT "$device" | grep -q '^$' && ! pvs 2>/dev/null | grep -q "$device"; then
-        echo "Creating OSD for \"$device\"..."
-        if ceph-volume lvm create --data "$device"; then
-          echo "Successfully created OSD for \"$device\"."
-        else
-          echo "Failed to create OSD for \"$device\". Continuing..."
+    __info__ "Checking for devices on node: $(hostname)"
+
+    local created=0
+    local skipped=0
+    local failed=0
+
+    for device in /dev/sd* /dev/nvme* /dev/hd*; do
+        [ -e "$device" ] || continue
+
+        if [ ! -b "$device" ]; then
+            __update__ "Skipping $device (not a valid block device)"
+            ((skipped++))
+            continue
         fi
-      else
-        echo "\"$device\" is in use (mounted or in pvs). Skipping."
-      fi
-    else
-      echo "\"$device\" is not a valid block device. Skipping."
-    fi
-  done
-  echo "=== OSD creation complete on node: $(hostname) ==="
+
+        # Check if device is mounted or in pvs
+        if lsblk -no MOUNTPOINT "$device" 2>/dev/null | grep -q '^$' && ! pvs 2>/dev/null | grep -q "$device"; then
+            __update__ "Creating OSD for $device..."
+            if ceph-volume lvm create --data "$device" 2>/dev/null; then
+                __ok__ "Created OSD for $device"
+                ((created++))
+            else
+                __warn__ "Failed to create OSD for $device"
+                ((failed++))
+            fi
+        else
+            __update__ "Skipping $device (in use - mounted or in pvs)"
+            ((skipped++))
+        fi
+    done
+
+    __info__ "Node $(hostname): Created: $created, Skipped: $skipped, Failed: $failed"
 }
 
-###############################################################################
-# MAIN SCRIPT
-###############################################################################
-echo "=== Starting OSD creation on all nodes ==="
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
 
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
-if [ "${#REMOTE_NODES[@]}" -eq 0 ]; then
-  echo "Error: No remote nodes found in the cluster."
-  exit 1
-fi
+    __info__ "Starting OSD creation on all cluster nodes"
 
-for NODE_IP in "${REMOTE_NODES[@]}"; do
-  echo "=> Connecting to node: \"$NODE_IP\""
-  ssh root@"$NODE_IP" "$(typeset -f create_osds); create_osds"
-done
+    local remote_nodes
+    readarray -t remote_nodes < <(__get_remote_node_ips__)
 
-echo "=== Ceph OSD creation process completed on all nodes! ==="
+    if [ "${#remote_nodes[@]}" -eq 0 ]; then
+        __err__ "No remote nodes found in the cluster"
+    fi
+
+    local total_nodes="${#remote_nodes[@]}"
+    local current=0
+
+    for node_ip in "${remote_nodes[@]}"; do
+        ((current++))
+        __update__ "Processing node $current/$total_nodes: $node_ip"
+
+        if ssh root@"$node_ip" "$(typeset -f create_osds); create_osds" 2>/dev/null; then
+            __ok__ "Completed OSD creation on $node_ip"
+        else
+            __warn__ "Issues encountered on $node_ip"
+        fi
+    done
+
+    __ok__ "Ceph OSD creation process completed on all nodes"
+}
+
+main
+
+# Testing status:
+#   - Pending validation

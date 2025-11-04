@@ -6,7 +6,7 @@
 # This script safely removes NFS, SMB/CIFS, PBS, or other storage types from the datacenter configuration.
 #
 # Usage:
-#   ./RemoveStorage.sh <storage_id> [--force]
+#   RemoveStorage.sh <storage_id> [--force]
 #
 # Arguments:
 #   storage_id - The unique identifier/name of the storage to remove
@@ -15,9 +15,9 @@
 #   --force    - Skip confirmation prompt and force removal
 #
 # Examples:
-#   ./RemoveStorage.sh NFS-Storage
-#   ./RemoveStorage.sh SMB-Backup --force
-#   ./RemoveStorage.sh PBS-Backup
+#   RemoveStorage.sh NFS-Storage
+#   RemoveStorage.sh SMB-Backup --force
+#   RemoveStorage.sh PBS-Backup
 #
 # Function Index:
 #   - usage
@@ -27,7 +27,7 @@
 #   - main
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
@@ -111,7 +111,7 @@ parse_args() {
 # @return 0 if not in use, 1 if in use
 check_storage_usage() {
     __info__ "Checking if storage is in use..."
-    
+
     local in_use=false
     local usage_details=""
 
@@ -186,7 +186,7 @@ main() {
         echo
         __warn__ "This will remove storage '${STORAGE_ID}' from the cluster"
         __warn__ "Data on the storage server will remain but become inaccessible"
-        
+
         if ! __prompt_user_yn__ "Are you sure you want to remove this storage?"; then
             __info__ "Operation cancelled by user"
             exit 0

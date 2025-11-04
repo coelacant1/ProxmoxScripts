@@ -33,7 +33,10 @@
 #   - __check_vm_status__
 #   - __validate_ctid__
 #   - __check_ct_status__
+#   - __is_local_ip__
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -161,8 +164,6 @@ __init_node_mappings__() {
     MAPPINGS_INITIALIZED=1
 }
 
-
-
 # --- __get_ip_from_name__ ------------------------------------------------------------
 # @function __get_ip_from_name__
 # @description Given a node’s name (e.g., "pve01"), prints its link0 IP address.
@@ -224,8 +225,6 @@ __get_name_from_ip__() {
 
     echo "$name"
 }
-
-
 
 # --- __get_cluster_lxc__ ------------------------------------------------------------
 # @function __get_cluster_lxc__
@@ -333,9 +332,9 @@ __get_vm_node__() {
         echo "Error: __get_vm_node__ requires a VMID argument." >&2
         return 1
     fi
-    
+
     __install_or_prompt__ "jq"
-    
+
     pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
         jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true
 }
@@ -354,12 +353,12 @@ __get_vm_node__() {
 __resolve_node_name__() {
     local node_spec="$1"
     local node_name
-    
+
     if [[ -z "$node_spec" ]]; then
         echo "Error: __resolve_node_name__ requires a node specification argument." >&2
         return 1
     fi
-    
+
     if [[ "$node_spec" == "local" ]]; then
         node_name="$(hostname -s)"
     elif [[ "$node_spec" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -371,7 +370,7 @@ __resolve_node_name__() {
     else
         node_name="$node_spec"
     fi
-    
+
     echo "$node_name"
 }
 
@@ -386,22 +385,22 @@ __resolve_node_name__() {
 __validate_vm_id_range__() {
     local start_id="$1"
     local end_id="$2"
-    
+
     if [[ -z "$start_id" ]] || [[ -z "$end_id" ]]; then
         echo "Error: __validate_vm_id_range__ requires start and end VM IDs." >&2
         return 1
     fi
-    
+
     if ! [[ "$start_id" =~ ^[0-9]+$ ]] || ! [[ "$end_id" =~ ^[0-9]+$ ]]; then
         echo "Error: VM IDs must be numeric (got start='$start_id', end='$end_id')." >&2
         return 1
     fi
-    
+
     if (( start_id > end_id )); then
         echo "Error: Start VM ID must be less than or equal to end VM ID (got start=$start_id, end=$end_id)." >&2
         return 1
     fi
-    
+
     return 0
 }
 
@@ -521,8 +520,8 @@ __get_ip_from_vmid__() {
         guest_ip=$(
             qm guest cmd "$vmid" network-get-interfaces 2>/dev/null |
                 jq -r --arg mac "$mac" '
-                .[] 
-                | select((.["hardware-address"] // "") 
+                .[]
+                | select((.["hardware-address"] // "")
                          | ascii_downcase == ($mac | ascii_downcase))
                 | .["ip-addresses"][]?
                 | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
@@ -720,30 +719,30 @@ __get_ip_from_guest_agent__() {
 #   VMID 100 is a valid VM
 __validate_vmid__() {
     local vmid="$1"
-    
+
     if [[ -z "$vmid" ]]; then
         echo "Error: VMID is required" >&2
         return 1
     fi
-    
+
     # Validate VMID is numeric
     if ! [[ "$vmid" =~ ^[0-9]+$ ]]; then
         echo "Error: Invalid VMID '${vmid}' - must be numeric" >&2
         return 1
     fi
-    
+
     # Check if it's a VM
     if qm status "$vmid" &>/dev/null; then
         return 0
     fi
-    
+
     # Check if it's a container (not valid for this function)
     if pct status "$vmid" &>/dev/null; then
         echo "Error: VMID ${vmid} is a container, not a VM" >&2
         echo "Use __validate_ctid__ for containers" >&2
         return 1
     fi
-    
+
     # VMID doesn't exist
     echo "Error: VMID ${vmid} not found" >&2
     return 1
@@ -762,10 +761,10 @@ __validate_vmid__() {
 __check_vm_status__() {
     local vmid="$1"
     shift
-    
+
     local should_stop=false
     local force_stop=false
-    
+
     # Parse optional arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -782,20 +781,20 @@ __check_vm_status__() {
                 ;;
         esac
     done
-    
+
     local status
     status=$(qm status "$vmid" 2>/dev/null | awk '{print $2}')
-    
+
     if [[ "$status" != "running" ]]; then
         return 0
     fi
-    
+
     # VM is running
     if ! $should_stop; then
         echo "Warning: VM ${vmid} is running" >&2
         return 1
     fi
-    
+
     # Should stop - check if we need confirmation
     if ! $force_stop; then
         echo "VM ${vmid} is currently running and must be stopped" >&2
@@ -806,13 +805,13 @@ __check_vm_status__() {
             return 1
         fi
     fi
-    
+
     # Stop the VM
     if ! qm stop "$vmid" 2>&1; then
         echo "Error: Failed to stop VM ${vmid}" >&2
         return 1
     fi
-    
+
     # Wait for VM to fully stop
     local wait_count=0
     while [[ "$(qm status "$vmid" 2>/dev/null | awk '{print $2}')" == "running" ]]; do
@@ -823,7 +822,7 @@ __check_vm_status__() {
             return 1
         fi
     done
-    
+
     return 0
 }
 
@@ -838,30 +837,30 @@ __check_vm_status__() {
 #   CTID 100 is a valid container
 __validate_ctid__() {
     local ctid="$1"
-    
+
     if [[ -z "$ctid" ]]; then
         echo "Error: CTID is required" >&2
         return 1
     fi
-    
+
     # Validate CTID is numeric
     if ! [[ "$ctid" =~ ^[0-9]+$ ]]; then
         echo "Error: Invalid CTID '${ctid}' - must be numeric" >&2
         return 1
     fi
-    
+
     # Check if it's a container
     if pct status "$ctid" &>/dev/null; then
         return 0
     fi
-    
+
     # Check if it's a VM (not valid for this function)
     if qm status "$ctid" &>/dev/null; then
         echo "Error: CTID ${ctid} is a VM, not a container" >&2
         echo "Use __validate_vmid__ for VMs" >&2
         return 1
     fi
-    
+
     # CTID doesn't exist
     echo "Error: CTID ${ctid} not found" >&2
     return 1
@@ -880,10 +879,10 @@ __validate_ctid__() {
 __check_ct_status__() {
     local ctid="$1"
     shift
-    
+
     local should_stop=false
     local force_stop=false
-    
+
     # Parse optional arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -900,20 +899,20 @@ __check_ct_status__() {
                 ;;
         esac
     done
-    
+
     local status
     status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}')
-    
+
     if [[ "$status" != "running" ]]; then
         return 0
     fi
-    
+
     # Container is running
     if ! $should_stop; then
         echo "Warning: Container ${ctid} is running" >&2
         return 1
     fi
-    
+
     # Should stop - check if we need confirmation
     if ! $force_stop; then
         echo "Container ${ctid} is currently running and must be stopped" >&2
@@ -924,13 +923,13 @@ __check_ct_status__() {
             return 1
         fi
     fi
-    
+
     # Stop the container
     if ! pct stop "$ctid" 2>&1; then
         echo "Error: Failed to stop container ${ctid}" >&2
         return 1
     fi
-    
+
     # Wait for container to fully stop
     local wait_count=0
     while [[ "$(pct status "$ctid" 2>/dev/null | awk '{print $2}')" == "running" ]]; do
@@ -941,6 +940,35 @@ __check_ct_status__() {
             return 1
         fi
     done
-    
+
     return 0
+}
+
+# --- __is_local_ip__ ---------------------------------------------------------
+# Check if a given IP address belongs to the local node.
+#
+# Parameters:
+#   $1 - IP address to check
+#
+# Returns:
+#   0 if IP is local, 1 otherwise
+#
+# Example:
+#   if __is_local_ip__ "192.168.1.100"; then
+#       echo "IP is local"
+#   fi
+#
+__is_local_ip__() {
+    local ip_to_check="$1"
+    local local_ips ip
+
+    local_ips=$(hostname -I)
+
+    for ip in $local_ips; do
+        if [[ "$ip" == "$ip_to_check" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
 }

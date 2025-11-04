@@ -2,100 +2,101 @@
 #
 # PortScan.sh
 #
-# A script to scan one or multiple Proxmox hosts (or all in a cluster) to identify
-# which TCP ports are open. This script uses nmap (installing it if missing), then
-# optionally removes it when finished.
+# Scans TCP ports on Proxmox hosts using nmap.
 #
 # Usage:
-#   ./PortScan.sh <target-host> [<additional-hosts> ...]
-#   ./PortScan.sh all
+#   PortScan.sh <host> [<host2> ...]
+#   PortScan.sh all
+#
+# Arguments:
+#   host - Target host IP or hostname
+#   all - Scan all cluster nodes
 #
 # Examples:
-#   # Scans a single host at 192.168.1.50 for open TCP ports.
-#   ./PortScan.sh 192.168.1.50
-#
-#   # Scans multiple specified hosts for open TCP ports.
-#   ./PortScan.sh 192.168.1.50 192.168.1.51 192.168.1.52
-#
-#   # Discovers all cluster nodes from the Proxmox cluster configuration
-#   # and runs the open port scan on each node.
-#   ./PortScan.sh all
-#
-# Note: Use responsibly and only with explicit permission.
-#       Unauthorized port scanning may be illegal.
+#   PortScan.sh 192.168.1.50
+#   PortScan.sh 192.168.1.50 192.168.1.51
+#   PortScan.sh all
 #
 # Function Index:
-#   - usage_info
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Usage Information
-###############################################################################
-function usage_info() {
-  echo "Usage:"
-  echo "  $0 <target-host> [<additional-hosts> ...]"
-  echo "  $0 all"
-  echo
-  echo "Examples:"
-  echo "  # Scans a single host at 192.168.1.50 for open TCP ports."
-  echo "  $0 192.168.1.50"
-  echo
-  echo "  # Scans multiple specified hosts for open TCP ports."
-  echo "  $0 192.168.1.50 192.168.1.51 192.168.1.52"
-  echo
-  echo "  # Discovers all cluster nodes from the Proxmox cluster configuration,"
-  echo "  # then runs the open port scan on each node."
-  echo "  $0 all"
-  exit 1
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    if [[ $# -lt 1 ]]; then
+        __err__ "Missing required argument"
+        echo "Usage: $0 <host> [<host2> ...] | all"
+        exit 64
+    fi
+
+    __install_or_prompt__ "nmap"
+
+    local -a targets
+
+    if [[ "$1" == "all" ]]; then
+        __check_cluster_membership__
+
+        __info__ "Discovering cluster nodes"
+        mapfile -t targets < <(__get_remote_node_ips__)
+
+        if [[ ${#targets[@]} -eq 0 ]]; then
+            __err__ "No cluster nodes discovered"
+            exit 1
+        fi
+
+        __ok__ "Found ${#targets[@]} cluster node(s)"
+        for ip in "${targets[@]}"; do
+            echo "  - $ip"
+        done
+        echo
+    else
+        targets=("$@")
+    fi
+
+    __warn__ "Starting port scan on ${#targets[@]} host(s)"
+    __warn__ "Use responsibly and only with permission"
+
+    local scanned=0
+
+    for host in "${targets[@]}"; do
+        echo
+        echo "================================================================"
+        __info__ "Scanning: $host"
+        echo "================================================================"
+
+        if nmap -p- --open -n "${host}" 2>&1; then
+            __ok__ "Scan completed: $host"
+            ((scanned++))
+        else
+            __warn__ "Scan failed: $host"
+        fi
+
+        echo "================================================================"
+    done
+
+    echo
+    __ok__ "Port scan completed"
+    __info__ "Hosts scanned: $scanned"
+
+    __prompt_keep_installed_packages__
 }
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-if [[ $# -lt 1 ]]; then
-  usage_info
-fi
+main "$@"
 
-__install_or_prompt__ "nmap"
-
-if [[ "$1" == "all" ]]; then
-  __check_cluster_membership__
-  readarray -t discoveredHosts < <( __get_remote_node_ips__ )
-  
-  if [[ ${#discoveredHosts[@]} -eq 0 ]]; then
-    echo "Error: No hosts discovered in the cluster. Exiting."
-    exit 2
-  fi
-  
-  echo "[*] Discovered the following cluster node IPs:"
-  for ip in "${discoveredHosts[@]}"; do
-    echo "$ip"
-  done
-  echo
-  
-  targets=("${discoveredHosts[@]}")
-else
-  targets=("$@")
-fi
-
-for host in "${targets[@]}"; do
-  echo "======================================================================="
-  echo "[*] Scanning open TCP ports for host: \"${host}\""
-  echo "======================================================================="
-  nmap -p- --open -n "${host}"
-  echo "======================================================================="
-  echo "[*] Finished scanning \"${host}\""
-  echo "======================================================================="
-  echo
-done
-
-__prompt_keep_installed_packages__
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

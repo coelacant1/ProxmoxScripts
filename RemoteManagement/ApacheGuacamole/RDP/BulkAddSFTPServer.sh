@@ -15,14 +15,22 @@
 #   - "sftp-port" is set to the provided SFTP_PORT value (default: 22)
 #
 # Usage:
-#   ./BulkAddSFTPServer.sh GUAC_SERVER_URL SEARCH_SUBSTRING [SFTP_ROOT_DIRECTORY] [SFTP_PORT] [DATA_SOURCE]
+#   BulkAddSFTPServer.sh GUAC_SERVER_URL SEARCH_SUBSTRING [SFTP_ROOT_DIRECTORY] [SFTP_PORT] [DATA_SOURCE]
 #
 # Example:
-#   ./BulkAddSFTPServer.sh "http://172.20.192.10:8080/guacamole" "Clone" "/root/Desktop" 22 mysql
+#   BulkAddSFTPServer.sh "http://172.20.192.10:8080/guacamole" "Clone" "/root/Desktop" 22 mysql
 #
 
-# Optionally load utility functions (if available)
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 __install_or_prompt__ "jq"
 
 # Assign input parameters
@@ -32,7 +40,7 @@ SFTP_ROOT="${3:-/root/Desktop}"
 SFTP_PORT="${4:-22}"
 GUAC_DATA_SOURCE="${5:-mysql}"
 
-if [[ -z "$GUAC_URL"  -z "$SEARCH_SUBSTRING" ]]; then
+if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
     echo "Error: Missing required arguments."
     echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [SFTP_ROOT_DIRECTORY] [SFTP_PORT] [DATA_SOURCE]"
     exit 1
@@ -89,15 +97,15 @@ echo "Updating SFTP parameters for matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
-    
+
     echo "---------------------------------------------"
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
-    
+
     # Retrieve the full connection JSON.
     connectionInfo=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ -z "$connectionInfo" ]]; then
       echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
       continue
@@ -106,15 +114,15 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     # Retrieve existing parameters.
     existingParams=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
-    
+
     # Default to an empty object if no parameters are returned.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
-    
+
     # Extract the current password, hostname, and username from the existing parameters.
     current_password=$(echo "$existingParams" | jq -r '.password // ""')
     current_hostname=$(echo "$existingParams" | jq -r '.hostname // ""')
     current_username=$(echo "$existingParams" | jq -r '.username // ""')
-    
+
     # Build new parameters by updating/adding SFTP settings.
     newParams=$(echo "$existingParams" | jq --arg sftpRoot "$SFTP_ROOT" \
                                              --arg sftpPort "$SFTP_PORT" \
@@ -129,7 +137,7 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
         .["enable-sftp"]         = "true" |
         .["sftp-port"]           = $sftpPort
     ')
-    
+
     # Build the updated connection JSON payload.
     updatedJson=$(echo "$connectionInfo" | jq --argjson params "$newParams" '
         {
@@ -140,14 +148,14 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
           parameters: $params
         }
     ')
-    
+
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       -H "Content-Type: application/json" \
       -d "$updatedJson" \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
-    if [[ "$updateResponse" -eq 200  "$updateResponse" -eq 204 ]]; then
+
+    if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully updated SFTP parameters for connection '$connId'."
     else
         echo "  Failed to update connection '$connId' (HTTP status $updateResponse)."

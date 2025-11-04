@@ -2,180 +2,198 @@
 #
 # ExpandEXT4Partition.sh
 #
-# Non-interactive GPT fix + partition resize + ext4 resize using sgdisk + sfdisk,
-# ensuring we don't exceed the "last usable sector."
+# Expands a GPT partition and ext4 filesystem to use available disk space.
+# Non-interactive operation using sgdisk and sfdisk.
 #
 # Usage:
-#   ./ExpandEXT4Partition.sh /dev/sdb
+#   ExpandEXT4Partition.sh <device>
 #
-# Prerequisites/Assumptions:
-#   1) The disk is GPT-labeled, has exactly one partition (/dev/sdb1).
-#   2) It's ext4.
-#   3) The partition is not root or LVM.
-#   4) You have backups of your data.
-#   5) The partition can be unmounted (e.g. not in active use).
+# Arguments:
+#   device - Disk device (e.g., /dev/sdb)
 #
-# Example:
-#   # Resize /dev/sdb to maximum capacity
-#   ./ExpandEXT4Partition.sh /dev/sdb
+# Examples:
+#   ExpandEXT4Partition.sh /dev/sdb
 #
-
-source "${UTILITYPATH}/Prompts.sh"
-
-###############################################################################
-# Ensure script runs as root on a Proxmox system; install needed packages.
-###############################################################################
-__check_root__
-__check_proxmox__
-
-__install_or_prompt__ "gdisk"           # Provides sgdisk
-__install_or_prompt__ "parted"
-__install_or_prompt__ "util-linux"      # Ensures sfdisk, partprobe, etc. are present
-__install_or_prompt__ "e2fsprogs"       # Ensures e2fsck and resize2fs are present
-__install_or_prompt__ "uuid-runtime"    # Ensures uuidgen is present
-
-__prompt_keep_installed_packages__
+# Function Index:
+#   - main
+#
 
 set -euo pipefail
 
-###############################################################################
-# Check arguments
-###############################################################################
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 /dev/sdX"
-  exit 1
-fi
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-DISK="$1"
-PARTITION="${DISK}1"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Verify block device
-###############################################################################
-if [[ ! -b "$DISK" ]]; then
-  echo "ERROR: \"$DISK\" is not a valid block device."
-  exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-###############################################################################
-# Fix GPT with sgdisk -e (if needed), then probe
-###############################################################################
-echo "===> Step: Fix GPT with sgdisk -e (if needed)."
-sgdisk -e "$DISK" || true
-partprobe "$DISK" || true
-sleep 2
+    __install_or_prompt__ "gdisk"
+    __install_or_prompt__ "parted"
+    __install_or_prompt__ "util-linux"
+    __install_or_prompt__ "e2fsprogs"
+    __install_or_prompt__ "uuid-runtime"
 
-###############################################################################
-# Check that there is exactly one partition
-###############################################################################
-PART_COUNT=$(lsblk -no NAME "$DISK" | grep -c "^$(basename "$DISK")")
-if [[ "$PART_COUNT" -ne 1 ]]; then
-  echo "ERROR: Expected exactly 1 partition on \"$DISK\", found \"$PART_COUNT\"."
-  exit 1
-fi
+    if [[ $# -lt 1 ]]; then
+        __err__ "Missing required argument: device"
+        echo "Usage: $0 /dev/sdX"
+        exit 64
+    fi
 
-###############################################################################
-# Unmount if currently mounted
-###############################################################################
-MOUNTPOINT="$(lsblk -no MOUNTPOINT "$PARTITION" || true)"
-if [[ -n "$MOUNTPOINT" ]]; then
-  echo "Partition \"$PARTITION\" is currently mounted at \"$MOUNTPOINT\". Unmounting..."
-  umount "$PARTITION" || {
-    echo "ERROR: Could not unmount \"$PARTITION\". A process may still be using it."
-    exit 1
-  }
-fi
+    local disk="$1"
+    local partition="${disk}1"
 
-###############################################################################
-# Determine the last usable sector from sgdisk -p
-###############################################################################
-SGDISK_OUT="$(sgdisk -p "$DISK" || true)"
-LAST_USABLE=$(echo "$SGDISK_OUT" | sed -nE 's/.*last usable sector is ([0-9]+).*/\1/p')
+    # Verify block device
+    if [[ ! -b "$disk" ]]; then
+        __err__ "Not a valid block device: $disk"
+        exit 1
+    fi
 
-if [[ -z "$LAST_USABLE" ]]; then
-  echo "ERROR: Could not parse last usable sector from sgdisk output:"
-  echo "$SGDISK_OUT"
-  exit 1
-fi
+    __warn__ "This will resize partition ${partition} to use all available space"
+    __warn__ "Ensure you have backups before proceeding"
 
-echo "Last usable GPT sector on \"$DISK\" = \"$LAST_USABLE\""
+    if ! __prompt_yes_no__ "Proceed with partition expansion?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
 
-###############################################################################
-# Use sfdisk --dump to read the partition's start sector
-###############################################################################
-echo "===> Step: Reading partition info from sfdisk --dump..."
-SF_OUT="$(sfdisk --dump "$DISK")"
+    # Fix GPT if needed
+    __info__ "Fixing GPT table if needed"
+    sgdisk -e "$disk" 2>&1 || true
+    partprobe "$disk" 2>&1 || true
+    sleep 2
 
-PART_INFO="$(echo "$SF_OUT" | grep -E "^${PARTITION} :")"
-if [[ -z "$PART_INFO" ]]; then
-  echo "ERROR: Could not find \"${PARTITION} :\" in sfdisk dump."
-  echo "sfdisk --dump output was:"
-  echo "$SF_OUT"
-  exit 1
-fi
+    # Verify exactly one partition
+    local part_count
+    part_count=$(lsblk -no NAME "$disk" | grep -c "^$(basename "$disk")" || echo 0)
+    if [[ "$part_count" -ne 1 ]]; then
+        __err__ "Expected exactly 1 partition, found $part_count"
+        exit 1
+    fi
 
-START_SECTOR="$(echo "$PART_INFO" | sed -nE 's/.*start= *([0-9]+).*/\1/p')"
-if [[ -z "$START_SECTOR" ]]; then
-  echo "ERROR: Unable to parse start sector from partition info."
-  exit 1
-fi
+    # Unmount if mounted
+    local mountpoint
+    mountpoint=$(lsblk -no MOUNTPOINT "$partition" 2>/dev/null || true)
+    if [[ -n "$mountpoint" ]]; then
+        __info__ "Unmounting ${partition} from ${mountpoint}"
+        if umount "$partition" 2>&1; then
+            __ok__ "Unmounted successfully"
+        else
+            __err__ "Could not unmount ${partition}"
+            exit 1
+        fi
+    fi
 
-echo "Partition start sector = \"$START_SECTOR\""
+    # Get last usable sector
+    __info__ "Determining disk geometry"
+    local sgdisk_out
+    sgdisk_out=$(sgdisk -p "$disk" 2>&1 || true)
+    local last_usable
+    last_usable=$(echo "$sgdisk_out" | sed -nE 's/.*last usable sector is ([0-9]+).*/\1/p')
 
-###############################################################################
-# Calculate new partition size in sectors
-###############################################################################
-NEW_SIZE=$(( LAST_USABLE - START_SECTOR + 1 ))
-if (( NEW_SIZE < 1 )); then
-  echo "ERROR: Computed new_size < 1, something is wrong."
-  exit 1
-fi
+    if [[ -z "$last_usable" ]]; then
+        __err__ "Could not determine last usable sector"
+        exit 1
+    fi
 
-echo "New partition size     = \"$NEW_SIZE\" (in sectors)"
+    __info__ "Last usable sector: $last_usable"
 
-###############################################################################
-# Create an sfdisk input to rewrite partition #1 from START_SECTOR for NEW_SIZE
-###############################################################################
-TMPFILE="$(mktemp)"
-cat <<EOF > "$TMPFILE"
+    # Get partition start sector
+    local sf_out
+    sf_out=$(sfdisk --dump "$disk" 2>&1)
+    local part_info
+    part_info=$(echo "$sf_out" | grep -E "^${partition} :")
+
+    if [[ -z "$part_info" ]]; then
+        __err__ "Could not find partition info"
+        exit 1
+    fi
+
+    local start_sector
+    start_sector=$(echo "$part_info" | sed -nE 's/.*start= *([0-9]+).*/\1/p')
+
+    if [[ -z "$start_sector" ]]; then
+        __err__ "Could not determine start sector"
+        exit 1
+    fi
+
+    __info__ "Start sector: $start_sector"
+
+    # Calculate new size
+    local new_size=$((last_usable - start_sector + 1))
+    if ((new_size < 1)); then
+        __err__ "Invalid partition size calculated"
+        exit 1
+    fi
+
+    __info__ "New partition size: $new_size sectors"
+
+    # Create sfdisk input
+    local tmpfile
+    tmpfile=$(mktemp)
+    cat <<EOF > "$tmpfile"
 label: gpt
 label-id: $(uuidgen)
-device: $DISK
+device: $disk
 unit: sectors
 
-${PARTITION} : start=${START_SECTOR}, size=${NEW_SIZE}, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+${partition} : start=${start_sector}, size=${new_size}, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
 EOF
 
-echo "===> Step: Applying new partition layout with sfdisk..."
-sfdisk --no-reread --force "$DISK" < "$TMPFILE"
-rm -f "$TMPFILE"
+    __info__ "Applying new partition layout"
+    if sfdisk --no-reread --force "$disk" < "$tmpfile" 2>&1; then
+        __ok__ "Partition table updated"
+    else
+        __err__ "Failed to update partition table"
+        rm -f "$tmpfile"
+        exit 1
+    fi
+    rm -f "$tmpfile"
 
-partprobe "$DISK" || true
-sleep 2
+    partprobe "$disk" 2>&1 || true
+    sleep 2
 
-###############################################################################
-# Run e2fsck, then resize2fs
-###############################################################################
-echo "===> Step: Running e2fsck..."
-e2fsck -f -y "$PARTITION"
+    # Run e2fsck
+    __info__ "Checking filesystem"
+    if e2fsck -f -y "$partition" 2>&1; then
+        __ok__ "Filesystem check completed"
+    else
+        __warn__ "Filesystem check reported issues"
+    fi
 
-echo "===> Step: Resizing ext4 filesystem..."
-resize2fs "$PARTITION"
+    # Resize filesystem
+    __info__ "Resizing ext4 filesystem"
+    if resize2fs "$partition" 2>&1; then
+        __ok__ "Filesystem resized"
+    else
+        __err__ "Failed to resize filesystem"
+        exit 1
+    fi
 
-###############################################################################
-# Remount if it was mounted before
-###############################################################################
-if [[ -n "$MOUNTPOINT" ]]; then
-  echo "===> Step: Remounting \"$PARTITION\" at \"$MOUNTPOINT\"..."
-  mkdir -p "$MOUNTPOINT" 2>/dev/null || true
-  mount "$PARTITION" "$MOUNTPOINT"
-fi
+    # Remount if it was mounted
+    if [[ -n "$mountpoint" ]]; then
+        __info__ "Remounting at $mountpoint"
+        mkdir -p "$mountpoint" 2>/dev/null || true
+        if mount "$partition" "$mountpoint" 2>&1; then
+            __ok__ "Remounted successfully"
+        else
+            __warn__ "Could not remount partition"
+        fi
+    fi
 
-###############################################################################
-# Show final partition table
-###############################################################################
-echo "===> Final partition table for \"$DISK\":"
-parted -s "$DISK" print || true
+    echo
+    __ok__ "Partition expansion completed successfully!"
+    __info__ "Verify with: lsblk or df -h"
 
-echo "Resize completed successfully!"
-echo "Use 'lsblk' or 'df -h' to confirm the expanded space."
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

@@ -23,7 +23,7 @@
 #   bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCPVE.sh)"
 #
 
-set -e
+set -euo pipefail
 
 apt update || true
 

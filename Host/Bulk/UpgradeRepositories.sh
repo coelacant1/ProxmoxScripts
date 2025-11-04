@@ -2,194 +2,167 @@
 #
 # UpgradeRepositories.sh
 #
-# A script to:
-#   1. Identify the **latest** stable Debian codename that Proxmox currently supports (by querying
-#      http://download.proxmox.com/debian/pve/dists).
-#   2. Update your local Proxmox repository configuration to use that codename (e.g., switch
-#      from "buster" to "bullseye", or from "bullseye" to "bookworm") if it's different
-#      from what you currently have.
-#   3. Perform an apt-get update and apt-get dist-upgrade to pull the newest stable Proxmox
-#      packages (excluding pvetest).
+# Updates Proxmox repository to latest stable Debian codename and performs upgrade.
+# Queries download.proxmox.com to determine newest stable release.
 #
 # Usage:
-#   ./UpgradeRepositories.sh
-#     - Automatically switches your Proxmox repo to the newest stable codename and runs dist-upgrade.
+#   UpgradeRepositories.sh [--dry-run]
 #
-#   ./UpgradeRepositories.sh --dry-run
-#     - Shows what changes would be made but does not apply them.
-#
-#   ./UpgradeRepositories.sh --help
-#     - Prints this help message.
+# Arguments:
+#   --dry-run - Show changes without applying them
 #
 # Examples:
-#   # Standard usage (updates local repo config to newest stable codename + dist-upgrade):
-#   ./UpgradeRepositories.sh
-#
-#   # Check what would happen without making any changes:
-#   ./UpgradeRepositories.sh --dry-run
-#
-# Description/Notes:
-#   - "Latest" stable codename is determined by parsing the directory listing at:
-#       http://download.proxmox.com/debian/pve/dists/
-#     ignoring "pvetest" or "publickey" directories, then selecting the final entry (which
-#     should be the newest stable release).
-#
-#   - The script overwrites or creates /etc/apt/sources.list.d/pve-latest.list with
-#     the new codename if different from your existing config. This assumes a single
-#     stable Proxmox repository file. If you use multiple .list files or have an enterprise
-#     subscription, adjust accordingly.
-#
-#   - Make sure you have a valid snapshot/backup before switching to a new
-#     distribution codename, especially for major version upgrades (e.g., from buster to bullseye).
-#
-#   - Always confirm your environment supports upgrading to the new major release, and
-#     review official Proxmox documentation for recommended upgrade paths and caveats.
+#   UpgradeRepositories.sh
+#   UpgradeRepositories.sh --dry-run
 #
 # Function Index:
-#   - display_help
 #   - get_latest_proxmox_codename
 #   - ensure_latest_repo
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
 
-###############################################################################
-# Preliminary Checks via Utilities
-###############################################################################
-__check_root__
-__check_proxmox__
-__install_or_prompt__ "curl"
-__check_cluster_membership__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument Parsing
-###############################################################################
 DRY_RUN=false
 
-function display_help() {
-  sed -n '2,/^# Examples:/p' "$0" | sed 's/^#//'
-}
-
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run)
-      DRY_RUN=true
-      shift
-      ;;
-    --help|-h)
-      display_help
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: '$arg'"
-      echo "Use --help for usage."
-      exit 3
-      ;;
-  esac
-done
-
-###############################################################################
-# Functions
-###############################################################################
-
-# ----------------------------------------------------------------------------
-# get_latest_proxmox_codename
-#   Queries http://download.proxmox.com/debian/pve/dists/ to find the newest
-#   stable Proxmox codename by parsing out directories. Excludes "pvetest" and
-#   "publickey". Assumes the final directory is the newest stable codename.
-#   Prints the latest codename (e.g. "bullseye" or "bookworm"). Exits if none found.
-# ----------------------------------------------------------------------------
+# --- get_latest_proxmox_codename ---------------------------------------------
 get_latest_proxmox_codename() {
-  local tmpfile
-  tmpfile="$(mktemp)"
+    local tmpfile
+    tmpfile=$(mktemp)
 
-  curl -s "http://download.proxmox.com/debian/pve/dists/" > "$tmpfile"
-  if [[ ! -s "$tmpfile" ]]; then
-    echo "Error: Could not retrieve Proxmox 'dists' directory listing from the internet."
+    if ! curl -s "http://download.proxmox.com/debian/pve/dists/" > "$tmpfile"; then
+        __err__ "Could not retrieve Proxmox dists directory"
+        rm -f "$tmpfile"
+        exit 1
+    fi
+
+    local latest_codename
+    latest_codename=$(
+        grep -Po '(?<=href=")[^"]+(?=/")' "$tmpfile" \
+        | grep -Ev 'pvetest|publickey|^$' \
+        | tail -n 1
+    )
     rm -f "$tmpfile"
-    exit 4
-  fi
 
-  local latestCodename
-  latestCodename="$(
-    grep -Po '(?<=href=")[^"]+(?=/")' "$tmpfile" \
-      | egrep -v 'pvetest|publickey|^$' \
-      | tail -n 1
-  )"
-  rm -f "$tmpfile"
+    if [[ -z "$latest_codename" ]]; then
+        __err__ "Unable to parse valid stable codename"
+        exit 1
+    fi
 
-  if [[ -z "$latestCodename" ]]; then
-    echo "Error: Unable to parse a valid stable codename from Proxmox dists listing."
-    exit 5
-  fi
-
-  echo "$latestCodename"
+    echo "$latest_codename"
 }
 
-# ----------------------------------------------------------------------------
-# ensure_latest_repo
-#   Creates or updates /etc/apt/sources.list.d/pve-latest.list to reference
-#   the specified Proxmox codename for the 'pve-no-subscription' repository.
-# ----------------------------------------------------------------------------
+# --- ensure_latest_repo ------------------------------------------------------
 ensure_latest_repo() {
-  local latest="$1"
-  local repoFile="/etc/apt/sources.list.d/pve-latest.list"
-  local repoLine="deb http://download.proxmox.com/debian/pve '$latest' pve-no-subscription"
+    local latest="$1"
+    local repo_file="/etc/apt/sources.list.d/pve-latest.list"
+    local repo_line="deb http://download.proxmox.com/debian/pve $latest pve-no-subscription"
 
-  if [[ ! -f "$repoFile" ]]; then
-    echo "Proxmox stable repo file not found at '$repoFile'."
-    if [[ "$DRY_RUN" == true ]]; then
-      echo "[DRY-RUN] Would create '$repoFile' with:"
-      echo "  $repoLine"
-    else
-      echo "Creating '$repoFile'..."
-      echo "$repoLine" > "$repoFile"
+    if [[ ! -f "$repo_file" ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            __info__ "[DRY-RUN] Would create $repo_file"
+        else
+            __info__ "Creating $repo_file"
+            echo "$repo_line" > "$repo_file"
+            __ok__ "Repository file created"
+        fi
+        return
     fi
-    return
-  fi
 
-  if grep -Eq "^deb .*proxmox.com.* $latest .*pve-no-subscription" "$repoFile"; then
-    echo "'$repoFile' already references the latest codename '$latest'. No change needed."
-  else
-    echo "Repository file exists but does not match the latest Proxmox codename '$latest'."
-    if [[ "$DRY_RUN" == true ]]; then
-      echo "[DRY-RUN] Would overwrite '$repoFile' with:"
-      echo "  $repoLine"
+    if grep -Eq "^deb .*proxmox.com.* $latest .*pve-no-subscription" "$repo_file"; then
+        __ok__ "Repository already references latest codename: $latest"
     else
-      echo "Overwriting '$repoFile' with new repo line for codename '$latest'..."
-      echo "$repoLine" > "$repoFile"
+        if [[ "$DRY_RUN" == true ]]; then
+            __info__ "[DRY-RUN] Would update $repo_file to codename: $latest"
+        else
+            __info__ "Updating repository to codename: $latest"
+            echo "$repo_line" > "$repo_file"
+            __ok__ "Repository updated"
+        fi
     fi
-  fi
 }
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "Retrieving latest Proxmox stable codename from the internet..."
-LATEST_CODENAME="$(get_latest_proxmox_codename)"
-echo "Latest stable Proxmox codename is: '$LATEST_CODENAME'"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __install_or_prompt__ "curl"
+    __check_cluster_membership__
 
-echo "Ensuring local repository file references '$LATEST_CODENAME'..."
-ensure_latest_repo "$LATEST_CODENAME"
+    # Parse arguments
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run)
+                DRY_RUN=true
+                __info__ "Dry-run mode enabled"
+                ;;
+            --help|-h)
+                __info__ "Usage: $0 [--dry-run]"
+                exit 0
+                ;;
+            *)
+                __err__ "Unknown argument: $arg"
+                exit 64
+                ;;
+        esac
+    done
 
-# Refresh package lists
-if [[ "$DRY_RUN" == true ]]; then
-  echo "[DRY-RUN] Would run: apt update"
-else
-  echo "Updating package lists..."
-  apt update
-fi
+    __warn__ "This will update Proxmox repositories and perform system upgrade"
+    if [[ "$DRY_RUN" != true ]]; then
+        if ! __prompt_yes_no__ "Proceed with repository upgrade?"; then
+            __info__ "Operation cancelled"
+            exit 0
+        fi
+    fi
 
-# Now run dist-upgrade to get the newest stable packages
-if [[ "$DRY_RUN" == true ]]; then
-  echo "[DRY-RUN] Would run: apt upgrade -y"
-else
-  echo "Performing dist-upgrade to pull the newest stable Proxmox packages..."
-  apt upgrade -y
-fi
+    __info__ "Retrieving latest Proxmox stable codename"
+    local latest_codename
+    latest_codename=$(get_latest_proxmox_codename)
+    __ok__ "Latest stable codename: $latest_codename"
 
-echo "Repository check, upgrade, and potential distribution switch are complete."
-echo "Script finished successfully."
+    __info__ "Updating repository configuration"
+    ensure_latest_repo "$latest_codename"
 
-__prompt_keep_installed_packages__
+    # Update package lists
+    if [[ "$DRY_RUN" == true ]]; then
+        __info__ "[DRY-RUN] Would run: apt update"
+        __info__ "[DRY-RUN] Would run: apt upgrade -y"
+    else
+        __info__ "Updating package lists"
+        if apt-get update -qq 2>&1; then
+            __ok__ "Package lists updated"
+        else
+            __err__ "Failed to update package lists"
+            exit 1
+        fi
+
+        __info__ "Performing system upgrade"
+        if apt-get upgrade -y 2>&1; then
+            __ok__ "System upgraded successfully"
+        else
+            __err__ "Failed to upgrade system"
+            exit 1
+        fi
+    fi
+
+    echo
+    __ok__ "Repository upgrade completed successfully!"
+    __info__ "Verify with: apt-cache policy pve-manager"
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

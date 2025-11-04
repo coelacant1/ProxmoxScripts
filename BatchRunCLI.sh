@@ -16,9 +16,9 @@
 #   - usage
 #   - parse_args
 #   - ensure_dependencies
+#   - enter_alternate_screen
+#   - exit_alternate_screen
 #   - gather_interactive_inputs
-#   - show_header_block
-#   - extract_example_lines
 #   - choose_script_via_navigation
 #   - build_remote_script_command
 #   - wrap_remote_command
@@ -27,6 +27,8 @@
 #   - cleanup
 #   - main
 #
+
+set -euo pipefail
 
 set -u
 
@@ -169,7 +171,7 @@ gather_interactive_inputs() {
         read -r -s -p "SSH password for ${SSH_USER}: " SSH_PASS
         echo
     fi
-    
+
     read -r -p "Git branch to use (default: main): " branch_input
     if [[ -n "$branch_input" ]]; then
         GIT_BRANCH="$branch_input"

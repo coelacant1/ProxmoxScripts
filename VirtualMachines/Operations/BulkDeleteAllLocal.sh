@@ -1,38 +1,105 @@
 #!/bin/bash
 #
-# This script deletes all virtual machines (VMs) currently listed on this Proxmox machine.
-# It performs three actions for each VM: unprotects, stops, and destroys them.
-# WARNING: This script will permanently delete all VMs on the Proxmox machine.
+# BulkDeleteAllLocal.sh
+#
+# Deletes all virtual machines (VMs) on the local Proxmox node.
+# WARNING: This permanently deletes ALL VMs on the current node.
 #
 # Usage:
-# ./BulkDeleteAllLocal.sh
+#   BulkDeleteAllLocal.sh [--force]
+#
+# Arguments:
+#   --force - Skip confirmation prompt
+#
+# Examples:
+#   BulkDeleteAllLocal.sh
+#   BulkDeleteAllLocal.sh --force
+#
+# Function Index:
+#   - main
+#   - delete_vm_callback
 #
 
-# Fetch the list of all VM IDs
-VM_IDS=$(qm list | awk 'NR>1 {print $1}')
+set -euo pipefail
 
-if [ -z "$VM_IDS" ]; then
-    echo "No VMs found on this Proxmox machine."
-    exit 0
-fi
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/ProxmoxAPI.sh
+source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Confirm action before proceeding
-echo "WARNING: This will delete the following VMs permanently:"
-echo "$VM_IDS"
-read -p "Are you sure you want to proceed? Type 'yes' to continue: " CONFIRMATION
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [ "$CONFIRMATION" != "yes" ]; then
-    echo "Operation canceled."
-    exit 0
-fi
+# Parse arguments
+__parse_args__ "--force:flag" "$@"
 
-# Iterate through each VM ID and delete it
-for vmid in $VM_IDS; do
-    echo "Processing VM ID: $vmid"
-    qm set $vmid --protection 0
-    qm stop $vmid
-    qm destroy $vmid
-    echo "VM ID $vmid has been deleted."
-done
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "All VMs have been deleted successfully."
+    # Get list of all local VM IDs
+    local vm_ids
+    vm_ids=$(qm list | awk 'NR>1 {print $1}')
+
+    if [[ -z "$vm_ids" ]]; then
+        __info__ "No VMs found on this Proxmox node"
+        exit 0
+    fi
+
+    # Convert to array
+    local -a vm_array
+    read -r -a vm_array <<< "$vm_ids"
+
+    __warn__ "This will permanently delete ${#vm_array[@]} VM(s) on this node:"
+    echo "$vm_ids"
+
+    # Confirm unless --force
+    if [[ -z "${FORCE:-}" ]]; then
+        if ! __prompt_yes_no__ "Are you sure you want to delete all VMs?"; then
+            __info__ "Operation canceled"
+            exit 0
+        fi
+    fi
+
+    # Local callback for bulk operation
+    delete_vm_callback() {
+        local vmid="$1"
+
+        # Disable protection
+        __vm_set_protection__ "$vmid" 0
+
+        # Stop VM
+        __vm_stop__ "$vmid"
+
+        # Delete VM
+        __vm_delete__ "$vmid" --purge
+    }
+
+    # Process each VM
+    BULK_OPERATION_NAME="Delete"
+    for vmid in "${vm_array[@]}"; do
+        if delete_vm_callback "$vmid"; then
+            ((BULK_SUCCESS++))
+        else
+            ((BULK_FAILED++))
+            BULK_FAILED_IDS+=("$vmid")
+        fi
+    done
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All VMs deleted successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework

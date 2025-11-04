@@ -9,20 +9,20 @@
 #   3. configure - Adjust CPU governor ("performance", "balanced", or "powersave") with optional min/max frequencies.
 #
 # Usage:
-#   ./EnableCPUScalingGoverner.sh install [performance|balanced|powersave] [opts]
-#   ./EnableCPUScalingGoverner.sh remove
-#   ./EnableCPUScalingGoverner.sh configure [performance|balanced|powersave] [opts]
+#   EnableCPUScalingGoverner.sh install [performance|balanced|powersave] [opts]
+#   EnableCPUScalingGoverner.sh remove
+#   EnableCPUScalingGoverner.sh configure [performance|balanced|powersave] [opts]
 #
 # Common options for "install" or "configure":
 #   -m, --min <freq>  Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)
 #   -M, --max <freq>  Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)
 #
 # Examples:
-#   ./EnableCPUScalingGoverner.sh install
-#   ./EnableCPUScalingGoverner.sh install performance -m 1.2GHz -M 3.0GHz
-#   ./EnableCPUScalingGoverner.sh remove
-#   ./EnableCPUScalingGoverner.sh configure balanced
-#   ./EnableCPUScalingGoverner.sh configure powersave --min 800MHz
+#   EnableCPUScalingGoverner.sh install
+#   EnableCPUScalingGoverner.sh install performance -m 1.2GHz -M 3.0GHz
+#   EnableCPUScalingGoverner.sh remove
+#   EnableCPUScalingGoverner.sh configure balanced
+#   EnableCPUScalingGoverner.sh configure powersave --min 800MHz
 #
 # Further Explanation:
 #   - "balanced" maps to either "ondemand" or "schedutil", whichever is available.
@@ -40,6 +40,8 @@
 #   - do_remove
 #   - do_configure
 #
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -62,7 +64,7 @@ SYSTEM_DEFAULT="${BALANCED_FALLBACK}"
 ###############################################################################
 # Check Requirements
 ###############################################################################
-# We assume this script is used primarily on Proxmox. If run outside Proxmox, 
+# We assume this script is used primarily on Proxmox. If run outside Proxmox,
 # remove or comment out __check_proxmox__ as needed.
 __check_root__
 __check_proxmox__

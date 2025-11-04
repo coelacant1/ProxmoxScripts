@@ -7,20 +7,27 @@
 #
 # Usage:
 #   # Install/Configure:
-#   ./OptimizeSpindown.sh <time_in_minutes> <device_path1> [<device_path2> ...]
+#   OptimizeSpindown.sh <time_in_minutes> <device_path1> [<device_path2> ...]
 #
 #   # Uninstall (removes hdparm, spindown service, and helper script):
-#   ./OptimizeSpindown.sh uninstall
+#   OptimizeSpindown.sh uninstall
 #
 # Examples:
 #   # Set a 15-minute spindown for /dev/sda and /dev/sdb
-#   ./OptimizeSpindown.sh 15 /dev/sda /dev/sdb
+#   OptimizeSpindown.sh 15 /dev/sda /dev/sdb
 #
 #   # Uninstall and remove all changes
-#   ./OptimizeSpindown.sh uninstall
+#   OptimizeSpindown.sh uninstall
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
 source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Global Variables
@@ -118,7 +125,7 @@ cat <<EOF > "$HELPER_SCRIPT"
 # Auto-generated script for spinning down drives.
 # Do not edit directly; edits may be overwritten by the installation script.
 
-set -e
+set -euo pipefail
 
 echo "Applying hdparm spindown settings..."
 EOF

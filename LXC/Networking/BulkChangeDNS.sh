@@ -2,58 +2,65 @@
 #
 # BulkChangeDNS.sh
 #
-# This script updates DNS nameservers for a series of LXC containers, from a specified
-# start ID to a specified end ID (inclusive).
+# Updates DNS nameservers for a range of LXC containers within a Proxmox VE cluster.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeDNS.sh <start_ct_id> <end_ct_id> <dns1> [<dns2> <dns3> ...]
+#   BulkChangeDNS.sh <start_ct_id> <end_ct_id> <dns_servers>
 #
-# Example:
-#   ./BulkChangeDNS.sh 400 402 8.8.8.8 1.1.1.1
-#   This updates containers 400, 401, and 402 to use DNS servers 8.8.8.8 and 1.1.1.1
+# Arguments:
+#   start_ct_id - Starting container ID
+#   end_ct_id   - Ending container ID
+#   dns_servers - Space-separated DNS server addresses (e.g., "8.8.8.8 1.1.1.1")
 #
-# Note:
-#   - You can pass more than two DNS servers if desired. They get appended.
-#   - If you want to specify a single DNS server, omit the rest.
-#   - Must be run as root on a Proxmox node.
+# Examples:
+#   BulkChangeDNS.sh 400 402 "8.8.8.8 1.1.1.1"
+#   BulkChangeDNS.sh 400 402 "8.8.8.8"
+#
+# Function Index:
+#   - main
+#   - change_dns_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <dns1> [<dns2> <dns3> ...]"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid dns_servers:string" "$@"
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-shift 2
-DNS_SERVERS="$*"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "DNS servers to set: \"$DNS_SERVERS\""
-echo "=== Starting DNS update for containers in range ${START_CT_ID}..${END_CT_ID} ==="
+    __info__ "Bulk change DNS: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "DNS servers: ${DNS_SERVERS}"
 
-__check_root__
-__check_proxmox__
-# If a cluster check is required, uncomment:
-# __check_cluster_membership__
+    change_dns_callback() {
+        local vmid="$1"
+        __ct_set_dns__ "$vmid" "$DNS_SERVERS"
+    }
 
-for (( CT_ID=START_CT_ID; CT_ID<=END_CT_ID; CT_ID++ )); do
-  if pct config "$CT_ID" &>/dev/null; then
-    echo "Updating DNS for container $CT_ID to: \"$DNS_SERVERS\""
-    if pct set "$CT_ID" -nameserver "$DNS_SERVERS"; then
-      echo " - Successfully updated DNS for CT $CT_ID."
-    else
-      echo " - Failed to update DNS for CT $CT_ID."
-    fi
-  else
-    echo " - Container $CT_ID does not exist. Skipping."
-  fi
-done
+    __bulk_ct_operation__ --name "Change DNS" --report "$START_VMID" "$END_VMID" change_dns_callback
 
-echo "=== Bulk DNS change process complete! ==="
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "DNS settings updated successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

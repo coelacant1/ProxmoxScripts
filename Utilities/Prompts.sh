@@ -34,6 +34,8 @@
 #   - __require_root_and_proxmox__
 #
 
+set -euo pipefail
+
 ###############################################################################
 # GLOBALS
 ###############################################################################
@@ -76,14 +78,14 @@ __check_proxmox__() {
 # @usage __prompt_user_yn__ "Question text?"
 # @param question The question to ask the user
 # @return Returns 0 if user answers yes (Y/y), 1 if user answers no (N/n) or presses Enter (default: no)
-# @example_output 
+# @example_output
 #   __prompt_user_yn__ "Continue with operation?" && echo "Proceeding..." || echo "Cancelled"
 __prompt_user_yn__() {
     local question="$1"
     local response
-    
+
     read -r -p "${question} [y/N]: " response
-    
+
     if [[ "$response" =~ ^[Yy]$ ]]; then
         return 0
     else

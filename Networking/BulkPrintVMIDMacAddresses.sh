@@ -1,68 +1,103 @@
 #!/bin/bash
 #
-# This script retrieves the network configuration details for all virtual machines (VMs) across all nodes in a Proxmox cluster.
-# It outputs the MAC addresses associated with each VM, helping in network configuration audits or inventory management.
-# The script utilizes the Proxmox VE command-line tool pvesh to fetch information in JSON format and parses it using jq.
+# BulkPrintVMIDMacAddresses.sh
+#
+# Prints MAC addresses for all VMs and containers across cluster in CSV format.
 #
 # Usage:
-# Simply run this script on a Proxmox cluster host that has permissions to access the Proxmox VE API:
-# ./BulkPrintVMIDMacAddresses.sh
+#   BulkPrintVMIDMacAddresses.sh
+#
+# Examples:
+#   BulkPrintVMIDMacAddresses.sh
+#   BulkPrintVMIDMacAddresses.sh > mac_addresses.csv
+#
+# Function Index:
+#   - main
 #
 
-# Source utility scripts (adjust UTILITYPATH as needed)
+set -euo pipefail
 
-###############################################################################
-# Pre-flight checks
-###############################################################################
-check_root
-check_proxmox
-install_or_prompt "jq"
-check_cluster_membership
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
+source "${UTILITYPATH}/Queries.sh"
 
-# Print header for CSV output
-echo "Nodename, CTID/VMID, VM or CT, Mac Address"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main Logic: Iterate locally through /etc/pve/nodes/<node>/qemu-server and /lxc
-###############################################################################
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
 
-# Loop over each node directory in /etc/pve/nodes
-for nodeDir in /etc/pve/nodes/*; do
-  if [ -d "$nodeDir" ]; then
-    nodeName=$(basename "$nodeDir")
-    
-    # Process QEMU virtual machine configuration files
-    qemuDir="$nodeDir/qemu-server"
-    if [ -d "$qemuDir" ]; then
-      for configFile in "$qemuDir"/*.conf; do
-        if [ -f "$configFile" ]; then
-          vmid=$(basename "$configFile" .conf)
-          # Look for lines starting with "net" and extract MAC addresses (format: XX:XX:XX:XX:XX:XX)
-          macs=$(grep -E '^net[0-9]+:' "$configFile" \
-                  | grep -Eo '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' \
-                  | tr '\n' ' ' \
-                  | sed 's/ *$//')
-          [ -z "$macs" ] && macs="None"
-          echo "$nodeName, $vmid, VM, $macs"
+    # Print CSV header
+    echo "Nodename,CTID/VMID,Type,MacAddress"
+
+    local total_entries=0
+
+    # Loop over each node directory
+    for node_dir in /etc/pve/nodes/*; do
+        if [[ ! -d "$node_dir" ]]; then
+            continue
         fi
-      done
-    fi
 
-    # Process LXC container configuration files
-    lxcDir="$nodeDir/lxc"
-    if [ -d "$lxcDir" ]; then
-      for configFile in "$lxcDir"/*.conf; do
-        if [ -f "$configFile" ]; then
-          ctid=$(basename "$configFile" .conf)
-          macs=$(grep -E '^net[0-9]+:' "$configFile" \
-                  | grep -Eo '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' \
-                  | tr '\n' ' ' \
-                  | sed 's/ *$//')
-          [ -z "$macs" ] && macs="None"
-          echo "$nodeName, $ctid, CT, $macs"
+        local node_name
+        node_name=$(basename "$node_dir")
+
+        # Process QEMU VMs
+        local qemu_dir="${node_dir}/qemu-server"
+        if [[ -d "$qemu_dir" ]]; then
+            for config_file in "$qemu_dir"/*.conf; do
+                if [[ ! -f "$config_file" ]]; then
+                    continue
+                fi
+
+                local vm_id
+                vm_id=$(basename "$config_file" .conf)
+
+                local macs
+                macs=$(grep -E '^net[0-9]+:' "$config_file" \
+                    | grep -Eo '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' \
+                    | tr '\n' ' ' \
+                    | sed 's/ *$//')
+
+                [[ -z "$macs" ]] && macs="None"
+                echo "$node_name,$vm_id,VM,$macs"
+                ((total_entries++))
+            done
         fi
-      done
-    fi
 
-  fi
-done
+        # Process LXC containers
+        local lxc_dir="${node_dir}/lxc"
+        if [[ -d "$lxc_dir" ]]; then
+            for config_file in "$lxc_dir"/*.conf; do
+                if [[ ! -f "$config_file" ]]; then
+                    continue
+                fi
+
+                local ct_id
+                ct_id=$(basename "$config_file" .conf)
+
+                local macs
+                macs=$(grep -E '^net[0-9]+:' "$config_file" \
+                    | grep -Eo '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' \
+                    | tr '\n' ' ' \
+                    | sed 's/ *$//')
+
+                [[ -z "$macs" ]] && macs="None"
+                echo "$node_name,$ct_id,CT,$macs"
+                ((total_entries++))
+            done
+        fi
+    done
+
+    __info__ "Total entries: $total_entries" >&2
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

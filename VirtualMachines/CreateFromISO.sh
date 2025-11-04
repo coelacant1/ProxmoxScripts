@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 #
 # CreateFromISO.sh
 #
@@ -6,10 +7,10 @@
 # and creates a Proxmox VM with user-specified or tier-based parameters.
 #
 # Usage (non-interactive example):
-#   ./CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso"
+#   CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso"
 #
 # More options:
-#   ./CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso" -s "local-lvm" -d 32 -b uefi -p t0h -v vmbr1
+#   CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso" -s "local-lvm" -d 32 -b uefi -p t0h -v vmbr1
 #
 # Tier Profiles (memory in GiB, cores):
 #   t0h: 64GB, 20 cores, host CPU
@@ -74,7 +75,7 @@ function pick_largest_storage_for_content {
 
 ###############################################################################
 # parse_disk_size_gib:
-#   - Strips a trailing 'G' or 'g' from user input (e.g., "32G" → "32").
+#   - Strips a trailing 'G' or 'g' from user input (e.g., "32G" -> "32").
 #   - Checks if the remaining string is numeric.
 #   - If not numeric, prints error and exits.
 #   - Returns the numeric value (in GiB) to stdout.
@@ -254,7 +255,7 @@ function pick_iso_local_or_remote {
             dispName="$(basename "$link")"
         fi
 
-        # We'll store the display name for the user, 
+        # We'll store the display name for the user,
         # but keep the real link after ### so we can still download from it
         remoteIsos+=( "Remote: ${dispName}###${link}" )
     done < <( tr -d '\r' < "$csvPath" | grep -v '^[[:space:]]*$' )
@@ -421,7 +422,7 @@ else
     if [[ -n "$ISO_URL" ]]; then
         isoName="$(basename "$ISO_URL")"
     fi
-    
+
     MEMORY_GIB="8"
     CPU_CORES="4"
     CPU_MODEL="default"

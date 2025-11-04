@@ -7,8 +7,8 @@
 # `ceph-mon@<id>.service` units and restarts them safely with systemd.
 #
 # Usage:
-#   ./RestartMonitor.sh restart     # (default) Restart MON daemons
-#   ./RestartMonitor.sh status      # Show MON daemon status only
+#   RestartMonitor.sh restart     # (default) Restart MON daemons
+#   RestartMonitor.sh status      # Show MON daemon status only
 #
 # Function Index:
 #   - _find_mon_units
@@ -16,9 +16,13 @@
 #   - statusMon
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 
 __check_root__
@@ -44,7 +48,7 @@ function restartMon() {
 
     echo "Restarting Ceph Monitor daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-mon daemons have been restarted."

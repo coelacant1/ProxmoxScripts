@@ -2,68 +2,70 @@
 #
 # DeleteCluster.sh
 #
-# Script to remove a single-node Proxmox cluster configuration,
-# returning the node to a standalone setup.
+# Removes cluster configuration from a single-node Proxmox cluster,
+# returning the node to standalone mode.
 #
 # Usage:
-#   ./DeleteCluster.sh
+#   DeleteCluster.sh
 #
-# Warning:
-#   - If this node is part of a multi-node cluster, first remove other nodes
-#     from the cluster (pvecm delnode <nodename>) until this is the last node.
-#   - This process is DESTRUCTIVE and will remove cluster configuration.
+# Examples:
+#   DeleteCluster.sh
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__        # Ensure script is run as root
-__check_proxmox__     # Ensure this is a Proxmox node
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "=== Proxmox Cluster Removal (Single-Node) ==="
-echo "This will remove Corosync/cluster configuration from this node."
-read -r -p "Proceed? (y/N): " confirm
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-  echo "Aborted."
-  exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-nodeCount="$(__get_number_of_cluster_nodes__)"
-if [[ "$nodeCount" -gt 1 ]]; then
-  echo "Error: This script is for a single-node cluster only."
-  echo "Current cluster shows \"$nodeCount\" nodes. Remove other nodes first, then re-run."
-  exit 2
-fi
+    __warn__ "This will remove cluster configuration from this node"
+    __warn__ "This is DESTRUCTIVE and cannot be undone"
 
-echo "Stopping cluster services..."
-systemctl stop corosync || true
-systemctl stop pve-cluster || true
+    if ! __prompt_yes_no__ "Proceed with cluster removal?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
 
-echo "Removing Corosync config from /etc/pve and /etc/corosync..."
-rm -f "/etc/pve/corosync.conf" 2>/dev/null || true
-rm -rf "/etc/corosync/"* 2>/dev/null || true
+    local node_count
+    node_count=$(__get_number_of_cluster_nodes__)
+    if [[ "$node_count" -gt 1 ]]; then
+        __err__ "This script is for single-node clusters only"
+        __err__ "Current cluster has ${node_count} nodes. Remove other nodes first."
+        exit 1
+    fi
 
-# Optionally remove additional cluster-related config (use caution):
-# rm -f /etc/pve/cluster.conf 2>/dev/null || true
+    __info__ "Stopping cluster services"
+    systemctl stop corosync || true
+    systemctl stop pve-cluster || true
 
-echo "Restarting pve-cluster (it will now run standalone)..."
-systemctl start pve-cluster
+    __info__ "Removing Corosync configuration"
+    rm -f "/etc/pve/corosync.conf" 2>/dev/null || true
+    rm -rf "/etc/corosync/"* 2>/dev/null || true
 
-echo "Verifying that corosync is not running..."
-systemctl stop corosync 2>/dev/null || true
-systemctl disable corosync 2>/dev/null || true
+    __info__ "Restarting pve-cluster in standalone mode"
+    systemctl start pve-cluster
 
-echo "=== Done ==="
-echo "This node is no longer part of any Proxmox cluster."
-echo "You can verify by running 'pvecm status' (it should show no cluster)."
+    __info__ "Disabling corosync service"
+    systemctl stop corosync 2>/dev/null || true
+    systemctl disable corosync 2>/dev/null || true
 
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node
+    __ok__ "Cluster configuration removed successfully!"
+    __info__ "This node is now standalone. Verify with: pvecm status"
+}
+
+main
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

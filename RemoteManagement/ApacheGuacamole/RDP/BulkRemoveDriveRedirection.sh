@@ -15,14 +15,22 @@
 # are preserved.
 #
 # Usage:
-#   ./BulkRemoveDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
+#   BulkRemoveDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
 #
 # Example:
-#   ./BulkRemoveDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+#   BulkRemoveDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
 #
 
-# Optionally load utility functions (if you have them available)
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 __install_or_prompt__ "jq"
 
 # Assign input parameters
@@ -64,7 +72,7 @@ fi
 echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
   --arg SUBSTR "$SEARCH_SUBSTRING" '
-    [ (.childConnections // [])[] 
+    [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | { id: .identifier, name: .name } ]
   ')
@@ -86,15 +94,15 @@ echo "Removing drive redirection parameters from matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
-    
+
     echo "---------------------------------------------"
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
-    
+
     # Retrieve the full connection JSON using the identifier.
     connectionInfo=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ -z "$connectionInfo" ]]; then
       echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
       continue
@@ -103,13 +111,13 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     # Retrieve existing parameters from the dedicated endpoint.
     existingParams=$(curl -s -X GET \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
-    
+
     # If no parameters are returned, default to an empty object.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
-    
+
     # Remove drive redirection keys.
     newParams=$(echo "$existingParams" | jq 'del(.["enable-drive"], .["drive-name"], .["drive-path"], .["create-drive-path"])')
-    
+
     # Build the updated connection JSON payload.
     # Preserve parentIdentifier, name, protocol, and attributes from connectionInfo.
     updatedJson=$(echo "$connectionInfo" | jq --argjson params "$newParams" '
@@ -121,13 +129,13 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
           parameters: $params
         }
     ')
-    
+
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       -H "Content-Type: application/json" \
       -d "$updatedJson" \
       "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
-    
+
     if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully updated connection '$connId'."
     else

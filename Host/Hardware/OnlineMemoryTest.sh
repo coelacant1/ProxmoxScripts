@@ -2,63 +2,71 @@
 #
 # OnlineMemoryTest.sh
 #
-# A script to perform an in-memory RAM test on a running Proxmox server without fully shutting down.
-# Uses the 'memtester' utility to allocate and test a portion of system memory in gigabytes.
+# Performs in-memory RAM test on a running Proxmox server using memtester.
 #
 # Usage:
-#   ./OnlineMemoryTest.sh <size-in-GB>
+#   OnlineMemoryTest.sh <size_in_gb>
+#
+# Arguments:
+#   size_in_gb - Amount of RAM to test in gigabytes
 #
 # Examples:
-#   ./OnlineMemoryTest.sh 1
-#       This command tests 1GB (1024MB) of RAM in a running system.
+#   OnlineMemoryTest.sh 1
+#   OnlineMemoryTest.sh 2
 #
-#   ./OnlineMemoryTest.sh 2
-#       This command tests 2GB (2048MB) of RAM in a running system.
-#
-# Note:
-#   - Running this script may temporarily reduce available memory for other processes.
-#   - For best results, stop or pause non-critical workloads before testing.
-#   - This script MUST be run as root and on a Proxmox host.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-if [[ $# -lt 1 ]]; then
-  echo "Error: Missing <size-in-GB> argument."
-  echo "Usage: $0 <size-in-GB>"
-  exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-TEST_SIZE_GB="$1"
-re='^[0-9]+$'
-if ! [[ "$TEST_SIZE_GB" =~ $re ]]; then
-  echo "Error: <size-in-GB> must be a positive integer."
-  exit 2
-fi
+    if [[ $# -lt 1 ]]; then
+        __err__ "Missing required argument: size_in_gb"
+        echo "Usage: $0 <size_in_gb>"
+        exit 64
+    fi
 
-TEST_SIZE_MB=$(( TEST_SIZE_GB * 1024 ))
+    local test_size_gb="$1"
 
-###############################################################################
-# Check for and Possibly Install 'memtester'
-###############################################################################
-__install_or_prompt__ "memtester"
+    # Validate input is a positive integer
+    if ! [[ "$test_size_gb" =~ ^[0-9]+$ ]]; then
+        __err__ "Size must be a positive integer"
+        exit 1
+    fi
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "Starting in-memory test for \"${TEST_SIZE_MB}MB\" (\"${TEST_SIZE_GB}GB\")..."
-memtester "${TEST_SIZE_MB}M" 1
-echo "Memory test completed. Check output above for any errors or failures."
+    local test_size_mb=$((test_size_gb * 1024))
 
-###############################################################################
-# Prompt to Keep or Remove Installed Packages
-###############################################################################
-__prompt_keep_installed_packages__
+    __install_or_prompt__ "memtester"
 
-exit 0
+    __warn__ "Testing ${test_size_gb}GB (${test_size_mb}MB) of RAM"
+    __warn__ "This may temporarily reduce available memory for other processes"
+
+    __info__ "Starting memory test"
+    if memtester "${test_size_mb}M" 1 2>&1; then
+        __ok__ "Memory test completed"
+        __info__ "Check output above for any errors or failures"
+    else
+        __err__ "Memory test encountered errors"
+        exit 1
+    fi
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

@@ -7,7 +7,7 @@
 # Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkSetCPUTypeCoreCount.sh <start_vm_id> <end_vm_id> <num_cores> [cpu_type]
+#   BulkSetCPUTypeCoreCount.sh <start_vm_id> <end_vm_id> <num_cores> [cpu_type]
 #
 # Arguments:
 #   start_vm_id - The ID of the first VM to update.
@@ -16,159 +16,79 @@
 #   cpu_type    - Optional. CPU type (e.g., 'host', 'kvm64'). Retains current if not provided.
 #
 # Examples:
-#   ./BulkSetCPUTypeCoreCount.sh 400 430 4
-#   ./BulkSetCPUTypeCoreCount.sh 400 430 4 host
+#   BulkSetCPUTypeCoreCount.sh 400 430 4
+#   BulkSetCPUTypeCoreCount.sh 400 430 4 host
 #
 # Function Index:
-#   - usage
-#   - parse_args
-#   - set_cpu_config
 #   - main
+#   - set_cpu_config_callback
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# --- usage -------------------------------------------------------------------
-# @function usage
-# @description Prints usage information and exits.
-usage() {
-    cat <<-USAGE
-Usage: ${0##*/} <start_vm_id> <end_vm_id> <num_cores> [cpu_type] [node]
-
-Sets CPU type and core count for a range of VMs.
-
-Arguments:
-  start_vm_id - The ID of the first VM to update
-  end_vm_id   - The ID of the last VM to update
-  num_cores   - Number of CPU cores to assign
-  cpu_type    - Optional CPU type (e.g., 'host', 'kvm64')
-Examples:
-USAGE
-}
-
-# --- parse_args --------------------------------------------------------------
-# @function parse_args
-# @description Parses and validates command-line arguments.
-# @param @ All command-line arguments
-parse_args() {
-    if [[ $# -lt 3 ]]; then
-        __err__ "Missing required arguments"
-        usage
-        exit 64
-    fi
-
-    START_VM_ID="$1"
-    END_VM_ID="$2"
-    NUM_CORES="$3"
-    CPU_TYPE="${4:-}"
-    # If 4th arg looks like a node, adjust
-    if [[ -n "$CPU_TYPE" ]] && [[ "$CPU_TYPE" =~ ^(local|pve|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
-        TARGET_NODE="$CPU_TYPE"
-        CPU_TYPE=""
-    fi
-
-    # Validate VM IDs are numeric
-    if ! [[ "$START_VM_ID" =~ ^[0-9]+$ ]] || ! [[ "$END_VM_ID" =~ ^[0-9]+$ ]]; then
-        __err__ "VM IDs must be numeric"
-        exit 64
-    fi
-
-    # Validate range
-    if (( START_VM_ID > END_VM_ID )); then
-        __err__ "Start VM ID must be less than or equal to end VM ID"
-        exit 64
-    fi
-    
-    # Validate num_cores is numeric
-    if ! [[ "$NUM_CORES" =~ ^[0-9]+$ ]]; then
-        __err__ "Number of cores must be numeric"
-        exit 64
-    fi
-}
-
-# --- set_cpu_config ----------------------------------------------------------
-# @function set_cpu_config
-# @description Sets CPU configuration for a VM.
-# @param 1 VM ID
-# @param 2 Target node name
-set_cpu_config() {
-    local vmid="$1"
-    local node
-    
-    node=$(__get_vm_node__ "$vmid")
-    
-    if [[ -z "$node" ]]; then
-        __update__ "VM ${vmid} not found in cluster, skipping on ${node}"
-        return 0
-    fi
-    
-    __update__ "Updating CPU configuration for VM ${vmid}... on ${node}"
-    
-    if qm set "$vmid" --cores "$NUM_CORES" --node "$node" 2>/dev/null; then
-        if [[ -n "$CPU_TYPE" ]]; then
-            if qm set "$vmid" --cpu "$CPU_TYPE" --node "$node" 2>/dev/null; then
-                __ok__ "CPU set to ${NUM_CORES} cores, type: ${CPU_TYPE} for VM ${vmid} on ${node}"
-            else
-                __err__ "Failed to set CPU type for VM ${vmid}"
-                return 1
-            fi
-        else
-            __ok__ "CPU set to ${NUM_CORES} cores for VM ${vmid} on ${node}"
-        fi
-    else
-        __err__ "Failed to set CPU cores for VM ${vmid}"
-        return 1
-    fi
-}
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid num_cores:int cpu_type?" "$@"
 
 # --- main --------------------------------------------------------------------
-# @function main
-# @description Main script logic - iterates through VM range and sets CPU config.
 main() {
     __check_root__
     __check_proxmox__
-    
-    __info__ "Bulk set CPU config: VMs ${START_VM_ID} to ${END_VM_ID} (cluster-wide)"
+
+    __info__ "Bulk set CPU config: VMs ${START_VMID} to ${END_VMID} (cluster-wide)"
     __info__ "Cores: ${NUM_CORES}"
-    [[ -n "$CPU_TYPE" ]] && __info__ "CPU Type: ${CPU_TYPE}"
-        # Set CPU config for VMs in the specified range
-    local failed_count=0
-    local processed_count=0
-    for (( vmid=START_VM_ID; vmid<=END_VM_ID; vmid++ )); do
+    [[ -n "${CPU_TYPE:-}" ]] && __info__ "CPU Type: ${CPU_TYPE}"
 
-        if set_cpu_config "$vmid"; then
+    # Local callback for bulk operation
+    set_cpu_config_callback() {
+        local vmid="$1"
+        local node
 
-            ((processed_count++))
+        node=$(__get_vm_node__ "$vmid")
 
-        else
-
-            ((failed_count++))
-
+        if [[ -z "$node" ]]; then
+            __update__ "VM ${vmid} not found in cluster"
+            return 1
         fi
 
-    done
-    
-    __info__ "Processed ${processed_count} VM(s)"
-    
-    
-    
-    if (( failed_count > 0 )); then
-        __err__ "Operation completed with ${failed_count} failure(s)"
-        exit 1
-    else
-        __ok__ "CPU configuration updated successfully for all VMs"
-    fi
+        __update__ "Updating CPU configuration for VM ${vmid}..."
+
+        if qm set "$vmid" --cores "$NUM_CORES" --node "$node" 2>/dev/null; then
+            if [[ -n "${CPU_TYPE:-}" ]]; then
+                if qm set "$vmid" --cpu "$CPU_TYPE" --node "$node" 2>/dev/null; then
+                    return 0
+                else
+                    return 1
+                fi
+            else
+                return 0
+            fi
+        else
+            return 1
+        fi
+    }
+
+    # Use BulkOperations framework
+    __bulk_vm_operation__ --name "CPU Configuration" --report "$START_VMID" "$END_VMID" set_cpu_config_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "CPU configuration updated successfully!"
 }
 
-parse_args "$@"
 main
 
 # Testing status:
-#   - 2025-10-14: Updated to follow contributing guidelines, converted to cluster-wide
+#   - Updated to use ArgumentParser and BulkOperations framework

@@ -1,10 +1,38 @@
 #!/usr/bin/env python3
+"""
+VerifySourceCalls.py
+
+Verifies that all function calls in shell scripts have corresponding source
+statements for the utility files that define those functions.
+
+Features:
+- Scans all .sh files for function calls (e.g., __function_name__)
+- Checks if each call is defined locally or in a sourced utility
+- Identifies missing source statements
+- Identifies unused source statements
+- Can automatically fix issues with --fix flag
+- Dry-run mode with --dry-run (report only, no changes)
+
+Usage:
+    python3 VerifySourceCalls.py [--fix] [--dry-run] [--scripts-dir DIR] [--utilities-dir DIR]
+
+Options:
+    --fix              Prompt to fix each script with issues
+    --dry-run          Report issues without prompting or fixing
+    --scripts-dir      Directory containing scripts to check
+    --utilities-dir    Directory containing utility files
+
+Author: Coela
+"""
 
 import os
 import re
 import sys
 import argparse
 from pathlib import Path
+
+# Directories to skip during traversal
+SKIP_DIRS = {".git", ".github", ".site", ".check", ".docs"}
 
 # -----------------------------------------------------------------------------
 # HARD-CODED DIRECTORIES:
@@ -349,8 +377,13 @@ def main():
     parser = argparse.ArgumentParser(description="Check unknown calls in .sh scripts and optionally fix missing sources.")
     parser.add_argument("--scripts-dir", default=SCRIPTS_DIR, help="Directory of .sh scripts to check (recursively).")
     parser.add_argument("--utilities-dir", default=UTILITIES_DIR, help="Directory containing utility .sh scripts.")
-    parser.add_argument("--fix", action="store_true", help="Automatically add missing 'source' lines if exactly one utility defines the unknown call.")
+    parser.add_argument("--fix", action="store_true", help="Automatically add missing 'source' lines if exactly one utility defines the unknown call (prompts for each file).")
+    parser.add_argument("--dry-run", action="store_true", help="Report issues without prompting or making changes.")
     args = parser.parse_args()
+    
+    # Dry-run overrides fix
+    if args.dry_run:
+        args.fix = False
 
     # 1) Build the global function map from all utilities
     global_map = build_global_function_map(args.utilities_dir)
@@ -360,13 +393,34 @@ def main():
     utilities_path = Path(args.utilities_dir).resolve()
 
     all_scripts = list(scripts_dir_path.rglob("*.sh"))
-    scripts_to_check = [
-        s for s in all_scripts
-        if not str(s.resolve()).startswith(str(utilities_path))
-    ]
+    
+    # Filter out utilities and skip directories
+    scripts_to_check = []
+    for s in all_scripts:
+        s_resolved = s.resolve()
+        # Skip if in utilities
+        if str(s_resolved).startswith(str(utilities_path)):
+            continue
+        # Skip if in a skip directory
+        skip = False
+        for skip_dir in SKIP_DIRS:
+            if f"/{skip_dir}/" in str(s_resolved) or str(s_resolved).endswith(f"/{skip_dir}"):
+                skip = True
+                break
+        if not skip:
+            scripts_to_check.append(s)
+    
+    total_scripts = len(scripts_to_check)
+    scripts_ok = 0
+    scripts_with_issues = 0
+    scripts_fixed = 0
 
     # 3) Analyze each script
-    for script_file in scripts_to_check:
+    for idx, script_file in enumerate(scripts_to_check, 1):
+        # Show progress
+        progress = int((idx / total_scripts) * 100)
+        print(f"\rAnalyzing [{idx}/{total_scripts}] ({progress}%)...", end='')
+        
         unknown_calls, used_includes, all_includes = analyze_script(script_file, global_map)
         # which includes to remove?
         unused_includes = all_includes - used_includes
@@ -387,9 +441,14 @@ def main():
 
         # If no issues, skip
         if not truly_unknown and not missing_includes and not unused_includes:
-            print(f"[OK] {script_file} - all calls recognized; no unused includes.")
+            scripts_ok += 1
             continue
+        
+        # Clear progress line before printing
+        print("\r" + " " * 60 + "\r", end='')
 
+        scripts_with_issues += 1
+        
         # Print summary
         print(f"\n[CHECK] {script_file}")
         if truly_unknown:
@@ -404,6 +463,10 @@ def main():
             print("  Unused includes:")
             for ui in sorted(unused_includes):
                 print(f"    source \"${{UTILITYPATH}}/{ui}\"")
+
+        if args.dry_run:
+            # Dry-run mode: just report, don't fix
+            continue
 
         if not args.fix:
             # Not fixing, just suggesting
@@ -423,9 +486,29 @@ def main():
             remove_sources=unused_includes
         )
         print("  -> Fixes applied.")
+        scripts_fixed += 1
 
-    print("\nDone.")
-    sys.exit(0)
+    # Clear progress line
+    print("\r" + " " * 60 + "\r", end='')
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("SUMMARY")
+    print("=" * 80)
+    print(f"Total scripts analyzed: {total_scripts}")
+    print(f"  Scripts OK: {scripts_ok}")
+    print(f"  Scripts with issues: {scripts_with_issues}")
+    if args.fix:
+        print(f"  Scripts fixed: {scripts_fixed}")
+    elif args.dry_run:
+        print(f"  (Dry-run mode: no changes made)")
+    print("")
+    
+    if scripts_with_issues > 0 and not args.fix:
+        print("Tip: Run with --fix to automatically fix issues (with confirmation)")
+        print("     or --dry-run to just see what would be changed")
+    
+    sys.exit(0 if scripts_with_issues == 0 else 1)
 
 
 if __name__ == "__main__":

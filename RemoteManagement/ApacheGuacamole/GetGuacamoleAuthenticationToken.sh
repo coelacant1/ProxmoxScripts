@@ -2,50 +2,83 @@
 #
 # GetGuacamoleAuthenticationToken.sh
 #
-# Retrieves an authentication token from the Apache Guacamole REST API
-# and saves it to /tmp/cc_pve/guac_token for later use.
+# Retrieves authentication token from Apache Guacamole REST API.
 #
 # Usage:
-#   ./GetGuacamoleAuthenticationToken.sh GUAC_SERVER_URL GUAC_ADMIN_USER GUAC_ADMIN_PASS
+#   GetGuacamoleAuthenticationToken.sh <server_url> <username> <password>
 #
-# Example:
-#   # Using default port 8080 on guac.example.com
-#   ./GetGuacamoleAuthenticationToken.sh "http://guac.example.com:8080/guacamole" "admin" "pass123"
+# Arguments:
+#   server_url - Guacamole server URL (e.g., http://guac.example.com:8080/guacamole)
+#   username   - Admin username
+#   password   - Admin password
+#
+# Examples:
+#   GetGuacamoleAuthenticationToken.sh "http://guac.example.com:8080/guacamole" "admin" "pass123"
+#   GetGuacamoleAuthenticationToken.sh "https://guac.local/guacamole" "guacadmin" "secret"
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-__check_root__
-__check_proxmox__
-__install_or_prompt__ "jq"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-GUAC_URL="$1"
-GUAC_ADMIN_USER="$2"
-GUAC_ADMIN_PASS="$3"
+TOKEN_PATH="/tmp/cc_pve/guac_token"
 
-if [[ -z "$GUAC_URL" || -z "$GUAC_ADMIN_USER" || -z "$GUAC_ADMIN_PASS" ]]; then
-    echo "Error: Missing required arguments." >&2
-    echo "Usage: ./GetGuacToken.sh GUAC_SERVER_URL GUAC_ADMIN_USER GUAC_ADMIN_PASS" >&2
-    exit 1
-fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __install_or_prompt__ "jq"
 
-mkdir -p "/tmp/cc_pve"
+    if [[ $# -lt 3 ]]; then
+        __err__ "Missing required arguments"
+        echo "Usage: $0 <server_url> <username> <password>"
+        exit 64
+    fi
 
-###############################################################################
-# Main Logic
-###############################################################################
-TOKEN_RESPONSE="$(curl -s -X POST \
-  -d "username=${GUAC_ADMIN_USER}&password=${GUAC_ADMIN_PASS}" \
-  "${GUAC_URL}/api/tokens")"
+    local guac_url="$1"
+    local guac_user="$2"
+    local guac_pass="$3"
 
-AUTH_TOKEN="$(echo "$TOKEN_RESPONSE" | jq -r '.authToken')"
+    __info__ "Requesting authentication token from Guacamole"
+    __info__ "Server: $guac_url"
 
-if [[ -z "$AUTH_TOKEN" || "$AUTH_TOKEN" == "null" ]]; then
-    echo "Error: Failed to retrieve Guacamole auth token." >&2
-    exit 1
-fi
+    mkdir -p "$(dirname "$TOKEN_PATH")"
 
-echo "$AUTH_TOKEN" > "/tmp/cc_pve/guac_token"
-echo "Guacamole auth token saved to /tmp/cc_pve/guac_token"
+    local token_response
+    if ! token_response=$(curl -s -X POST \
+        -d "username=${guac_user}&password=${guac_pass}" \
+        "${guac_url}/api/tokens" 2>&1); then
+        __err__ "Failed to connect to Guacamole server"
+        exit 1
+    fi
 
-__prompt_keep_installed_packages__
+    local auth_token
+    auth_token="$(echo "$token_response" | jq -r '.authToken' 2>/dev/null || echo "")"
+
+    if [[ -z "$auth_token" || "$auth_token" == "null" ]]; then
+        __err__ "Failed to retrieve authentication token"
+        __info__ "Check credentials and server URL"
+        exit 1
+    fi
+
+    echo "$auth_token" > "$TOKEN_PATH"
+
+    __ok__ "Authentication token retrieved successfully!"
+    __info__ "Token saved to: $TOKEN_PATH"
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
+
+# Testing status:
+#   - Updated to use utility functions
+#   - Pending validation

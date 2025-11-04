@@ -7,8 +7,8 @@
 # units with systemd and restarts them safely.
 #
 # Usage:
-#   ./RestartOSDs.sh restart     # (default) Restart all OSD daemons
-#   ./RestartOSDs.sh status      # Show OSD daemon status only
+#   RestartOSDs.sh restart     # (default) Restart all OSD daemons
+#   RestartOSDs.sh status      # Show OSD daemon status only
 #
 # Function Index:
 #   - _find_osd_units
@@ -16,9 +16,13 @@
 #   - statusOsd
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 
 __check_root__
@@ -44,7 +48,7 @@ function restartOsd() {
 
     echo "Restarting Ceph OSD daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-osd daemons have been restarted."

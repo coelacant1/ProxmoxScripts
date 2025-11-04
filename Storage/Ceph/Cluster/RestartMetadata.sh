@@ -5,16 +5,22 @@
 # Restarts every Ceph Metadata Server (MDS) on the cluster one at a time.
 #
 # Usage:
-#   ./RestartMetadata.sh
+#   RestartMetadata.sh
 #
 # This script retrieves Ceph MDS information in JSON format, parses each MDS's
 # name and address, and restarts the corresponding MDS service (ceph-mds@<mdsName>).
 # If the MDS is hosted on a remote node, the restart and subsequent check for
 # active status are executed via SSH.
 #
+# Function Index:
+#   - wait_for_mds_active
+#
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Queries.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -75,23 +81,6 @@ fi
 __info__ "Found ${totalMDS} Ceph Metadata Server(s). Restarting them one at a time."
 
 ###############################################################################
-# Function: is_local_ip
-# Checks if the provided IP address belongs to the local system.
-###############################################################################
-is_local_ip(){
-    local ipToCheck="$1"
-    local localIPs
-    local ip
-    localIPs=$(hostname -I)
-    for ip in $localIPs; do
-        if [ "$ip" = "$ipToCheck" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-###############################################################################
 # Function: wait_for_mds_active
 # Waits until the ceph-mds@<mdsName> service is active on the specified target host
 # (local or remote), or until a timeout (120 seconds) is reached.
@@ -132,7 +121,7 @@ for index in "${!mdsNames[@]}"; do
     __update__ "Processing MDS ${currentMDS} of ${totalMDS}: ceph-mds@${mdsName}"
 
     # Determine the target host: if the MDS IP is one of the local IPs, it's local.
-    if is_local_ip "$mdsIP"; then
+    if __is_local_ip__ "$mdsIP"; then
         targetHost="local"
     else
         # Attempt to resolve the node IP using the MDS name via the node mappings.

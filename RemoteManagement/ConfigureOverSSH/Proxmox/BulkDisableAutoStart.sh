@@ -10,10 +10,10 @@
 # provided credentials and disables autostart flags on all internal resources.
 #
 # Usage:
-#   ./BulkDisableAutoStart.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
+#   BulkDisableAutoStart.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
 #
 # Example:
-#   ./BulkDisableAutoStart.sh 200 210 root passw0rd
+#   BulkDisableAutoStart.sh 200 210 root passw0rd
 #
 # Notes:
 #   - Must be run as root on the outer Proxmox host.
@@ -23,12 +23,12 @@
 #
 # Function Index:
 #   - usage
-#   - get_ip_for_vmid
-#   - ssh_exec
 #   - disable_autostart_inner
 #   - process_vmid
 #   - main
 #
+
+set -euo pipefail
 
 ###############################################################################
 # Usage
@@ -54,6 +54,8 @@ USAGE
 ###############################################################################
 # Setup / Imports
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Queries.sh"
@@ -172,7 +174,7 @@ main() {
     process_vmid "$id"
   done
   echo "All requested VMIDs processed ($startVmId..$endVmId)."
-  
+
   __prompt_keep_installed_packages__
 }
 

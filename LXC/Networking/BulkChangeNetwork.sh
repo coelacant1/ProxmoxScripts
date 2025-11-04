@@ -2,72 +2,71 @@
 #
 # BulkChangeNetwork.sh
 #
-# This script changes the network interface for a range of LXC containers in Proxmox.
-# Typically, this means changing the bridge (e.g., vmbr0 -> vmbr1) and/or the interface name (eth0 -> eth1).
+# Changes the network interface configuration for a range of LXC containers.
+# Updates bridge and/or interface name settings.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeNetwork.sh <start_ct_id> <end_ct_id> <bridge> [interface_name]
+#   BulkChangeNetwork.sh <start_ct_id> <end_ct_id> <bridge> [interface_name]
 #
-# Example usage:
-#   # This changes containers 400..402 to use net0 => name=eth1,bridge=vmbr1
-#   ./BulkChangeNetwork.sh 400 402 vmbr1 eth1
+# Arguments:
+#   start_ct_id    - Starting container ID
+#   end_ct_id      - Ending container ID
+#   bridge         - Network bridge (e.g., vmbr0, vmbr1)
+#   interface_name - Optional interface name (default: eth0)
 #
-#   # This changes containers 400..402 to use net0 => name=eth0,bridge=vmbr1 (default eth0)
-#   ./BulkChangeNetwork.sh 400 402 vmbr1
+# Examples:
+#   BulkChangeNetwork.sh 400 402 vmbr1
+#   BulkChangeNetwork.sh 400 402 vmbr1 eth1
 #
-# Further explanation:
-#   The script takes a starting container ID, an ending container ID, the new bridge name,
-#   and optionally a new interface name (defaults to eth0). It loops over the specified range
-#   and sets 'net0' with the new configuration if the container exists.
+# Function Index:
+#   - main
+#   - change_network_callback
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-###############################################################################
-# Ensure script is run as root and on a Proxmox node
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [ $# -lt 3 ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <bridge> [interface_name]"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid bridge:string interface_name:string:?" "$@"
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-BRIDGE="$3"
-IF_NAME="${4:-eth0}"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-if [[ "${END_CT_ID}" -lt "${START_CT_ID}" ]]; then
-  echo "Error: end_ct_id must be greater than or equal to start_ct_id."
-  exit 1
-fi
+    # Set default interface name
+    INTERFACE_NAME="${INTERFACE_NAME:-eth0}"
 
-###############################################################################
-# Main Logic
-###############################################################################
-echo "=== Starting network interface update ==="
-echo " - Container range: \"${START_CT_ID}\" to \"${END_CT_ID}\""
-echo " - New bridge: \"${BRIDGE}\""
-echo " - Interface name: \"${IF_NAME}\""
+    __info__ "Bulk change network: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Bridge: ${BRIDGE}, Interface: ${INTERFACE_NAME}"
 
-for (( ctId="${START_CT_ID}"; ctId<="${END_CT_ID}"; ctId++ )); do
-  if pct config "${ctId}" &>/dev/null; then
-    echo "Updating network interface for container \"${ctId}\"..."
-    pct set "${ctId}" -net0 "name=${IF_NAME},bridge=${BRIDGE}"
-    if [ $? -eq 0 ]; then
-      echo " - Successfully updated CT \"${ctId}\"."
-    else
-      echo " - Failed to update CT \"${ctId}\"."
-    fi
-  else
-    echo " - Container \"${ctId}\" does not exist. Skipping."
-  fi
-done
+    change_network_callback() {
+        local vmid="$1"
+        local net_config="name=${INTERFACE_NAME},bridge=${BRIDGE}"
+        __ct_set_network__ "$vmid" "$net_config"
+    }
 
-echo "=== Bulk interface change process complete! ==="
+    __bulk_ct_operation__ --name "Change Network" --report "$START_VMID" "$END_VMID" change_network_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Network configuration updated successfully!"
+}
+
+main
+
+# Testing status:
+#   - Updated to use ArgumentParser and BulkOperations framework
+#   - Pending validation

@@ -6,7 +6,7 @@
 # This script configures the storage in the datacenter and makes it available across all nodes.
 #
 # Usage:
-#   ./AddStorage.sh <storage_type> <storage_id> <server> [path] [options]
+#   AddStorage.sh <storage_type> <storage_id> <server> [path] [options]
 #
 # Arguments:
 #   storage_type - Type of storage: 'nfs', 'smb', 'cifs', or 'pbs'
@@ -28,17 +28,17 @@
 #
 # Examples:
 #   # Add NFS storage
-#   ./AddStorage.sh nfs NFS-Storage 192.168.1.100 /mnt/nfs-share
-#   ./AddStorage.sh nfs NFS-Backup 192.168.1.100 /backup --content backup
+#   AddStorage.sh nfs NFS-Storage 192.168.1.100 /mnt/nfs-share
+#   AddStorage.sh nfs NFS-Backup 192.168.1.100 /backup --content backup
 #
 #   # Add SMB/CIFS storage
-#   ./AddStorage.sh smb SMB-Storage 192.168.1.200 SharedFolder --username admin --password pass123
-#   ./AddStorage.sh cifs CIFS-ISO 192.168.1.200 ISOs --username admin --password pass123 --domain WORKGROUP
+#   AddStorage.sh smb SMB-Storage 192.168.1.200 SharedFolder --username admin --password pass123
+#   AddStorage.sh cifs CIFS-ISO 192.168.1.200 ISOs --username admin --password pass123 --domain WORKGROUP
 #
 #   # Add Proxmox Backup Server (no path argument needed)
 #   # Get fingerprint from PBS: proxmox-backup-manager cert info | grep Fingerprint
-#   ./AddStorage.sh pbs PBS-Backup 192.168.1.50 --username backup@pbs --password secret --datastore main --fingerprint "AA:BB:CC:DD..."
-#   ./AddStorage.sh pbs PBS-Backup 192.168.1.50 --username backup@pbs --password secret --datastore main --fingerprint "12:34:56:78..."
+#   AddStorage.sh pbs PBS-Backup 192.168.1.50 --username backup@pbs --password secret --datastore main --fingerprint "AA:BB:CC:DD..."
+#   AddStorage.sh pbs PBS-Backup 192.168.1.50 --username backup@pbs --password secret --datastore main --fingerprint "12:34:56:78..."
 #
 # Function Index:
 #   - usage
@@ -50,7 +50,7 @@
 #   - main
 #
 
-set -u
+set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
@@ -267,7 +267,7 @@ add_nfs_storage() {
     [[ -n "$MOUNT_OPTIONS" ]] && __info__ "  Options: ${MOUNT_OPTIONS}"
 
     local cmd="pvesm add nfs \"${STORAGE_ID}\" --server \"${SERVER}\" --export \"${EXPORT_PATH}\" --content \"${CONTENT}\""
-    
+
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
     [[ -n "$MOUNT_OPTIONS" ]] && cmd+=" --options \"${MOUNT_OPTIONS}\""
 
@@ -294,15 +294,15 @@ add_smb_storage() {
     [[ -n "$NODES" ]] && __info__ "  Nodes: ${NODES}"
 
     local cmd="pvesm add cifs \"${STORAGE_ID}\" --server \"${SERVER}\" --share \"${EXPORT_PATH}\" --content \"${CONTENT}\""
-    
+
     if [[ -n "$USERNAME" ]]; then
         cmd+=" --username \"${USERNAME}\""
-        
+
         if [[ -n "$PASSWORD" ]]; then
             cmd+=" --password \"${PASSWORD}\""
         fi
     fi
-    
+
     [[ -n "$DOMAIN" ]] && cmd+=" --domain \"${DOMAIN}\""
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
 
@@ -324,21 +324,21 @@ add_pbs_storage() {
     __info__ "  Server: ${SERVER}"
     __info__ "  Username: ${USERNAME}"
     __info__ "  Datastore: ${DATASTORE}"
-    
+
     if [[ -n "$FINGERPRINT" ]]; then
         __info__ "  Fingerprint: ${FINGERPRINT}"
     else
         __warn__ "  Fingerprint: NOT PROVIDED (connection may fail)"
     fi
-    
+
     [[ -n "$NODES" ]] && __info__ "  Nodes: ${NODES}"
 
     local cmd="pvesm add pbs \"${STORAGE_ID}\" --server \"${SERVER}\" --username \"${USERNAME}\" --datastore \"${DATASTORE}\""
-    
+
     if [[ -n "$PASSWORD" ]]; then
         cmd+=" --password \"${PASSWORD}\""
     fi
-    
+
     [[ -n "$FINGERPRINT" ]] && cmd+=" --fingerprint \"${FINGERPRINT}\""
     [[ -n "$NODES" ]] && cmd+=" --nodes \"${NODES}\""
 

@@ -2,101 +2,101 @@
 #
 # EnableGPUPassthroughVM.sh
 #
-# This script automates the configuration of GPU passthrough on a Proxmox host.
-# It adjusts system configuration files to enable GPU passthrough based on the
-# GPU type (NVIDIA or AMD) and the specific GPU IDs provided.
-# The script modifies GRUB settings for IOMMU, blacklists conflicting drivers,
-# and sets module options necessary for VFIO operation.
+# Automates GPU passthrough configuration for Proxmox VMs. Configures IOMMU,
+# blacklists conflicting drivers, and sets up VFIO for GPU passthrough.
 #
 # Usage:
-#   ./EnableGPUPassthroughVM.sh <gpu_type> <gpu_ids>
+#   EnableGPUPassthroughVM.sh <gpu_type> <gpu_ids>
 #
-#   <gpu_type> : 'nvidia' or 'amd'
-#   <gpu_ids>  : PCI IDs of the GPUs, formatted as 'vendor_id:device_id'
+# Arguments:
+#   gpu_type - GPU type: 'nvidia' or 'amd'
+#   gpu_ids  - PCI IDs formatted as 'vendor_id:device_id'
 #
 # Examples:
-#   ./EnableGPUPassthroughVM.sh nvidia 10de:1e78
-#   ./EnableGPUPassthroughVM.sh amd 1002:67df
+#   EnableGPUPassthroughVM.sh nvidia 10de:1e78
+#   EnableGPUPassthroughVM.sh amd 1002:67df
 #
-# Suitable for users setting up virtual machines that require direct access
-# to GPU hardware.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
-###############################################################################
-# Setup
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Validate Inputs
-###############################################################################
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 <gpu_type> <gpu_ids>"
-  echo "Example: $0 nvidia 10de:1e78"
-  echo "Example: $0 amd 1002:67df"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "gpu_type:string gpu_ids:string" "$@"
 
-GPU_TYPE="$1"
-GPU_IDS="$2"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-GRUB_CONFIG="/etc/default/grub"
-BLACKLIST_CONFIG="/etc/modprobe.d/pveblacklist.conf"
-IOMMU_CONFIG="/etc/modprobe.d/iommu_unsafe_interrupts.conf"
-VFIO_CONFIG="/etc/modprobe.d/vfio.conf"
+    local grub_config="/etc/default/grub"
+    local blacklist_config="/etc/modprobe.d/pveblacklist.conf"
+    local iommu_config="/etc/modprobe.d/iommu_unsafe_interrupts.conf"
+    local vfio_config="/etc/modprobe.d/vfio.conf"
 
-echo "Configuring GPU passthrough for \"$GPU_TYPE\"..."
+    # Validate GPU type
+    if [[ "$GPU_TYPE" != "nvidia" ]] && [[ "$GPU_TYPE" != "amd" ]]; then
+        __err__ "Invalid GPU type: $GPU_TYPE (must be 'nvidia' or 'amd')"
+        exit 64
+    fi
 
-###############################################################################
-# Update GRUB Configuration
-###############################################################################
-if ! grep -q "iommu=on" "$GRUB_CONFIG"; then
-  if [ "$GPU_TYPE" == "nvidia" ]; then
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on"/' "$GRUB_CONFIG"
-  elif [ "$GPU_TYPE" == "amd" ]; then
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on"/' "$GRUB_CONFIG"
-  else
-    echo "Error: Invalid GPU type specified (\"$GPU_TYPE\"). Use 'nvidia' or 'amd'."
-    exit 2
-  fi
-  echo "GRUB updated for \"$GPU_TYPE\". Please run 'update-grub' to apply changes."
-else
-  echo "GRUB is already configured for IOMMU."
-fi
+    __info__ "Configuring GPU passthrough for $GPU_TYPE ($GPU_IDS)"
 
-###############################################################################
-# Blacklist NVIDIA Framebuffer (NVIDIA Only)
-###############################################################################
-if [ "$GPU_TYPE" == "nvidia" ]; then
-  if [ ! -f "$BLACKLIST_CONFIG" ] || ! grep -q "blacklist nvidiafb" "$BLACKLIST_CONFIG"; then
-    echo "blacklist nvidiafb" >> "$BLACKLIST_CONFIG"
-    echo "NVIDIA framebuffer driver blacklisted."
-  else
-    echo "NVIDIA framebuffer blacklist entry already exists."
-  fi
-fi
+    # Update GRUB configuration
+    if ! grep -q "iommu=on" "$grub_config"; then
+        if [[ "$GPU_TYPE" == "nvidia" ]]; then
+            sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on"/' "$grub_config"
+        else
+            sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on"/' "$grub_config"
+        fi
+        __ok__ "GRUB updated for $GPU_TYPE"
+        __update__ "Run 'update-grub' to apply changes"
+    else
+        __update__ "GRUB already configured for IOMMU"
+    fi
 
-###############################################################################
-# Update IOMMU Unsafe Interrupts Config
-###############################################################################
-if [ ! -f "$IOMMU_CONFIG" ] || ! grep -q "allow_unsafe_interrupts=1" "$IOMMU_CONFIG"; then
-  echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" >> "$IOMMU_CONFIG"
-  echo "IOMMU unsafe interrupts config updated."
-else
-  echo "IOMMU config already set."
-fi
+    # Blacklist NVIDIA framebuffer (NVIDIA only)
+    if [[ "$GPU_TYPE" == "nvidia" ]]; then
+        if [[ ! -f "$blacklist_config" ]] || ! grep -q "blacklist nvidiafb" "$blacklist_config"; then
+            echo "blacklist nvidiafb" >> "$blacklist_config"
+            __ok__ "NVIDIA framebuffer driver blacklisted"
+        else
+            __update__ "NVIDIA framebuffer already blacklisted"
+        fi
+    fi
 
-###############################################################################
-# Update VFIO Configuration with GPU IDs
-###############################################################################
-if [ ! -f "$VFIO_CONFIG" ] || ! grep -q "options vfio-pci ids=$GPU_IDS disable_vga=1" "$VFIO_CONFIG"; then
-  echo "options vfio-pci ids=$GPU_IDS disable_vga=1" >> "$VFIO_CONFIG"
-  echo "VFIO config updated for GPU IDs \"$GPU_IDS\"."
-else
-  echo "VFIO config already set for these IDs."
-fi
+    # Update IOMMU unsafe interrupts config
+    if [[ ! -f "$iommu_config" ]] || ! grep -q "allow_unsafe_interrupts=1" "$iommu_config"; then
+        echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" >> "$iommu_config"
+        __ok__ "IOMMU unsafe interrupts configured"
+    else
+        __update__ "IOMMU config already set"
+    fi
 
-echo "GPU passthrough configuration complete for \"$GPU_TYPE\"."
+    # Update VFIO configuration with GPU IDs
+    if [[ ! -f "$vfio_config" ]] || ! grep -q "options vfio-pci ids=$GPU_IDS disable_vga=1" "$vfio_config"; then
+        echo "options vfio-pci ids=$GPU_IDS disable_vga=1" >> "$vfio_config"
+        __ok__ "VFIO configured for GPU IDs: $GPU_IDS"
+    else
+        __update__ "VFIO config already set for these IDs"
+    fi
+
+    __ok__ "GPU passthrough configuration complete!"
+    __warn__ "Reboot required for changes to take effect"
+}
+
+main
+
+# Testing status:
+#   - Updated to follow CONTRIBUTING.md guidelines
+#   - Pending validation
