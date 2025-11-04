@@ -79,7 +79,7 @@ bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCP
 
 Notes:
 - Arguments are passed verbatim to the target script (no additional quoting added).
-- The repository is still downloaded fresh each invocation (ephemeral mode). For repeated usage, clone the repo instead.
+- The repository is still downloaded fresh each invocation (ephemeral mode). For repeated usage, clone the repo instead and call GUI.sh directly.
 - Use `--list` first if unsure of the correct relative path.
 - Utilities path (`UTILITYPATH`) is exported automatically so scripts can source shared helpers.
 
@@ -113,7 +113,7 @@ To execute these scripts offline on your system, follow these steps:
 
 4. Execute a script by following the examples provided in comments within the scripts, adjusting parameters as needed for your environment. Or execute the text based GUI with:
     ```bash
-    ./CCPVEOffline.sh
+    ./GUI.sh
     ```
 
 5. To update your repository automatically, call this:
@@ -124,11 +124,7 @@ To execute these scripts offline on your system, follow these steps:
 
 ## Usage
 
-For direct script calls, you may need to call the Utilities.sh script to initialize functions:
-```bash
-./Utilities.sh
-./UpdateProxmoxScripts.sh
-```
+Each script includes detailed usage information in its header comments. Scripts automatically source required utility functions from the `Utilities/` directory.
 
 Example for description and example commands in each script in this repository:
 
@@ -152,13 +148,22 @@ Example for description and example commands in each script in this repository:
 
 ## Contributing
 
-If you would like to add to the ProxmoxScripts, please follow these steps:
+Please read the [CONTRIBUTING.md](CONTRIBUTING.md) guide for:
 
-- Fork the repository on GitHub.
-- Commit your changes (git commit -m 'Add some YourFeature').
-- Push to the branch (git push origin main).
-- Submit a pull request through the GitHub website.
+- **Style guide** - Function documentation, error handling, and naming conventions
+- **Utility functions** - Required usage of shared utilities from `Utilities/` directory
+- **Testing requirements** - How to test your changes
+- **Compliance checklist** - Use `Utilities/_ScriptComplianceChecklist.md` before submitting
+
+Quick steps:
+- Fork the repository on GitHub
+- Create a feature branch
+- Follow the scripting standards in CONTRIBUTING.md
+- Test thoroughly in a development environment
+- Submit a pull request with clear description
+
+For questions, open an issue in the GitHub repository.
 
 ## Support
 
-For support, please open an issue in the GitHub repository or contact the maintainers.
+For support, please open an issue in the GitHub repository.

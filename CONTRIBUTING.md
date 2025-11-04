@@ -64,10 +64,12 @@ If you find yourself writing manual loops, parsing arguments with regex, or call
 All scripts must begin with a comment block that covers:
 
 - File name and short description
-- Usage example(s) starting with `./`
+- Usage example(s) - **Format: `#   ScriptName.sh <args>`** (no `./` prefix)
 - Relevant notes (root requirement, Proxmox requirement, etc.)
 - A “Function Index” placeholder (see next section)
 
+
+**Important:** Usage lines should use the script name only (e.g., `ScriptName.sh`), not `./ScriptName.sh`. Scripts require `UTILITYPATH` to be set (automatically done by `GUI.sh` or must be exported manually).
 Example header:
 
 ```bash
@@ -78,7 +80,8 @@ Example header:
 # Short description of what the script does.
 #
 # Usage:
-#   ./MyScript.sh <arg1> [--flag]
+#   MyScript.sh <arg1> [--flag]
+#   MyScript.sh 100 --type host --cores 4
 #
 # Function Index:
 #   - check_something
@@ -93,9 +96,9 @@ Example header:
 
 ### 3.6 Common Script Structure
 
-1. Source needed utilities (e.g., `source "${UTILITYPATH}/Prompts.sh"`). When launched via `GUI.sh`, `${UTILITYPATH}` is already exported.
+1. Source needed utilities (e.g., `source "${UTILITYPATH}/ArgumentParser.sh"`). When launched via `GUI.sh`, `${UTILITYPATH}` is already exported.
 2. Perform prerequisite checks (`__check_root__`, `__check_proxmox__`, dependency checks with `command -v`).
-3. Parse arguments and validate input. Print usage and exit on bad input.
+3. **Parse arguments using `__parse_args__`** - see section 3.10 for details. ArgumentParser handles validation and help generation automatically.
 4. Group functions logically with clear separators such as `# --- Preliminary Checks -----------------------------------------------------`.
 5. Implement main logic inside a `main()` function and call it at the end of the script.
 6. Record testing notes near the bottom of the file.
@@ -104,7 +107,7 @@ Example header:
 
 Example:
 ```bash
-# If using __validate_ip__ or __parse_positional_args__
+# For argument parsing (ALWAYS needed)
 source "${UTILITYPATH}/ArgumentParser.sh"
 
 # If using __vm_start__ or __ct_exists__
@@ -142,61 +145,265 @@ See `Utilities/_Utilities.md` for a complete reference of which functions belong
 
 ### 3.10 Argument Parsing
 
-**NEW: Use the declarative `__parse_args__` function for simple, reliable argument parsing.**
+**MANDATORY: Always use ArgumentParser.sh for argument parsing.**
 
-The ArgumentParser.sh utility now provides a one-line declarative API that handles both parsing and validation automatically. **Always use this instead of manual parsing.**
+The ArgumentParser.sh utility provides a one-line declarative API that handles both parsing and validation automatically. This is the **only approved method** for argument parsing in this repository.
 
-**Simple Example:**
+**Quick Decision Guide:**
+
+| Validation Type | Tool | Example |
+|----------------|------|---------|
+| Type checking (ip, vmid, port, etc.) | **ArgumentParser** | `__parse_args__ "ip:ip port:port" "$@"` |
+| Range validation (1-128, etc.) | **ArgumentParser** | `__parse_args__ "cores:cpu" "$@"` |
+| Format validation (standard types) | **ArgumentParser** | `__parse_args__ "mac:mac fqdn:fqdn" "$@"` |
+| Relationships between arguments | **Custom function** | vCPUs can't exceed cores |
+| Complex format patterns | **Custom function** | Affinity list (0,1,2 or 0-3) |
+| Business logic rules | **Custom function** | At least one option required |
+| Conditional warnings | **Custom function** | NUMA on small VMs |
+
+**Pattern:** Use ArgumentParser for all parsing + type validation, then add a separate `validate_custom_options()` function for business logic.
+
+**Why ArgumentParser is Required:**
+- Automatic type validation (vmid, ip, port, etc.)
+- Built-in `--help` generation - no manual `usage()` functions needed
+- Consistent error messages across all scripts
+- Reduces boilerplate from 100+ lines to ~1 line
+- Type-safe with clear declarations
+- Prevents common parsing bugs
+
+**Basic Usage Pattern:**
 ```bash
+#!/bin/bash
 source "${UTILITYPATH}/ArgumentParser.sh"
 
-# One line to parse and validate all arguments
+# Define arguments in one line
 __parse_args__ "start:vmid end:vmid --force:flag --node:string:?" "$@"
 
-# After parsing, use uppercase variable names
+# Variables are automatically created in UPPERCASE
 echo "Processing VMs ${START} to ${END}"
 [[ "$FORCE" == "true" ]] && echo "Force mode enabled"
 [[ -n "$NODE" ]] && echo "Target node: ${NODE}"
 ```
 
-**Spec Format:**
-- Positional: `name:type` or `name:type:default`
-- Flags: `--name:type` or `--name:flag`
-- Optional: Use `:?` for optional without default, or `:value` for default value
+**Argument Spec Format:**
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| `name:type` | Required positional | `vmid:vmid` |
+| `name:type:default` | Optional with default | `port:port:22` |
+| `name:type:?` | Optional without default | `node:string:?` |
+| `--name:flag` | Boolean flag | `--force:flag` |
+| `--name:type` | Named option | `--cores:cpu` |
+| `--name:type:default` | Named with default | `--storage:storage:local-lvm` |
 
 **Common Types:**
-- `vmid`, `number`, `integer`, `float`
-- `ip`, `ipv4`, `ipv6`, `cidr`, `gateway`
-- `port`, `hostname`, `fqdn`, `mac`
-- `storage`, `bridge`, `vlan`, `node`
-- `cpu`, `memory`, `disk`, `onboot`, `ostype`
-- `string`, `path`, `url`, `email`
-- `flag`, `boolean`
 
-**Complete Example:**
+| Category | Types | Validation |
+|----------|-------|------------|
+| **IDs** | `vmid`, `number`, `integer` | Numeric validation, range checks |
+| **Network** | `ip`, `ipv4`, `ipv6`, `cidr`, `gateway`, `mac`, `port` | Format validation |
+| **DNS** | `hostname`, `fqdn`, `url`, `email` | RFC compliance |
+| **Proxmox** | `storage`, `bridge`, `vlan`, `node`, `pool`, `ostype` | Proxmox-specific |
+| **Resources** | `cpu`, `memory`, `disk` | Resource validation |
+| **General** | `string`, `path`, `boolean`, `flag` | Basic types |
+
+**Complete Real-World Example:**
+```bash
+#!/bin/bash
+#
+# BulkConfigureCPU.sh
+#
+# Usage:
+#   BulkConfigureCPU.sh 100 110 --cores 4 --sockets 2
+#   BulkConfigureCPU.sh 100 110 --type host --numa 1
+#
+source "${UTILITYPATH}/ArgumentParser.sh"
+source "${UTILITYPATH}/Communication.sh"
+
+# Parse all arguments in one line
+__parse_args__ "start_id:vmid end_id:vmid --cores:cpu:? --sockets:number:? --numa:boolean:? --type:string:?" "$@"
+
+# Custom validation for business logic
+if [[ -n "$CORES" && -n "$SOCKETS" && -n "$NUMA" ]]; then
+    total=$((CORES * SOCKETS))
+    if [[ "$NUMA" == "1" && $total -le 4 ]]; then
+        __warn__ "NUMA enabled for small VM (${total} cores) - may not be beneficial"
+    fi
+fi
+
+# Rest of your script logic...
+```
+
+**Handling Custom Validation:**
+
+ArgumentParser handles type validation. For business logic validation, create a separate function:
+
+```bash
+__parse_args__ "start:vmid end:vmid --cores:cpu:? --vcpus:cpu:?" "$@"
+
+# Custom validation for relationships between arguments
+validate_custom_options() {
+    # Check at least one option provided
+    if [[ -z "$CORES" && -z "$VCPUS" ]]; then
+        __err__ "At least one option must be specified"
+        exit 64
+    fi
+    
+    # Check vCPUs doesn't exceed cores
+    if [[ -n "$VCPUS" && -n "$CORES" && $VCPUS -gt $CORES ]]; then
+        __err__ "vCPUs ($VCPUS) cannot exceed cores ($CORES)"
+        exit 64
+    fi
+}
+
+validate_custom_options
+```
+
+**When Custom Validation is Needed:**
+
+Use a separate `validate_custom_options()` function when you need to validate:
+
+1. **Relationships between arguments**
+   ```bash
+   # Example: vCPUs can't exceed total cores
+   if [[ -n "$VCPUS" && -n "$CORES" && -n "$SOCKETS" ]]; then
+       total=$((CORES * SOCKETS))
+       if (( VCPUS > total )); then
+           __err__ "vCPUs ($VCPUS) cannot exceed total cores ($total)"
+           exit 64
+       fi
+   fi
+   ```
+
+2. **Complex format patterns ArgumentParser doesn't support**
+   ```bash
+   # Example: CPU affinity list format (0,1,2 or 0-3)
+   if [[ -n "$AFFINITY" ]]; then
+       if ! [[ "$AFFINITY" =~ ^[0-9,\-]+$ ]]; then
+           __err__ "Invalid affinity format. Use: 0,1,2,3 or 0-3"
+           exit 64
+       fi
+   fi
+   ```
+
+3. **Business logic rules**
+   ```bash
+   # Example: At least one option must be specified
+   if [[ -z "$CORES" && -z "$SOCKETS" && -z "$NUMA" ]]; then
+       __err__ "At least one CPU option must be specified"
+       exit 64
+   fi
+   ```
+
+4. **Conditional warnings (not errors)**
+   ```bash
+   # Example: Warn about potentially inefficient configuration
+   if [[ "$NUMA" == "1" && $total_cores -le 4 ]]; then
+       __warn__ "NUMA enabled for small VM (${total_cores} cores) - may not be beneficial"
+   fi
+   ```
+
+**Pattern to Follow:**
+
 ```bash
 #!/bin/bash
 source "${UTILITYPATH}/ArgumentParser.sh"
+source "${UTILITYPATH}/Communication.sh"
 
-# Define what arguments you need
-__parse_args__ "vmid:vmid ip:ip --storage:storage:local-lvm --force:flag" "$@"
+# 1. Parse arguments with ArgumentParser
+__parse_args__ "start:vmid end:vmid --cores:cpu:? --flags:string:?" "$@"
 
-# Use the parsed variables (automatically uppercased)
-echo "Creating VM ${VMID} with IP ${IP}"
-echo "Storage: ${STORAGE}"
-[[ "$FORCE" == "true" ]] && echo "Force mode"
+# 2. Create separate validation function for custom logic
+validate_custom_options() {
+    # Check relationships
+    if [[ -n "$CORES" && -n "$VCPUS" && $VCPUS -gt $CORES ]]; then
+        __err__ "Invalid relationship: vCPUs > cores"
+        exit 64
+    fi
+    
+    # Check complex formats
+    if [[ -n "$FLAGS" ]]; then
+        if ! [[ "$FLAGS" =~ ^[+\-][a-z0-9_\-]+(,[+\-][a-z0-9_\-]+)*$ ]]; then
+            __err__ "Invalid flags format: use +flag1,-flag2"
+            exit 64
+        fi
+    fi
+    
+    # Business logic
+    if [[ -z "$CORES" && -z "$FLAGS" ]]; then
+        __err__ "At least one option required"
+        exit 64
+    fi
+}
+
+# 3. Call validation function
+validate_custom_options
+
+# 4. Continue with script logic
+main() {
+    # Your script logic here
+}
+
+main
 ```
+
+**Real-World Example from BulkConfigureCPU.sh:**
+
+See `VirtualMachines/Hardware/BulkConfigureCPU.sh` for a complete example that demonstrates:
+- ArgumentParser handling basic types (vmid, cpu, number, boolean, string)
+- Separate `validate_custom_options()` function for:
+  - Relationship validation (vCPUs vs total cores)
+  - Complex format patterns (affinity list, CPU flags)
+  - Business logic (at least one option required)
+  - Conditional warnings (NUMA on small VMs)
 
 **Benefits:**
 - Automatic validation based on type
-- Built-in help generation (--help)
+- Built-in help generation (--help) - **no need for manual `usage()` functions**
 - Consistent error messages
-- Less boilerplate code
+- Less boilerplate code (typically 100+ lines reduced to ~10)
 - Type-safe with clear declarations
+
+**Important Notes:**
+- **DO NOT create manual `usage()` functions** - ArgumentParser automatically generates help with `--help`
+- **GUI.sh extracts usage examples from header comments** (lines starting with `#   ScriptName.sh`)
+- Usage format should be `ScriptName.sh <args>` without `./` prefix
+- For complex validations beyond type checking, create a separate validation function
+- All variables are automatically created in UPPERCASE (e.g., `start:vmid` becomes `$START`)
+
+**What NOT to Do:**
+```bash
+# DON'T: Manual parsing with case/shift
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cores) CORES="$2"; shift 2 ;;
+        --sockets) SOCKETS="$2"; shift 2 ;;
+        *) echo "Unknown: $1"; exit 1 ;;
+    esac
+done
+
+# DON'T: Manual validation
+if ! [[ "$CORES" =~ ^[0-9]+$ ]]; then
+    echo "Cores must be numeric"
+    exit 1
+fi
+
+# DON'T: Manual usage functions
+usage() {
+    cat <<-USAGE
+    Usage: script.sh <args>
+    ...
+USAGE
+}
+
+# DO: Use ArgumentParser
+__parse_args__ "cores:cpu sockets:number" "$@"
+```
 
 **Legacy Validation Functions:**
 All `__validate_*__` functions are still available for manual validation when needed:
 - `__validate_numeric__`, `__validate_ip__`, `__validate_vmid_range__`, etc.
+- Only use these if ArgumentParser doesn't support your use case
 
 ### 3.11 Interactive vs. CLI Mode
 
@@ -209,7 +416,7 @@ Scripts may be interactive (prompting users for input), but they **MUST** also s
 - When all required arguments are provided, scripts MUST run without prompting
 - Interactive prompts are only acceptable when arguments are missing
 - Include a `--non-interactive` or `--yes` flag to force non-interactive mode when prompts might otherwise appear
-
+F
 **Good Pattern:**
 ```bash
 # Parse arguments
@@ -285,8 +492,34 @@ ssh "root@${node}" "qm destroy $vmid --purge"
 ```
 **Use remote execution utilities** - `__vm_node_exec__ "$vmid" "qm destroy {vmid} --purge"`
 
-**Don't use manual argument parsing** - 20+ lines of validation code
-**Use declarative parsing** - `__parse_args__ "vmid:vmid ip:ip" "$@"`
+**Don't use manual argument parsing**
+```bash
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cores) CORES="$2"; shift 2 ;;
+        --sockets) SOCKETS="$2"; shift 2 ;;
+        *) echo "Unknown: $1"; exit 1 ;;
+    esac
+done
+if ! [[ "$CORES" =~ ^[0-9]+$ ]]; then
+    echo "Invalid cores"
+    exit 1
+fi
+```
+**Use ArgumentParser** - `__parse_args__ "cores:cpu sockets:number" "$@"` (handles parsing, validation, and help automatically)
+
+**Don't create manual usage() functions**
+```bash
+# NEVER DO THIS - ArgumentParser handles help automatically
+usage() {
+    cat <<-USAGE
+    Usage: script.sh <args>
+    Options: --cores, --sockets
+USAGE
+    exit 1
+}
+```
+**Use ArgumentParser** - Automatic `--help` generation from argument spec
 
 **Don't use top-level callback functions in bulk scripts** - implies reusability when it's not
 **Use local callbacks in main()** - keeps bulk-specific logic contained
@@ -389,8 +622,9 @@ ssh "root@${node}" "qm destroy $vmid --purge"
 
 ### 3.14 GUI Invocation Expectations
 
-- When invoked via `GUI.sh`, scripts should rely on `${UTILITYPATH}` for sourcing utilities and must be executable on their own (`./script.sh` or `bash script.sh`).
-- Include at least one `./ExampleCommand.sh` usage line in the header - the GUI extracts these examples for display.
+- When invoked via `GUI.sh`, scripts should rely on `${UTILITYPATH}` for sourcing utilities and must be executable on their own (`bash ScriptName.sh`).
+- Include usage examples in the header with format `#   ScriptName.sh <args>` (no `./` prefix) - the GUI extracts these for display.
+- Scripts require `UTILITYPATH` to be set, which is automatically done by `GUI.sh` or must be exported manually before direct execution.
 - Clean up background processes and temporary state on exit.
 - **GUI.sh may invoke scripts with all arguments pre-filled**, so ensure your scripts work in non-interactive mode.
 
@@ -399,12 +633,14 @@ ssh "root@${node}" "qm destroy $vmid --purge"
 **For a comprehensive checklist with utility usage guide, see [Utilities/_ScriptComplianceChecklist.md](Utilities/_ScriptComplianceChecklist.md)**
 
 Basic requirements:
-- [ ] Header includes description, usage, and Function Index placeholder.
+- [ ] Header includes description, usage examples (`ScriptName.sh <args>` format), and Function Index placeholder.
+- [ ] **ArgumentParser.sh is sourced** - MANDATORY for all scripts with arguments.
+- [ ] **Using `__parse_args__` for argument parsing** - NO manual parsing or validation loops allowed.
+- [ ] **NO manual `usage()` functions** - ArgumentParser handles `--help` automatically.
 - [ ] All required utilities are sourced; no duplicated helper logic.
 - [ ] **All utility functions used have their corresponding utility file sourced** (check `Utilities/_Utilities.md` for reference).
 - [ ] **For bulk operations: Using BulkOperations.sh framework, not manual loops.**
 - [ ] **For VM/CT operations: Using ProxmoxAPI.sh functions, not direct qm/pct calls.**
-- [ ] **For argument parsing: Using __parse_args__, not manual validation.**
 - [ ] **Script supports CLI mode** - can run non-interactively with all arguments provided.
 - [ ] Variables are quoted and scoped appropriately.
 - [ ] Error handling and cleanup paths are present.

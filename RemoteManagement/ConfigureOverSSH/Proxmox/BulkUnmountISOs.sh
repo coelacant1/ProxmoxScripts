@@ -9,10 +9,13 @@
 # 'none'. It skips entries already unset. LXC containers are unaffected.
 #
 # Usage:
-#   BulkUnmountISOs.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
-#
-# Example:
 #   BulkUnmountISOs.sh 200 210 root passw0rd
+#
+# Arguments:
+#   start_vmid      - Starting outer VMID (inclusive)
+#   end_vmid        - Ending outer VMID (inclusive)
+#   ssh_username    - SSH username for nested host
+#   ssh_password    - SSH password for nested host
 #
 # Notes:
 #   - Must be run as root on the outer Proxmox host.
@@ -21,68 +24,28 @@
 #   - Only modifies nested QEMU VM configs by clearing ISO from IDE/SCSI cdrom.
 #
 # Function Index:
-#   - usage
-#   - unmount_isos_inner
 #   - process_vmid
 #   - main
 #
 
 set -euo pipefail
 
-###############################################################################
-# Usage
-###############################################################################
-usage() {
-  cat <<USAGE
-Usage:
-  ${0##*/} <startVmId> <endVmId> <sshUsername> <sshPassword>
-
-Unmount (detach) all ISO media from every QEMU VM inside each nested Proxmox
-instance in the inclusive VMID range.
-
-Arguments:
-  startVmId    Starting outer VMID (inclusive)
-  endVmId      Ending outer VMID (inclusive)
-  sshUsername  SSH username for nested host
-  sshPassword  SSH password for nested host
-
-Environment:
-  UTILITYPATH must be exported (GUI.sh sets it) to source shared helpers.
-USAGE
-}
-
-###############################################################################
-# Imports / Checks
-###############################################################################
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 __check_root__
 __check_proxmox__
 __ensure_dependencies__ jq sshpass
-
-###############################################################################
-# Args
-###############################################################################
-if [[ $# -lt 4 ]]; then
-  echo "Error: Missing arguments." >&2
-  usage
-  exit 1
-fi
-
-startVmId="$1"
-endVmId="$2"
-sshUser="$3"
-sshPass="$4"
-
-if ! [[ "$startVmId" =~ ^[0-9]+$ && "$endVmId" =~ ^[0-9]+$ && $endVmId -ge $startVmId ]]; then
-  echo "Invalid VMID range: $startVmId..$endVmId" >&2
-  exit 1
-fi
 
 ###############################################################################
 # Inner operation
@@ -98,79 +61,100 @@ if ! command -v qm &>/dev/null; then
 fi
 
 mapfile -t vms < <(qm list | awk 'NR>1 {print $1}')
-if (( ${#vms[@]} == 0 )); then
-  echo "No VMs found inside nested host."
-  exit 0
-fi
-
 for id in "${vms[@]}"; do
-  cfg="$(qm config "$id")" || continue
-  changed=0
-
-  while IFS= read -r line; do
-    bus="${line%%:*}"
-    if [[ "$line" =~ iso/.*\.iso ]] || [[ "$line" =~ media=cdrom ]]; then
-      echo "Clearing ISO on VM $id ($bus)"
-      qm set "$id" -delete "$bus" >/dev/null 2>&1 || true
-      qm set "$id" -$bus none,media=cdrom >/dev/null 2>&1 || true
-      changed=1
+  changed=false
+  for dev in ide{0..3} scsi{0..30}; do
+    line=$(qm config "$id" | grep "^${dev}:" || true)
+    if [[ -n "$line" && "$line" =~ (media=cdrom|media=cdrom,) ]]; then
+      if ! echo "$line" | grep -q 'none,'; then
+        qm set "$id" -"$dev" none >/dev/null 2>&1 || true
+        echo "VM $id: $dev -> none"
+        changed=true
+      fi
     fi
-  done < <(echo "$cfg" | grep -E '^(ide|scsi|sata)[0-9]+:')
-
-  if (( changed == 0 )); then
-    echo "VM $id: no ISO attachments to clear"
+  done
+  if ! $changed; then
+    echo "VM $id: no mounted ISOs or already unset"
   fi
 done
+echo "All ISOs unmounted from nested VMs."
 EOF
 
-unmount_isos_inner() {
-  local host="$1"
-  __ssh_exec_script__ \
-    --host "$host" \
-    --user "$sshUser" \
-    --password "$sshPass" \
-    --sudo \
-    --script-content "$unmountIsosScript"
-}
-
 ###############################################################################
-# process_vmid <vmid>
+# Process a single VMID
 ###############################################################################
 process_vmid() {
-  local vmid="$1"
-  if command -v __info__ &>/dev/null; then
-    __info__ "Processing VMID $vmid"
-  else
-    echo "=== VMID $vmid ==="
-  fi
+  local vmId="$1"
+  local user="$2"
+  local pass="$3"
+
+  echo "========================================="
+  echo "Processing VMID: $vmId"
+  echo "========================================="
+
   local ip
-  if ! ip="$( __get_ip_from_vmid__ "$vmid" 2>/dev/null )"; then
-    command -v __err__ &>/dev/null && __err__ "Could not resolve IP for $vmid" || echo "Error: No IP for $vmid" >&2
-    return 1
+  ip="$(__get_ip_from_vmid__ "$vmId" || echo "")"
+  if [[ -z "$ip" ]]; then
+    __warn__ "Could not get IP for VMID $vmId. Skipping."
+    return
   fi
-  __wait_for_ssh__ "$ip" "$sshUser" "$sshPass" 2>/dev/null || true
-  command -v __update__ &>/dev/null && __update__ "Unmounting ISOs on $ip" || echo "Unmounting on $ip ..."
-  if unmount_isos_inner "$ip"; then
-    command -v __ok__ &>/dev/null && __ok__ "Done $vmid" || echo "Completed $vmid"
+  echo "Detected IP: $ip"
+
+  if ! __wait_for_ssh__ "$ip" 300; then
+    __warn__ "SSH not reachable at $ip for VMID $vmId. Skipping."
+    return
+  fi
+
+  __info__ "Unmounting ISOs on nested Proxmox at $ip..."
+  if __ssh_exec_script__ "$ip" "$user" "$pass" "$unmountIsosScript"; then
+    __ok__ "Successfully unmounted ISOs on VMID $vmId ($ip)."
   else
-    command -v __err__ &>/dev/null && __err__ "Failed $vmid" || echo "Failed $vmid" >&2
+    __err__ "Failed to unmount ISOs on VMID $vmId ($ip)."
   fi
 }
 
 ###############################################################################
-# MAIN
+# Main
 ###############################################################################
 main() {
-  for ((id=startVmId; id<=endVmId; id++)); do
-    process_vmid "$id"
+  # Parse arguments using ArgumentParser
+  __parse_args__ "start_vmid:vmid end_vmid:vmid ssh_username:string ssh_password:string" "$@"
+
+  __info__ "Bulk unmount ISOs for nested Proxmox VMs: ${START_VMID}-${END_VMID}"
+  __info__ "SSH User: ${SSH_USERNAME}"
+
+  if ! __prompt_user_yn__ "Unmount ISOs for VMs ${START_VMID}-${END_VMID}?"; then
+    __info__ "Operation cancelled"
+    exit 0
+  fi
+
+  local failed=0
+  for ((vmid=START_VMID; vmid<=END_VMID; vmid++)); do
+    if ! process_vmid "$vmid" "$SSH_USERNAME" "$SSH_PASSWORD"; then
+      ((failed++))
+    fi
   done
-  echo "All requested VMIDs processed ($startVmId..$endVmId)."
-  __prompt_keep_installed_packages__
+
+  echo ""
+  echo "========================================="
+  echo "Summary"
+  echo "========================================="
+  local total=$((END_VMID - START_VMID + 1))
+  local success=$((total - failed))
+  echo "Total VMs processed: $total"
+  echo "Success: $success"
+  echo "Failed: $failed"
+
+  if [[ $failed -gt 0 ]]; then
+    exit 1
+  fi
+  __ok__ "All operations completed successfully"
 }
 
 main "$@"
 
-###############################################################################
-# Testing status
-###############################################################################
-# Tested: (pending) Lab nested cluster; validation requires VMs with ISO attached.
+# Testing status:
+#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+#   - Removed manual usage() function
+#   - Removed manual argument parsing
+#   - Now uses __parse_args__ with automatic validation

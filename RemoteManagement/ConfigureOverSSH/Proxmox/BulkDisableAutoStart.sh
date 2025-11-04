@@ -10,10 +10,13 @@
 # provided credentials and disables autostart flags on all internal resources.
 #
 # Usage:
-#   BulkDisableAutoStart.sh <startVmId> <endVmId> <sshUsername> <sshPassword>
-#
-# Example:
 #   BulkDisableAutoStart.sh 200 210 root passw0rd
+#
+# Arguments:
+#   start_vmid      - Starting VMID (inclusive)
+#   end_vmid        - Ending VMID (inclusive)
+#   ssh_username    - SSH username for nested Proxmox host
+#   ssh_password    - SSH password for nested Proxmox host
 #
 # Notes:
 #   - Must be run as root on the outer Proxmox host.
@@ -22,68 +25,28 @@
 #   - Only modifies autostart flags (onboot=0) within nested environment; no reboots performed.
 #
 # Function Index:
-#   - usage
-#   - disable_autostart_inner
 #   - process_vmid
 #   - main
 #
 
 set -euo pipefail
 
-###############################################################################
-# Usage
-###############################################################################
-usage() {
-  cat <<USAGE
-Usage: ${0##*/} <startVmId> <endVmId> <sshUsername> <sshPassword>
-
-Disables autostart (onboot) for all VMs and LXCs inside each nested Proxmox
-instance whose VMID is in the inclusive range [startVmId, endVmId].
-
-Arguments:
-  startVmId    Starting VMID (inclusive)
-  endVmId      Ending VMID (inclusive)
-  sshUsername  SSH username for nested Proxmox host
-  sshPassword  SSH password for nested Proxmox host
-
-Environment:
-  UTILITYPATH (optional, exported by GUI.sh) to source shared helpers.
-USAGE
-}
-
-###############################################################################
-# Setup / Imports
-###############################################################################
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 __check_root__
 __check_proxmox__
 __ensure_dependencies__ jq sshpass
-
-
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [[ $# -lt 4 ]]; then
-  echo "Error: Missing arguments." >&2
-  usage
-  exit 1
-fi
-
-startVmId="$1"
-endVmId="$2"
-sshUser="$3"
-sshPass="$4"
-
-if ! [[ "$startVmId" =~ ^[0-9]+$ && "$endVmId" =~ ^[0-9]+$ && $endVmId -ge $startVmId ]]; then
-  echo "Invalid VMID range: $startVmId..$endVmId" >&2
-  exit 1
-fi
 
 ###############################################################################
 # Helpers
@@ -123,65 +86,84 @@ if command -v pct &>/dev/null; then
     fi
   done
 fi
+echo "Autostart disabled for all resources."
 EOF
 
-disable_autostart_inner() {
-  local host="$1"
-  __ssh_exec_script__ \
-    --host "$host" \
-    --user "$sshUser" \
-    --password "$sshPass" \
-    --sudo \
-    --script-content "$disableAutostartScript"
-}
-
-# process_vmid <vmid>
+###############################################################################
+# Process a single VMID
+###############################################################################
 process_vmid() {
-  local vmid="$1"
-  if command -v __info__ &>/dev/null; then
-    __info__ "Processing VMID $vmid"
-  else
-    echo "=== VMID $vmid ==="
-  fi
+  local vmId="$1"
+  local user="$2"
+  local pass="$3"
+
+  echo "========================================="
+  echo "Processing VMID: $vmId"
+  echo "========================================="
+
   local ip
-  if ! ip="$( __get_ip_from_vmid__ "$vmid" 2>/dev/null )"; then
-    if command -v __err__ &>/dev/null; then
-      __err__ "Could not determine IP for VMID $vmid"
-    else
-      echo "Error: Could not determine IP for VMID $vmid" >&2
-    fi
-    return 1
+  ip="$(__get_ip_from_vmid__ "$vmId" || echo "")"
+  if [[ -z "$ip" ]]; then
+    __warn__ "Could not get IP for VMID $vmId. Skipping."
+    return
   fi
-  # Ensure SSH is reachable (best-effort) before attempting changes
-  __wait_for_ssh__ "$ip" "$sshUser" "$sshPass" 2>/dev/null || true
-  if command -v __update__ &>/dev/null; then
-    __update__ "Disabling autostart on nested host $ip"
-  else
-    echo "Connecting to $ip ..."
+  echo "Detected IP: $ip"
+
+  if ! __wait_for_ssh__ "$ip" 300; then
+    __warn__ "SSH not reachable at $ip for VMID $vmId. Skipping."
+    return
   fi
-  if disable_autostart_inner "$ip"; then
-    command -v __ok__ &>/dev/null && __ok__ "Done VMID $vmid" || echo "Completed VMID $vmid"
+
+  __info__ "Disabling autostart on nested Proxmox at $ip..."
+  if __ssh_exec_script__ "$ip" "$user" "$pass" "$disableAutostartScript"; then
+    __ok__ "Successfully disabled autostart on VMID $vmId ($ip)."
   else
-    command -v __err__ &>/dev/null && __err__ "Failed VMID $vmid" || echo "Failed VMID $vmid" >&2
+    __err__ "Failed to disable autostart on VMID $vmId ($ip)."
   fi
 }
 
 ###############################################################################
-# MAIN
+# Main
 ###############################################################################
 main() {
-  for ((id=startVmId; id<=endVmId; id++)); do
-    process_vmid "$id"
-  done
-  echo "All requested VMIDs processed ($startVmId..$endVmId)."
+  # Parse arguments using ArgumentParser
+  __parse_args__ "start_vmid:vmid end_vmid:vmid ssh_username:string ssh_password:string" "$@"
 
-  __prompt_keep_installed_packages__
+  __info__ "Bulk disable autostart for nested Proxmox VMs: ${START_VMID}-${END_VMID}"
+  __info__ "SSH User: ${SSH_USERNAME}"
+
+  if ! __prompt_user_yn__ "Disable autostart for VMs ${START_VMID}-${END_VMID}?"; then
+    __info__ "Operation cancelled"
+    exit 0
+  fi
+
+  local failed=0
+  for ((vmid=START_VMID; vmid<=END_VMID; vmid++)); do
+    if ! process_vmid "$vmid" "$SSH_USERNAME" "$SSH_PASSWORD"; then
+      ((failed++))
+    fi
+  done
+
+  echo ""
+  echo "========================================="
+  echo "Summary"
+  echo "========================================="
+  local total=$((END_VMID - START_VMID + 1))
+  local success=$((total - failed))
+  echo "Total VMs processed: $total"
+  echo "Success: $success"
+  echo "Failed: $failed"
+
+  if [[ $failed -gt 0 ]]; then
+    exit 1
+  fi
+  __ok__ "All operations completed successfully"
 }
 
 main "$@"
 
-
-###############################################################################
-# Testing status
-###############################################################################
-# Tested: (pending) range on lab cluster; guest agent required for accurate IP discovery.
+# Testing status:
+#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+#   - Removed manual usage() function
+#   - Removed manual argument parsing
+#   - Now uses __parse_args__ with automatic validation

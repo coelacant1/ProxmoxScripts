@@ -6,22 +6,21 @@
 # This script safely removes NFS, SMB/CIFS, PBS, or other storage types from the datacenter configuration.
 #
 # Usage:
-#   RemoveStorage.sh <storage_id> [--force]
-#
-# Arguments:
-#   storage_id - The unique identifier/name of the storage to remove
-#
-# Optional Arguments:
-#   --force    - Skip confirmation prompt and force removal
-#
-# Examples:
 #   RemoveStorage.sh NFS-Storage
 #   RemoveStorage.sh SMB-Backup --force
 #   RemoveStorage.sh PBS-Backup
 #
+# Arguments:
+#   storage_id - The unique identifier/name of the storage to remove
+#   --force    - Skip confirmation prompt and force removal
+#
+# Notes:
+#   - Storage must not be in use by any VMs or containers
+#   - All data on the storage will become inaccessible after removal
+#   - This does not delete data from the storage server itself
+#
 # Function Index:
-#   - usage
-#   - parse_args
+#   - validate_custom_options
 #   - check_storage_usage
 #   - remove_storage
 #   - main
@@ -29,6 +28,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -36,66 +37,10 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Global variables
-STORAGE_ID=""
-FORCE=false
-
-# --- usage -------------------------------------------------------------------
-# @function usage
-# @description Prints usage information and exits.
-usage() {
-    cat <<-USAGE
-Usage: ${0##*/} <storage_id> [--force]
-
-Removes storage from the Proxmox cluster.
-
-Arguments:
-  storage_id - Storage identifier to remove
-
-Optional Arguments:
-  --force    - Skip confirmation and force removal
-
-Examples:
-  ${0##*/} NFS-Storage
-  ${0##*/} SMB-Backup --force
-  ${0##*/} PBS-Backup
-
-Note:
-  - Storage must not be in use by any VMs or containers
-  - All data on the storage will become inaccessible after removal
-  - This does not delete data from the storage server itself
-USAGE
-}
-
-# --- parse_args --------------------------------------------------------------
-# @function parse_args
-# @description Parses and validates command-line arguments.
-# @param @ All command-line arguments
-parse_args() {
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: storage_id"
-        usage
-        exit 64
-    fi
-
-    STORAGE_ID="$1"
-    shift
-
-    # Parse optional arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --force)
-                FORCE=true
-                shift
-                ;;
-            *)
-                __err__ "Unknown option: $1"
-                usage
-                exit 64
-                ;;
-        esac
-    done
-
+# --- validate_custom_options -------------------------------------------------
+# @function validate_custom_options
+# @description Validates that storage exists.
+validate_custom_options() {
     # Validate storage exists
     if ! pvesm status --storage "$STORAGE_ID" &>/dev/null; then
         __err__ "Storage '${STORAGE_ID}' not found"
@@ -157,55 +102,50 @@ remove_storage() {
 }
 
 # --- main --------------------------------------------------------------------
-# @function main
-# @description Main script logic - validates and removes storage.
 main() {
     __check_root__
     __check_proxmox__
 
-    # Get storage information
-    __info__ "Storage information:"
+    # Parse arguments using ArgumentParser
+    __parse_args__ "storage_id:string --force:flag" "$@"
+
+    # Additional custom validation
+    validate_custom_options
+
+    # Display storage information
+    __info__ "Storage to remove: ${STORAGE_ID}"
+    __info__ "Storage details:"
     pvesm status --storage "$STORAGE_ID" 2>/dev/null || true
-    echo
 
     # Check if storage is in use
     if ! check_storage_usage; then
-        __warn__ "Storage is currently in use"
-        if ! $FORCE; then
-            __err__ "Cannot remove storage while in use"
-            __info__ "Move or delete VMs/containers using this storage first"
-            __info__ "Or use --force to override (not recommended)"
-            exit 1
-        else
-            __warn__ "Proceeding with forced removal (--force specified)"
-        fi
+        __err__ "Cannot remove storage that is currently in use"
+        __err__ "Remove or migrate VMs/CTs using this storage first"
+        exit 1
     fi
 
-    # Confirm action with user
-    if ! $FORCE; then
-        echo
-        __warn__ "This will remove storage '${STORAGE_ID}' from the cluster"
-        __warn__ "Data on the storage server will remain but become inaccessible"
-
-        if ! __prompt_user_yn__ "Are you sure you want to remove this storage?"; then
+    # Confirm removal (unless --force)
+    if [[ "$FORCE" != "true" ]]; then
+        __warn__ "This will remove storage '${STORAGE_ID}' from cluster configuration"
+        __warn__ "Data on the storage server will not be deleted"
+        if ! __prompt_user_yn__ "Remove storage '${STORAGE_ID}'?"; then
             __info__ "Operation cancelled by user"
             exit 0
         fi
     fi
 
     # Remove storage
-    echo
-    if remove_storage; then
-        echo
-        __ok__ "Storage removal complete"
-        __info__ "Storage '${STORAGE_ID}' has been removed from the cluster"
-    else
-        exit 1
-    fi
+    remove_storage
+
+    # Display remaining storage
+    __info__ "Remaining storage in cluster:"
+    pvesm status 2>/dev/null | tail -n +2 | awk '{print "  " $1 " (" $2 ")"}'
 }
 
-###############################################################################
-# Script Entry Point
-###############################################################################
-parse_args "$@"
-main
+main "$@"
+
+# Testing status:
+#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+#   - Removed manual usage() and parse_args() functions
+#   - Now uses __parse_args__ with automatic validation
+#   - Fixed __prompt_yes_no__ -> __prompt_user_yn__

@@ -9,40 +9,39 @@
 #   3. configure - Adjust CPU governor ("performance", "balanced", or "powersave") with optional min/max frequencies.
 #
 # Usage:
-#   EnableCPUScalingGoverner.sh install [performance|balanced|powersave] [opts]
-#   EnableCPUScalingGoverner.sh remove
-#   EnableCPUScalingGoverner.sh configure [performance|balanced|powersave] [opts]
-#
-# Common options for "install" or "configure":
-#   -m, --min <freq>  Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)
-#   -M, --max <freq>  Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)
-#
-# Examples:
 #   EnableCPUScalingGoverner.sh install
 #   EnableCPUScalingGoverner.sh install performance -m 1.2GHz -M 3.0GHz
 #   EnableCPUScalingGoverner.sh remove
 #   EnableCPUScalingGoverner.sh configure balanced
 #   EnableCPUScalingGoverner.sh configure powersave --min 800MHz
 #
-# Further Explanation:
+# Arguments:
+#   action              - Action to perform: install, remove, or configure
+#   governor            - Optional governor: performance, balanced, or powersave
+#   -m, --min <freq>    - Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)
+#   -M, --max <freq>    - Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)
+#
+# Notes:
 #   - "balanced" maps to either "ondemand" or "schedutil", whichever is available.
 #   - Installing will place this script into /usr/local/bin (so it's globally accessible).
 #   - Removing will attempt to restore default scaling governor (assuming 'ondemand' or 'schedutil').
-#   - This script will exit on any error (set -e).
 #
 # Dependencies:
 #   - cpupower (recommended) or sysfs-based access to CPU freq scaling.
 #
 # Function Index:
-#   - usage
 #   - set_governor
 #   - do_install
 #   - do_remove
 #   - do_configure
+#   - main
 #
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
@@ -64,39 +63,8 @@ SYSTEM_DEFAULT="${BALANCED_FALLBACK}"
 ###############################################################################
 # Check Requirements
 ###############################################################################
-# We assume this script is used primarily on Proxmox. If run outside Proxmox,
-# remove or comment out __check_proxmox__ as needed.
 __check_root__
 __check_proxmox__
-
-###############################################################################
-# Usage Function
-###############################################################################
-usage() {
-  echo "Usage:"
-  echo "  ${SCRIPT_NAME} install [performance|balanced|powersave] [options]"
-  echo "  ${SCRIPT_NAME} remove"
-  echo "  ${SCRIPT_NAME} configure [performance|balanced|powersave] [options]"
-  echo
-  echo "Options for \"install\" or \"configure\":"
-  echo "  -m, --min <freq>  Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)"
-  echo "  -M, --max <freq>  Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)"
-  echo
-  echo "Examples:"
-  echo "  ${SCRIPT_NAME} install"
-  echo "  ${SCRIPT_NAME} install performance -m 1.2GHz -M 3.0GHz"
-  echo "  ${SCRIPT_NAME} remove"
-  echo "  ${SCRIPT_NAME} configure balanced"
-  echo "  ${SCRIPT_NAME} configure powersave --min 800MHz"
-  echo
-  echo "Description:"
-  echo "  install:   Installs dependencies (cpupower), copies this script to /usr/local/bin,"
-  echo "             and optionally sets a default governor."
-  echo "  remove:    Removes cpupower (if installed by this script) and attempts to restore"
-  echo "             system defaults. Also removes this script from /usr/local/bin."
-  echo "  configure: Manually sets CPU governor and optional min/max frequencies."
-  exit 1
-}
 
 ###############################################################################
 # set_governor
@@ -148,40 +116,32 @@ do_install() {
   echo "Installing 'linux-cpupower' if not already installed..."
   __install_or_prompt__ "linux-cpupower"
 
-  echo "Copying script to '${TARGET_PATH}'..."
-  cp -f "$0" "${TARGET_PATH}"
-  chmod 755 "${TARGET_PATH}"
+  echo "Copying '${SCRIPT_NAME}' to ${TARGET_PATH} ..."
+  cp "$0" "${TARGET_PATH}"
+  chmod +x "${TARGET_PATH}"
+  echo "Installed to: ${TARGET_PATH}"
 
   if [[ -n "${gov}" ]]; then
-    # If user specified "balanced", map to fallback
-    if [[ "${gov}" == "balanced" ]]; then
-      gov="${BALANCED_FALLBACK}"
-    fi
     set_governor "${gov}" "${minFreq}" "${maxFreq}"
   else
-    echo "No governor specified; skipping governor configuration."
+    echo "No default governor specified, leaving system defaults."
   fi
-
-  __prompt_keep_installed_packages__
-  echo "Install complete."
   exit 0
 }
 
 do_remove() {
-  echo "Attempting to remove 'linux-cpupower' if it was installed by this script..."
-  # We rely on __prompt_keep_installed_packages__ having been called in do_install to decide.
-  # If the package remains installed, we attempt to remove it here anyway.
-  if command -v cpupower &>/dev/null; then
-    apt-get -y remove linux-cpupower || echo "Warning: Could not remove linux-cpupower automatically."
+  echo "Uninstalling 'linux-cpupower' (if installed by this script)..."
+  apt-get remove -y linux-cpupower 2>/dev/null || echo "Package not found or already removed."
+
+  echo "Attempting to restore system default governor: ${SYSTEM_DEFAULT}"
+  set_governor "${SYSTEM_DEFAULT}" "" ""
+
+  if [[ -f "${TARGET_PATH}" ]]; then
+    echo "Removing script from ${TARGET_PATH} ..."
+    rm -f "${TARGET_PATH}"
   fi
 
-  echo "Restoring system default governor ('${SYSTEM_DEFAULT}')..."
-  set_governor "${SYSTEM_DEFAULT}"
-
-  echo "Removing '${TARGET_PATH}'..."
-  rm -f "${TARGET_PATH}"
-
-  echo "Removal complete."
+  echo "Remove operation complete."
   exit 0
 }
 
@@ -191,12 +151,9 @@ do_configure() {
   local maxFreq="$3"
 
   if [[ -z "${gov}" ]]; then
-    echo "Error: Missing governor. Must be one of 'performance', 'balanced', or 'powersave'."
+    echo "Error: No governor specified for 'configure' action."
+    echo "Usage: ${SCRIPT_NAME} configure [performance|balanced|powersave] [options]"
     exit 1
-  fi
-
-  if [[ "${gov}" == "balanced" ]]; then
-    gov="${BALANCED_FALLBACK}"
   fi
 
   set_governor "${gov}" "${minFreq}" "${maxFreq}"
@@ -204,55 +161,60 @@ do_configure() {
 }
 
 ###############################################################################
-# Main Logic
+# Main
 ###############################################################################
-if [[ $# -lt 1 ]]; then
-  usage
-fi
+main() {
+  # Parse arguments using ArgumentParser
+  __parse_args__ "action:string governor:string:? -m|--min:string:? -M|--max:string:?" "$@"
 
-action="$1"
-shift
-
-govOpt=""
-minFreq=""
-maxFreq=""
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    performance|powersave|balanced)
-      govOpt="$1"
-      shift
-      ;;
-    -m|--min)
-      minFreq="$2"
-      shift 2
-      ;;
-    -M|--max)
-      maxFreq="$2"
-      shift 2
-      ;;
-    -h|--help)
-      usage
+  # Validate action
+  case "${ACTION}" in
+    install|remove|configure)
       ;;
     *)
-      echo "Error: Unknown option or argument '$1'"
-      usage
+      echo "Error: Unknown action '${ACTION}'"
+      echo "Valid actions: install, remove, configure"
+      exit 64
       ;;
   esac
-done
 
-case "${action}" in
-  install)
-    do_install "${govOpt}" "${minFreq}" "${maxFreq}"
-    ;;
-  remove)
-    do_remove
-    ;;
-  configure)
-    do_configure "${govOpt}" "${minFreq}" "${maxFreq}"
-    ;;
-  *)
-    echo "Error: Unknown action '${action}'"
-    usage
-    ;;
-esac
+  # Validate governor if provided
+  if [[ -n "$GOVERNOR" ]]; then
+    case "${GOVERNOR}" in
+      performance|powersave|balanced)
+        ;;
+      *)
+        echo "Error: Unknown governor '${GOVERNOR}'"
+        echo "Valid governors: performance, balanced, powersave"
+        exit 64
+        ;;
+    esac
+    
+    # Convert "balanced" to actual governor name
+    if [[ "${GOVERNOR}" == "balanced" ]]; then
+      GOVERNOR="${BALANCED_FALLBACK}"
+    fi
+  fi
+
+  # Execute action
+  case "${ACTION}" in
+    install)
+      do_install "${GOVERNOR}" "${MIN}" "${MAX}"
+      ;;
+    remove)
+      do_remove
+      ;;
+    configure)
+      do_configure "${GOVERNOR}" "${MIN}" "${MAX}"
+      ;;
+  esac
+}
+
+main "$@"
+
+# Testing status:
+#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+#   - Removed manual usage() function
+#   - Removed manual argument parsing in main
+#   - Now uses __parse_args__ with automatic validation
+#   - Handles subcommand pattern (install/remove/configure)

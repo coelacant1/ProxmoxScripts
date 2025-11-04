@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2025-11-04
+
+Implementation of ArgumentParser across the codebase and improved scripting standards
+
+### Added
+- **CONTRIBUTING.md Section 3.10** - Comprehensive ArgumentParser usage guide
+  - Declarative argument parsing patterns and examples
+  - Custom validation patterns with `validate_custom_options()`
+  - Decision guide table for when to use ArgumentParser vs manual parsing
+  - Best practices for handling complex argument structures
+
+### Changed
+- **Full refactoring + implementation of ArgumentParser**
+  - VirtualMachines/Hardware/BulkConfigureCPU.sh
+  - VirtualMachines/Hardware/BulkConfigureNetwork.sh
+  - VirtualMachines/Storage/BulkConfigureDisk.sh
+  - Storage/AddStorage.sh
+  - Storage/RemoveStorage.sh
+  - Removed manual `usage()` and `parse_args()` functions
+  - Added `validate_custom_options()` for logic validation
+  - Now use `__parse_args__` declarative parsing
+  - Fixed `__prompt_yes_no__` -> `__prompt_user_yn__` calls
+- **ArgumentParser integration**
+  - Host/Hardware/EnableCPUScalingGoverner.sh
+  - RemoteManagement/ConfigureOverSSH/Proxmox/BulkDisableAutoStart.sh
+  - RemoteManagement/ConfigureOverSSH/Proxmox/BulkUnmountISOs.sh
+  - Storage/Ceph/SetScrubInterval.sh: (quality improvement with proper documentation/standards)
+  - Removed manual `usage()` functions
+  - Added ArgumentParser sourcing and `__parse_args__` calls
+- **Storage/Ceph/SetScrubInterval.sh** - Updated to match current codebase
+  - Added proper `@function`, `@description`, `@param` documentation tags
+  - Replaced `echo` with `__info__`, `__ok__`, `__err__` communication functions
+  - Added `__prompt_user_yn__` confirmations before operations
+  - Added `readonly` constants for configuration values
+  - User feedback with detailed status messages
+- **README.md** - Corrected outdated references
+  - Fixed `CCPVEOffline.sh` -> `GUI.sh` (correct script name)
+  - Removed non-existent `Utilities.sh` reference
+  - Enhanced Contributing section with links to CONTRIBUTING.md
+  - Added ArgumentParser requirement highlights
+  - Added compliance checklist references
+- **CONTRIBUTING.md** - Enhanced with ArgumentParser standards
+  - Updated Usage section header format to `ScriptName.sh` (no `./` prefix)
+  - Clarified that GUI auto-generates usage from script comments
+  - Added comprehensive Section 3.10 on argument parsing
+
+### Fixed
+- **Script header format consistency**
+  - Usage section now shows `ScriptName.sh` without `./` prefix
+  - All scripts properly source ArgumentParser.sh
+  - Function documentation follows `@function`, `@description`, `@param` pattern
+- **Prompt function calls** - Corrected `__prompt_yes_no__` -> `__prompt_user_yn__` in refactored scripts
+- **Communication functions** - Ensured all user-facing messages use `__info__`, `__ok__`, `__err__` instead of plain `echo`
+
 ## [2.0.0] - 2025-11-03
 
 ### Overview
@@ -441,7 +495,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
 ## [v1.29] - 2025-01-19
 
 ### Added
-- **VerifySourceCalls.py** - Comprehensive Python script to verify source calls in shell scripts (364 lines)
+- **VerifySourceCalls.py** - Comprehensive Python script to verify source calls in shell scripts
 - Automated verification system for script dependencies and source calls
 - Integration with .check directory for continuous validation
 - Shell script execution for validation (_RunChecks.bat, _RunChecks.sh)
