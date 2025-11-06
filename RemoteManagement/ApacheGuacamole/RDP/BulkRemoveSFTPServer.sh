@@ -28,23 +28,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "guac_url:url search_substring:string guac_data_source:string:mysql" "$@"
+
 __install_or_prompt__ "jq"
-
-# Assign input parameters
-GUAC_URL="$1"
-SEARCH_SUBSTRING="$2"
-GUAC_DATA_SOURCE="${3:-mysql}"
-
-if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
-    echo "Error: Missing required arguments."
-    echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
-    exit 1
-fi
 
 # Ensure a Guacamole auth token exists
 if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then

@@ -22,12 +22,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "guac_url:url guac_user:string guac_pass:string" "$@"
 
 TOKEN_PATH="/tmp/cc_pve/guac_token"
 
@@ -37,25 +41,15 @@ main() {
     __check_proxmox__
     __install_or_prompt__ "jq"
 
-    if [[ $# -lt 3 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <server_url> <username> <password>"
-        exit 64
-    fi
-
-    local guac_url="$1"
-    local guac_user="$2"
-    local guac_pass="$3"
-
     __info__ "Requesting authentication token from Guacamole"
-    __info__ "Server: $guac_url"
+    __info__ "Server: $GUAC_URL"
 
     mkdir -p "$(dirname "$TOKEN_PATH")"
 
     local token_response
     if ! token_response=$(curl -s -X POST \
-        -d "username=${guac_user}&password=${guac_pass}" \
-        "${guac_url}/api/tokens" 2>&1); then
+        -d "username=${GUAC_USER}&password=${GUAC_PASS}" \
+        "${GUAC_URL}/api/tokens" 2>&1); then
         __err__ "Failed to connect to Guacamole server"
         exit 1
     fi
@@ -81,4 +75,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

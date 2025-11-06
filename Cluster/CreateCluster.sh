@@ -20,6 +20,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -27,19 +29,12 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "cluster_name:string mon_ip:ip" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
-
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <cluster_name> <mon_ip>"
-        exit 64
-    fi
-
-    local cluster_name="$1"
-    local mon_ip="$2"
 
     # Check if host is already part of a cluster
     if [[ -f "/etc/pve/.members" ]]; then
@@ -51,14 +46,14 @@ main() {
         fi
     fi
 
-    __info__ "Creating new Proxmox cluster: ${cluster_name}"
-    __info__ "Using link0 address: ${mon_ip}"
+    __info__ "Creating new Proxmox cluster: ${CLUSTER_NAME}"
+    __info__ "Using link0 address: ${MON_IP}"
 
-    if pvecm create "${cluster_name}" --link0 "address=${mon_ip}" 2>&1; then
-        __ok__ "Cluster ${cluster_name} created successfully!"
+    if pvecm create "${CLUSTER_NAME}" --link0 "address=${MON_IP}" 2>&1; then
+        __ok__ "Cluster ${CLUSTER_NAME} created successfully!"
         echo
         __info__ "Verify with: pvecm status"
-        __info__ "To join other nodes: pvecm add ${mon_ip}"
+        __info__ "To join other nodes: pvecm add ${MON_IP}"
     else
         __err__ "Failed to create cluster"
         exit 1
@@ -69,4 +64,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

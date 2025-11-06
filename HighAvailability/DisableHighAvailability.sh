@@ -26,8 +26,13 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Queries.sh
 source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "target_node_name:node" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -36,32 +41,24 @@ main() {
     __check_cluster_membership__
     __install_or_prompt__ "jq"
 
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: node_name"
-        echo "Usage: $0 <node_name>"
-        exit 64
-    fi
-
-    local target_node_name="$1"
-
-    __info__ "Disabling HA on node: ${target_node_name}"
+    __info__ "Disabling HA on node: ${TARGET_NODE_NAME}"
 
     # Resolve node name to IP
     local node_ip
-    if ! node_ip=$(__get_ip_from_name__ "$target_node_name"); then
-        __err__ "Could not resolve node name '${target_node_name}' to IP"
+    if ! node_ip=$(__get_ip_from_name__ "$TARGET_NODE_NAME"); then
+        __err__ "Could not resolve node name '${TARGET_NODE_NAME}' to IP"
         exit 1
     fi
-    __info__ "Node ${target_node_name} resolved to IP: ${node_ip}"
+    __info__ "Node ${TARGET_NODE_NAME} resolved to IP: ${node_ip}"
 
     # Find HA resources referencing this node
-    __info__ "Checking for HA resources on node ${target_node_name}"
+    __info__ "Checking for HA resources on node ${TARGET_NODE_NAME}"
     local ha_resources
     ha_resources=$(pvesh get /cluster/ha/resources --output-format json 2>/dev/null \
-        | jq -r '.[] | select(.statePath | contains("'"$target_node_name"'")) | .sid')
+        | jq -r '.[] | select(.statePath | contains("'"$TARGET_NODE_NAME"'")) | .sid')
 
     if [[ -z "$ha_resources" ]]; then
-        __info__ "No HA resources found for node ${target_node_name}"
+        __info__ "No HA resources found for node ${TARGET_NODE_NAME}"
     else
         __info__ "Removing HA resources:"
         local removed=0
@@ -84,21 +81,21 @@ main() {
     fi
 
     # Stop and disable HA services on the target node
-    __info__ "Stopping and disabling HA services on ${target_node_name}"
+    __info__ "Stopping and disabling HA services on ${TARGET_NODE_NAME}"
     __update__ "Stopping pve-ha-crm and pve-ha-lrm"
     ssh "root@${node_ip}" "systemctl stop pve-ha-crm pve-ha-lrm" 2>/dev/null || true
 
     __update__ "Disabling pve-ha-crm and pve-ha-lrm on startup"
     ssh "root@${node_ip}" "systemctl disable pve-ha-crm pve-ha-lrm" 2>/dev/null || true
 
-    __ok__ "HA disabled on node ${target_node_name} successfully!"
+    __ok__ "HA disabled on node ${TARGET_NODE_NAME} successfully!"
     __info__ "Verify with: ssh root@${node_ip} 'systemctl status pve-ha-crm pve-ha-lrm'"
 
     __prompt_keep_installed_packages__
 }
 
-main "$@"
+main
 
 # Testing status:
-#   - Updated to use utility functions
+#   - Updated to use utility functions and ArgumentParser
 #   - Pending validation

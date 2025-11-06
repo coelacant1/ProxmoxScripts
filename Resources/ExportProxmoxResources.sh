@@ -22,12 +22,22 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "type:string:both" "$@"
+
+# Validate type argument
+if [[ "$TYPE" != "lxc" && "$TYPE" != "vm" && "$TYPE" != "both" ]]; then
+    __err__ "Invalid resource type: $TYPE (must be: lxc, vm, or both)"
+    exit 64
+fi
 
 # --- parse_config_files ------------------------------------------------------
 parse_config_files() {
@@ -107,18 +117,10 @@ main() {
     __check_root__
     __check_proxmox__
 
-    local resource_type="${1:-both}"
-
-    if [[ "$resource_type" != "lxc" && "$resource_type" != "vm" && "$resource_type" != "both" ]]; then
-        __err__ "Invalid resource type: $resource_type"
-        echo "Usage: $0 [lxc|vm|both]"
-        exit 64
-    fi
-
     local output_file="cluster_resources.csv"
 
     __info__ "Exporting Proxmox resources"
-    __info__ "  Type: $resource_type"
+    __info__ "  Type: $TYPE"
     __info__ "  Output: $output_file"
 
     # Initialize CSV
@@ -138,7 +140,7 @@ main() {
     local processed=0
     for node in "${nodes[@]}"; do
         __update__ "Processing node: $node"
-        parse_config_files "$node" "$resource_type" "$output_file"
+        parse_config_files "$node" "$TYPE" "$output_file"
         ((processed++))
     done
 
@@ -156,4 +158,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

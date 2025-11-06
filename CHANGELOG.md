@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2025-11-06
+
+ArgumentParser migration
+
+### Changed
+- **Rest of Scripts Updated with ArgumentParser** 
+  - Migration of all non-interactive scripts (previously listed in TODO.md)
+
+- **Standards Applied**
+  - ArgumentParser.sh sourced with proper shellcheck directives
+  - UPPERCASE variable names from ArgumentParser
+  - Automatic --help support (or manual for hybrid scripts)
+  - Removed manual usage() functions and validation loops
+  - Proper exit codes (64 for usage errors)
+  - Consistent error handling with __err__
+  - Updated testing status comments
+
+### Fixed
+- **GUI.sh Critical Bug**
+  - Added `bash` prefix to all script execution calls
+  - Prevent immediate script closure issue
+
 ## [2.0.1] - 2025-11-04
 
 Implementation of ArgumentParser across the codebase and improved scripting standards

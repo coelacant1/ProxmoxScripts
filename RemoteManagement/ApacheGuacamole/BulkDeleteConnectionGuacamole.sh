@@ -22,12 +22,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "guac_url:url keyword:string data_source:string:mysql" "$@"
 
 TOKEN_PATH="/tmp/cc_pve/guac_token"
 
@@ -36,16 +40,6 @@ main() {
     __check_root__
     __check_proxmox__
     __install_or_prompt__ "jq"
-
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <server_url> <keyword> [data_source]"
-        exit 64
-    fi
-
-    local guac_url="$1"
-    local keyword="$2"
-    local data_source="${3:-mysql}"
 
     if [[ ! -f "$TOKEN_PATH" ]]; then
         __err__ "No Guacamole auth token found: $TOKEN_PATH"
@@ -57,14 +51,14 @@ main() {
     auth_token="$(cat "$TOKEN_PATH")"
 
     __info__ "Retrieving connections from Guacamole"
-    __info__ "  Server: $guac_url"
-    __info__ "  Data source: $data_source"
-    __info__ "  Keyword: $keyword"
+    __info__ "  Server: $GUAC_URL"
+    __info__ "  Data source: $DATA_SOURCE"
+    __info__ "  Keyword: $KEYWORD"
 
     # Retrieve connection tree
     local connections_json
     if ! connections_json=$(curl -s -X GET \
-        "${guac_url}/api/session/data/${data_source}/connectionGroups/ROOT/tree?token=${auth_token}" 2>&1); then
+        "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connectionGroups/ROOT/tree?token=${auth_token}" 2>&1); then
         __err__ "Failed to retrieve connection tree"
         exit 1
     fi
@@ -77,13 +71,13 @@ main() {
     # Parse matching connections
     local -a matching_connections
     mapfile -t matching_connections < <(echo "$connections_json" | jq -r \
-        --arg KEYWORD "$keyword" \
+        --arg KEYWORD "$KEYWORD" \
         '.childConnections[]
          | select(.name | test($KEYWORD; "i"))
          | .identifier' 2>/dev/null || true)
 
     if [[ ${#matching_connections[@]} -eq 0 ]]; then
-        __warn__ "No connections found matching: $keyword"
+        __warn__ "No connections found matching: $KEYWORD"
         __prompt_keep_installed_packages__
         exit 0
     fi
@@ -120,7 +114,7 @@ main() {
     for conn_id in "${matching_connections[@]}"; do
         local http_code
         http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            "${guac_url}/api/session/data/${data_source}/connections/${conn_id}?token=${auth_token}" 2>/dev/null || echo "000")
+            "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}?token=${auth_token}" 2>/dev/null || echo "000")
 
         if [[ "$http_code" -eq 204 ]]; then
             __ok__ "Deleted: $conn_id"
@@ -147,4 +141,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

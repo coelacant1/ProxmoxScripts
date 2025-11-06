@@ -27,21 +27,14 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+__parse_args__ "guac_url:url search_substring:string drive_name:string drive_path:path guac_data_source:string:mysql" "$@"
+
 __install_or_prompt__ "jq"
-
-# Assign input parameters
-GUAC_URL="$1"
-SEARCH_SUBSTRING="$2"
-DRIVE_NAME="$3"
-DRIVE_PATH="$4"
-GUAC_DATA_SOURCE="${5:-mysql}"
-
-if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" || -z "$DRIVE_NAME" || -z "$DRIVE_PATH" ]]; then
-    echo "Error: Missing required arguments."
-    echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING DRIVE_NAME DRIVE_PATH [DATA_SOURCE]"
-    exit 1
-fi
 
 # Ensure a Guacamole auth token exists
 if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
@@ -160,3 +153,9 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 done
 
 echo "Completed updating drive redirection parameters for all matching connections."
+
+
+# Testing status:
+#   - ArgumentParser.sh sourced  
+#   - Updated to use ArgumentParser.sh
+#   - Pending validation

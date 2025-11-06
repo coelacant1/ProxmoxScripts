@@ -22,12 +22,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "--prefix:string:? --dry-run:flag" "$@"
 
 DCFG="/etc/pve/datacenter.cfg"
 
@@ -50,7 +54,7 @@ rewrite_file_mac_prefix() {
         __info__ "Changes detected: $(basename "$file")"
         diff -u "$file" "$tmp".new || true
 
-        if [[ $dry_run -eq 0 ]]; then
+        if [[ "$dry_run" != "true" ]]; then
             mv "$tmp".new "$file"
             __ok__ "Updated: $(basename "$file")"
         else
@@ -69,41 +73,10 @@ main() {
     __check_root__
     __check_proxmox__
 
-    local override_prefix=""
-    local dry_run=0
-
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --prefix)
-                if [[ $# -lt 2 ]]; then
-                    __err__ "Missing value for --prefix"
-                    exit 64
-                fi
-                override_prefix="$2"
-                shift 2
-                ;;
-            --dry-run)
-                dry_run=1
-                shift
-                ;;
-            --help|-h)
-                echo "Usage: $0 [--prefix AA:BB:CC] [--dry-run]"
-                echo "Updates MAC address prefixes for all VMs and LXCs"
-                exit 0
-                ;;
-            *)
-                __err__ "Unknown argument: $1"
-                echo "Usage: $0 [--prefix AA:BB:CC] [--dry-run]"
-                exit 64
-                ;;
-        esac
-    done
-
     # Determine MAC prefix
     local prefix
-    if [[ -n "$override_prefix" ]]; then
-        prefix="$override_prefix"
+    if [[ -n "$PREFIX" ]]; then
+        prefix="$PREFIX"
         __info__ "Using provided prefix: $prefix"
     else
         if [[ ! -f "$DCFG" ]]; then
@@ -137,7 +110,7 @@ main() {
     local backup_dir="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
 
-    if [[ $dry_run -eq 1 ]]; then
+    if [[ "$DRY_RUN" == "true" ]]; then
         __warn__ "DRY-RUN MODE - No changes will be applied"
     fi
 
@@ -173,7 +146,7 @@ main() {
         [[ -f "$file" ]] || continue
         ((processed++))
 
-        if rewrite_file_mac_prefix "$file" "$prefix_upper" "$backup_dir" "$dry_run"; then
+        if rewrite_file_mac_prefix "$file" "$prefix_upper" "$backup_dir" "$DRY_RUN"; then
             ((changed++))
         fi
     done
@@ -184,7 +157,7 @@ main() {
     __info__ "  Files changed: $changed"
     __info__ "  Files unchanged: $((processed - changed))"
 
-    if [[ $dry_run -eq 0 ]]; then
+    if [[ "$DRY_RUN" != "true" ]]; then
         if [[ $changed -gt 0 ]]; then
             __update__ "Reloading pvedaemon"
             if systemctl reload pvedaemon 2>/dev/null; then
@@ -208,4 +181,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

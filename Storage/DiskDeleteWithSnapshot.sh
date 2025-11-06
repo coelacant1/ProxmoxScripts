@@ -22,12 +22,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "pool:string disk:string" "$@"
 
 # --- delete_snapshot_and_disk ------------------------------------------------
 delete_snapshot_and_disk() {
@@ -91,25 +95,16 @@ main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <pool> <disk>"
-        exit 64
-    fi
-
-    local pool="$1"
-    local disk="$2"
-
     __warn__ "DESTRUCTIVE OPERATION: Snapshot and disk deletion"
-    __info__ "Pool: $pool"
-    __info__ "Disk: $disk"
+    __info__ "Pool: $POOL"
+    __info__ "Disk: $DISK"
 
-    if ! __prompt_yes_no__ "Delete disk $disk from pool $pool?"; then
+    if ! __prompt_yes_no__ "Delete disk $DISK from pool $POOL?"; then
         __info__ "Operation cancelled"
         exit 0
     fi
 
-    if delete_snapshot_and_disk "$pool" "$disk"; then
+    if delete_snapshot_and_disk "$POOL" "$DISK"; then
         echo
         __ok__ "Snapshot and disk deleted successfully!"
     else
@@ -129,4 +124,6 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
+#   - Pending validation
 #   - Pending validation

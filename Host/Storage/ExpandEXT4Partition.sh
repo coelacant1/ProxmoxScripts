@@ -20,12 +20,22 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "device:path" "$@"
+
+# Verify block device
+if [[ ! -b "$DEVICE" ]]; then
+    __err__ "Not a valid block device: $DEVICE"
+    exit 1
+fi
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -38,20 +48,7 @@ main() {
     __install_or_prompt__ "e2fsprogs"
     __install_or_prompt__ "uuid-runtime"
 
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: device"
-        echo "Usage: $0 /dev/sdX"
-        exit 64
-    fi
-
-    local disk="$1"
-    local partition="${disk}1"
-
-    # Verify block device
-    if [[ ! -b "$disk" ]]; then
-        __err__ "Not a valid block device: $disk"
-        exit 1
-    fi
+    local partition="${DEVICE}1"
 
     __warn__ "This will resize partition ${partition} to use all available space"
     __warn__ "Ensure you have backups before proceeding"
@@ -63,13 +60,13 @@ main() {
 
     # Fix GPT if needed
     __info__ "Fixing GPT table if needed"
-    sgdisk -e "$disk" 2>&1 || true
-    partprobe "$disk" 2>&1 || true
+    sgdisk -e "$DEVICE" 2>&1 || true
+    partprobe "$DEVICE" 2>&1 || true
     sleep 2
 
     # Verify exactly one partition
     local part_count
-    part_count=$(lsblk -no NAME "$disk" | grep -c "^$(basename "$disk")" || echo 0)
+    part_count=$(lsblk -no NAME "$DEVICE" | grep -c "^$(basename "$DEVICE")" || echo 0)
     if [[ "$part_count" -ne 1 ]]; then
         __err__ "Expected exactly 1 partition, found $part_count"
         exit 1
@@ -91,7 +88,7 @@ main() {
     # Get last usable sector
     __info__ "Determining disk geometry"
     local sgdisk_out
-    sgdisk_out=$(sgdisk -p "$disk" 2>&1 || true)
+    sgdisk_out=$(sgdisk -p "$DEVICE" 2>&1 || true)
     local last_usable
     last_usable=$(echo "$sgdisk_out" | sed -nE 's/.*last usable sector is ([0-9]+).*/\1/p')
 
@@ -104,7 +101,7 @@ main() {
 
     # Get partition start sector
     local sf_out
-    sf_out=$(sfdisk --dump "$disk" 2>&1)
+    sf_out=$(sfdisk --dump "$DEVICE" 2>&1)
     local part_info
     part_info=$(echo "$sf_out" | grep -E "^${partition} :")
 
@@ -138,14 +135,14 @@ main() {
     cat <<EOF > "$tmpfile"
 label: gpt
 label-id: $(uuidgen)
-device: $disk
+device: $DEVICE
 unit: sectors
 
 ${partition} : start=${start_sector}, size=${new_size}, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
 EOF
 
     __info__ "Applying new partition layout"
-    if sfdisk --no-reread --force "$disk" < "$tmpfile" 2>&1; then
+    if sfdisk --no-reread --force "$DEVICE" < "$tmpfile" 2>&1; then
         __ok__ "Partition table updated"
     else
         __err__ "Failed to update partition table"
@@ -154,7 +151,7 @@ EOF
     fi
     rm -f "$tmpfile"
 
-    partprobe "$disk" 2>&1 || true
+    partprobe "$DEVICE" 2>&1 || true
     sleep 2
 
     # Run e2fsck
@@ -196,4 +193,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

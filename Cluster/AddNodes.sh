@@ -23,6 +23,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -32,20 +34,27 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# Custom parsing for this script due to complex variable args with --link1
+if [[ $# -lt 2 ]]; then
+    __err__ "Missing required arguments"
+    echo "Usage: $0 <cluster_ip> <new_node_1> [<new_node_2> ...] [--link1 <link1_1> [<link1_2> ...]]"
+    exit 64
+fi
+
+CLUSTER_IP="$1"
+shift
+
+# Validate cluster IP
+if ! [[ "$CLUSTER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    __err__ "Invalid cluster IP: $CLUSTER_IP"
+    exit 64
+fi
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
-
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <cluster_ip> <new_node_1> [<new_node_2> ...] [--link1 <link1_1> ...]"
-        exit 64
-    fi
-
-    local cluster_ip="$1"
-    shift
 
     local -a nodes=()
     local use_link1=false
@@ -77,7 +86,7 @@ main() {
         done
     fi
 
-    __info__ "Adding ${#nodes[@]} node(s) to cluster at ${cluster_ip}"
+    __info__ "Adding ${#nodes[@]} node(s) to cluster at ${CLUSTER_IP}"
 
     local counter=0
     local failed=0
@@ -85,7 +94,7 @@ main() {
     for node_ip in "${nodes[@]}"; do
         __update__ "Adding node ${node_ip} ($((counter + 1))/${#nodes[@]})"
 
-        local cmd="pvecm add \"${cluster_ip}\" --link0 \"${node_ip}\""
+        local cmd="pvecm add \"${CLUSTER_IP}\" --link0 \"${node_ip}\""
         if $use_link1; then
             cmd+=" --link1 \"${link1[$counter]}\""
             __info__ "  Using link1: ${link1[$counter]}"
@@ -115,4 +124,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh (hybrid for complex args)
 #   - Pending validation

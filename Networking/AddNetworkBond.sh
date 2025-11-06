@@ -22,12 +22,16 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "bond_base:string vlan_id:vlan" "$@"
 
 # --- insert_sorted_config ----------------------------------------------------
 insert_sorted_config() {
@@ -70,16 +74,8 @@ main() {
 
     __install_or_prompt__ "ifenslave"
 
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <bond_base> <vlan_id>"
-        exit 64
-    fi
-
-    local bond_base="$1"
-    local vlan_id="$2"
-    local bond_name="${bond_base}.${vlan_id}"
-    local vmbr_name="vmbr${vlan_id}"
+    local bond_name="${BOND_BASE}.${VLAN_ID}"
+    local vmbr_name="vmbr${VLAN_ID}"
     local config_file="/etc/network/interfaces"
 
     if [[ ! -f "$config_file" ]]; then
@@ -89,7 +85,7 @@ main() {
 
     __info__ "Configuring network bond"
     __info__ "  Bond: $bond_name"
-    __info__ "  VLAN ID: $vlan_id"
+    __info__ "  VLAN ID: $VLAN_ID"
     __info__ "  Bridge: $vmbr_name"
 
     # Backup config file
@@ -105,7 +101,7 @@ main() {
     local bond_config
     bond_config="auto $bond_name
 iface $bond_name inet manual
-    vlan-raw-device $bond_base"
+    vlan-raw-device $BOND_BASE"
 
     local vmbr_config
     vmbr_config="auto $vmbr_name
@@ -116,7 +112,7 @@ iface $vmbr_name inet manual
 
     # Insert configurations
     __update__ "Adding bond configuration"
-    if insert_sorted_config "$bond_name" "$bond_config" "$bond_base" "$config_file"; then
+    if insert_sorted_config "$bond_name" "$bond_config" "$BOND_BASE" "$config_file"; then
         __ok__ "Bond configuration added"
     fi
 
@@ -140,4 +136,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

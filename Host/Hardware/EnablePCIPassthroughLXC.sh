@@ -30,7 +30,21 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+# Variable args: pci_device + CTIDs - hybrid parsing
+if [[ $# -lt 2 ]]; then
+    __err__ "Missing required arguments"
+    echo "Usage: $0 <pci_device_id> <ctid_1> [<ctid_2> ...]"
+    exit 64
+fi
+
+PCI_DEVICE_ID="$1"
+shift
+CTID_ARRAY=("$@")
 
 # --- enable_pci_passthrough --------------------------------------------------
 enable_pci_passthrough() {
@@ -79,24 +93,14 @@ main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <pci_device_id> <ctid_1> [<ctid_2> ...]"
-        exit 64
-    fi
-
-    local pci_device_id="$1"
-    shift
-    local -a ctid_array=("$@")
-
     __info__ "PCI Passthrough Configuration"
-    __info__ "  Device: $pci_device_id"
-    __info__ "  Containers: ${ctid_array[*]}"
+    __info__ "  Device: $PCI_DEVICE_ID"
+    __info__ "  Containers: ${CTID_ARRAY[*]}"
 
     echo
     __warn__ "This will set containers to privileged mode"
 
-    if ! __prompt_yes_no__ "Configure PCI passthrough for ${#ctid_array[@]} container(s)?"; then
+    if ! __prompt_yes_no__ "Configure PCI passthrough for ${#CTID_ARRAY[@]} container(s)?"; then
         __info__ "Operation cancelled"
         exit 0
     fi
@@ -104,7 +108,7 @@ main() {
     local success=0
     local failed=0
 
-    for ctid in "${ctid_array[@]}"; do
+    for ctid in "${CTID_ARRAY[@]}"; do
         echo
         if ! pct config "${ctid}" &>/dev/null; then
             __err__ "Container $ctid does not exist - skipping"
@@ -112,7 +116,7 @@ main() {
             continue
         fi
 
-        if enable_pci_passthrough "$ctid" "$pci_device_id"; then
+        if enable_pci_passthrough "$ctid" "$PCI_DEVICE_ID"; then
             ((success++))
         else
             ((failed++))
@@ -138,4 +142,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to follow CONTRIBUTING.md guidelines
+#   - ArgumentParser.sh sourced (hybrid for variable args)
 #   - Pending validation

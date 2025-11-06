@@ -21,6 +21,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -30,29 +32,30 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# Variable args: group_name + resource IDs - hybrid parsing
+if [[ $# -lt 2 ]]; then
+    __err__ "Missing required arguments"
+    echo "Usage: $0 <group_name> <resource_id_1> [<resource_id_2> ...]"
+    exit 64
+fi
+
+GROUP_NAME="$1"
+shift
+RESOURCE_IDS=("$@")
+
+# Validate group name is not purely numeric
+if [[ "$GROUP_NAME" =~ ^[0-9]+$ ]]; then
+    __err__ "Group name '${GROUP_NAME}' cannot be purely numeric"
+    exit 64
+fi
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
 
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <group_name> <resource_id_1> [<resource_id_2> ...]"
-        exit 64
-    fi
-
-    local group_name="$1"
-    shift
-    local -a resource_ids=("$@")
-
-    # Validate group name is not purely numeric
-    if [[ "$group_name" =~ ^[0-9]+$ ]]; then
-        __err__ "Group name '${group_name}' cannot be purely numeric"
-        exit 1
-    fi
-
-    __info__ "Adding ${#resource_ids[@]} resource(s) to HA group '${group_name}'"
+    __info__ "Adding ${#RESOURCE_IDS[@]} resource(s) to HA group '${GROUP_NAME}'"
 
     # Get all cluster resources
     local -a all_cluster_lxc
@@ -63,7 +66,7 @@ main() {
     local success=0
     local failed=0
 
-    for resource_id in "${resource_ids[@]}"; do
+    for resource_id in "${RESOURCE_IDS[@]}"; do
         local resource_type=""
 
         # Determine resource type
@@ -77,8 +80,8 @@ main() {
             continue
         fi
 
-        __update__ "Adding ${resource_type}:${resource_id} to HA group ${group_name}"
-        if pvesh create /cluster/ha/resources --sid "${resource_type}:${resource_id}" --group "${group_name}" 2>&1; then
+        __update__ "Adding ${resource_type}:${resource_id} to HA group ${GROUP_NAME}"
+        if pvesh create /cluster/ha/resources --sid "${resource_type}:${resource_id}" --group "${GROUP_NAME}" 2>&1; then
             __ok__ "Added ${resource_type}:${resource_id}"
             ((success++))
         else
@@ -100,4 +103,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - ArgumentParser.sh sourced (hybrid for variable args)
 #   - Pending validation

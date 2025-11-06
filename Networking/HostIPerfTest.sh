@@ -22,6 +22,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -29,35 +31,27 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "server_host:string client_host:string port:port" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 3 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <server_host> <client_host> <port>"
-        exit 64
-    fi
-
-    local server_host="$1"
-    local client_host="$2"
-    local port="$3"
-
     __install_or_prompt__ "iperf3"
 
     __info__ "Starting iperf3 throughput test"
-    __info__ "  Server: $server_host"
-    __info__ "  Client: $client_host"
-    __info__ "  Port: $port"
+    __info__ "  Server: $SERVER_HOST"
+    __info__ "  Client: $CLIENT_HOST"
+    __info__ "  Port: $PORT"
 
     # Kill any existing iperf3 servers
-    __update__ "Stopping any existing iperf3 servers on $server_host"
-    ssh "root@${server_host}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
+    __update__ "Stopping any existing iperf3 servers on $SERVER_HOST"
+    ssh "root@${SERVER_HOST}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
 
     # Start iperf3 server
-    __info__ "Starting iperf3 server on $server_host"
-    if ssh "root@${server_host}" "iperf3 -s -p '${port}' &" 2>&1; then
+    __info__ "Starting iperf3 server on $SERVER_HOST"
+    if ssh "root@${SERVER_HOST}" "iperf3 -s -p '${PORT}' &" 2>&1; then
         __ok__ "Server started"
     else
         __err__ "Failed to start iperf3 server"
@@ -68,9 +62,9 @@ main() {
     sleep 5
 
     # Run iperf3 client
-    __info__ "Running iperf3 client on $client_host"
+    __info__ "Running iperf3 client on $CLIENT_HOST"
     echo
-    if ssh "root@${client_host}" "iperf3 -c '${server_host}' -p '${port}' -t 10" 2>&1; then
+    if ssh "root@${CLIENT_HOST}" "iperf3 -c '${SERVER_HOST}' -p '${PORT}' -t 10" 2>&1; then
         echo
         __ok__ "Client test completed"
     else
@@ -78,8 +72,8 @@ main() {
     fi
 
     # Stop iperf3 server
-    __update__ "Stopping iperf3 server on $server_host"
-    ssh "root@${server_host}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
+    __update__ "Stopping iperf3 server on $SERVER_HOST"
+    ssh "root@${SERVER_HOST}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
     __ok__ "Server stopped"
 
     echo
@@ -92,4 +86,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

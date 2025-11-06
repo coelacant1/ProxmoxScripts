@@ -33,6 +33,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Queries.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -76,6 +78,9 @@ create_rule_once() {
     fi
 }
 
+# Parse arguments
+__parse_args__ "management_subnet:cidr" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
@@ -83,15 +88,7 @@ main() {
     __install_or_prompt__ "jq"
     __check_cluster_membership__
 
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: management_subnet"
-        echo "Usage: $0 <management_subnet>"
-        exit 64
-    fi
-
-    local management_subnet="$1"
-
-    __info__ "Management Subnet: ${management_subnet}"
+    __info__ "Management Subnet: ${MANAGEMENT_SUBNET}"
     __info__ "Cluster Interface: ${CLUSTER_INTERFACE}"
 
     # Gather node IPs
@@ -134,18 +131,18 @@ main() {
         --enable 1
 
     create_rule_once \
-        "Allow SSH from ${management_subnet}" \
+        "Allow SSH from ${MANAGEMENT_SUBNET}" \
         --action ACCEPT \
-        --source "${management_subnet}" \
+        --source "${MANAGEMENT_SUBNET}" \
         --dest '+' \
         --dport 22 \
         --proto tcp \
         --enable 1
 
     create_rule_once \
-        "Allow Web GUI from ${management_subnet}" \
+        "Allow Web GUI from ${MANAGEMENT_SUBNET}" \
         --action ACCEPT \
-        --source "${management_subnet}" \
+        --source "${MANAGEMENT_SUBNET}" \
         --dest '+' \
         --dport 8006 \
         --proto tcp \
@@ -216,8 +213,8 @@ main() {
     __ok__ "Firewall setup completed successfully!"
 }
 
-main "$@"
+main
 
 # Testing status:
-#   - Updated to use utility functions
+#   - Updated to use utility functions and ArgumentParser
 #   - Pending validation

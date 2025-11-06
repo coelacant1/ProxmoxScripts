@@ -22,6 +22,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
@@ -31,6 +33,8 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "node_name:node --force:flag" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
@@ -38,57 +42,44 @@ main() {
     __install_or_prompt__ "jq"
     __check_cluster_membership__
 
-    local force=0
-    if [[ "${1:-}" == "--force" ]]; then
-        force=1
-        shift
-    fi
-
-    local node_name="${1:-}"
-    if [[ -z "$node_name" ]]; then
-        __err__ "Missing required argument: node_name"
-        echo "Usage: $0 [--force] <node_name>"
-        exit 64
-    fi
-
     # Check for VMs/containers unless --force
-    if [[ $force -ne 1 ]]; then
-        __info__ "Checking for VMs/containers on node ${node_name}"
+    if [[ "$FORCE" != "true" ]]; then
+        __info__ "Checking for VMs/containers on node ${NODE_NAME}"
 
         local vms_on_node
         vms_on_node=$(
             pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-            | jq -r --arg N "$node_name" '.[] | select(.node == $N) | "\(.type) \(.vmid)"'
+            | jq -r --arg N "$NODE_NAME" '.[] | select(.node == $N) | "\(.type) \(.vmid)"'
         )
 
         if [[ -n "$vms_on_node" ]]; then
-            __err__ "The following VMs/containers still reside on node ${node_name}:"
+            __err__ "The following VMs/containers still reside on node ${NODE_NAME}:"
             echo "$vms_on_node"
             __err__ "Migrate or remove them first, or use --force to override"
             exit 1
         fi
     fi
 
-    __warn__ "This will remove node ${node_name} from the cluster"
+    __warn__ "This will remove node ${NODE_NAME} from the cluster"
     if ! __prompt_yes_no__ "Proceed?"; then
         __info__ "Operation cancelled"
         exit 0
     fi
 
-    __info__ "Preparing node ${node_name} for removal"
+    __info__ "Preparing node ${NODE_NAME} for removal"
 
     # Stop cluster services on target node
     local host
-    host=$(__get_ip_from_name__ "$node_name") || true
+    host=$(__get_ip_from_name__ "$NODE_NAME") || true
 
     if [[ -n "$host" ]]; then
-        __info__ "Stopping cluster services on ${node_name}"
+        __info__ "Stopping cluster services on ${NODE_NAME}"
         ssh -t -o StrictHostKeyChecking=no "root@${host}" \
             "systemctl stop pve-cluster corosync && pmxcfs -l && rm -r /etc/corosync/* /etc/pve/corosync.conf && killall pmxcfs && systemctl start pve-cluster" 2>/dev/null || true
     fi
 
     # Remove node from cluster
-    __info__ "Removing node ${node_name} from cluster membership"
+    __info__ "Removing node ${NODE_NAME} from cluster membership"
 
     local node_count
     node_count=$(__get_number_of_cluster_nodes__)
@@ -102,15 +93,15 @@ main() {
         sleep 2
 
         __info__ "Attempting node removal (will retry until successful)"
-        while ! pvecm delnode "$node_name" 2>/dev/null; do
+        while ! pvecm delnode "$NODE_NAME" 2>/dev/null; do
             __update__ "Retrying in 5 seconds..."
             sleep 5
         done
     else
-        pvecm delnode "$node_name"
+        pvecm delnode "$NODE_NAME"
     fi
 
-    __ok__ "Node ${node_name} removed from cluster"
+    __ok__ "Node ${NODE_NAME} removed from cluster"
 
     # Clean SSH references on remaining nodes
     __info__ "Cleaning SSH references on remaining nodes"
@@ -118,18 +109,18 @@ main() {
     online_nodes=$(pvecm nodes | awk '!/Name/ {print $3}')
 
     for node in $online_nodes; do
-        [[ "$node" == "$node_name" ]] && continue
+        [[ "$node" == "$NODE_NAME" ]] && continue
         [[ -z "$node" ]] && continue
 
         __update__ "Cleaning SSH references on ${node}"
-        ssh "root@${node}" "ssh-keygen -R '${node_name}' >/dev/null 2>&1 || true"
-        ssh "root@${node}" "ssh-keygen -R '${node_name}.local' >/dev/null 2>&1 || true"
-        ssh "root@${node}" "sed -i '/${node_name}/d' /etc/ssh/ssh_known_hosts 2>/dev/null || true"
-        ssh "root@${node}" "rm -rf /etc/pve/nodes/${node_name} 2>/dev/null || true"
+        ssh "root@${node}" "ssh-keygen -R '${NODE_NAME}' >/dev/null 2>&1 || true"
+        ssh "root@${node}" "ssh-keygen -R '${NODE_NAME}.local' >/dev/null 2>&1 || true"
+        ssh "root@${node}" "sed -i '/${NODE_NAME}/d' /etc/ssh/ssh_known_hosts 2>/dev/null || true"
+        ssh "root@${node}" "rm -rf /etc/pve/nodes/${NODE_NAME} 2>/dev/null || true"
     done
 
     __ok__ "SSH references cleaned on all remaining nodes"
-    __ok__ "Node ${node_name} removed successfully!"
+    __ok__ "Node ${NODE_NAME} removed successfully!"
     __info__ "You can now safely re-add a node with this name"
 
     __prompt_keep_installed_packages__
@@ -139,4 +130,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

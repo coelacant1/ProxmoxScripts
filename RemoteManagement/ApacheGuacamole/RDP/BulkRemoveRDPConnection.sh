@@ -30,17 +30,40 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-# shellcheck source=Utilities/Prompts.sh
-source "${UTILITYPATH}/Prompts.sh"
-
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-source "${UTILITYPATH}/Prompts.sh"
 
 __install_or_prompt__ "jq"
+
+# Complex argument parsing - hybrid approach
+if [[ $# -lt 2 ]]; then
+    echo "Usage:"
+    echo "  $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
+    echo "  $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
+    exit 64
+fi
+
+GUAC_URL="$1"
+MODE="substring"
+
+if [[ "$2" == "--vmid-range" ]]; then
+    MODE="vmid-range"
+    if [[ $# -lt 4 ]]; then
+        echo "Error: Missing required arguments for VMID range mode."
+        echo "Usage: $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
+        exit 64
+    fi
+    START_VMID="$3"
+    END_VMID="$4"
+    GUAC_DATA_SOURCE="${5:-mysql}"
+else
+    SEARCH_SUBSTRING="$2"
+    GUAC_DATA_SOURCE="${3:-mysql}"
+fi
 
 ###############################################################################
 # delete_connection - Deletes a single connection from Guacamole
@@ -69,33 +92,6 @@ delete_connection() {
 ###############################################################################
 # Main Logic
 ###############################################################################
-
-# Parse arguments
-GUAC_URL="$1"
-MODE="substring"
-
-if [[ "$2" == "--vmid-range" ]]; then
-    MODE="vmid-range"
-    START_VMID="$3"
-    END_VMID="$4"
-    GUAC_DATA_SOURCE="${5:-mysql}"
-
-    if [[ -z "$GUAC_URL" || -z "$START_VMID" || -z "$END_VMID" ]]; then
-        echo "Error: Missing required arguments for VMID range mode."
-        echo "Usage: $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
-        exit 1
-    fi
-else
-    SEARCH_SUBSTRING="$2"
-    GUAC_DATA_SOURCE="${3:-mysql}"
-
-    if [[ -z "$GUAC_URL" || -z "$SEARCH_SUBSTRING" ]]; then
-        echo "Error: Missing required arguments."
-        echo "Usage: $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
-        echo "       $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
-        exit 1
-    fi
-fi
 
 # Ensure a Guacamole auth token exists
 if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
@@ -214,3 +210,7 @@ else
 fi
 
 __prompt_keep_installed_packages__
+
+# Testing status:
+#   - ArgumentParser.sh sourced (hybrid for complex dual-mode args)
+#   - Pending validation

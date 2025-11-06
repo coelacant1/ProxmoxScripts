@@ -23,12 +23,28 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "host_dir:path permission:string ctids:vmid..." "$@"
+
+# Validate permission
+if [[ "$PERMISSION" != "ro" && "$PERMISSION" != "rw" ]]; then
+    __err__ "Permission must be 'ro' or 'rw'"
+    exit 64
+fi
+
+# Validate host directory
+if [[ ! -d "$HOST_DIR" ]]; then
+    __err__ "Host directory does not exist: $HOST_DIR"
+    exit 1
+fi
 
 # --- process_container -------------------------------------------------------
 process_container() {
@@ -88,36 +104,13 @@ main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 3 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <host_dir> <permission> <ctid> [<ctid2>...]"
-        exit 64
-    fi
-
-    local host_dir="$1"
-    local permission="$2"
-    shift 2
-    local -a containers=("$@")
-
-    # Validate host directory
-    if [[ ! -d "$host_dir" ]]; then
-        __err__ "Host directory does not exist: $host_dir"
-        exit 1
-    fi
-
-    # Validate permission
-    if [[ "$permission" != "ro" && "$permission" != "rw" ]]; then
-        __err__ "Permission must be 'ro' or 'rw'"
-        exit 1
-    fi
-
     local ro_flag=0
-    [[ "$permission" == "ro" ]] && ro_flag=1
+    [[ "$PERMISSION" == "ro" ]] && ro_flag=1
 
     __info__ "Passthrough Storage Configuration"
-    __info__ "  Host directory: $host_dir"
-    __info__ "  Permission: $permission"
-    __info__ "  Containers: ${containers[*]}"
+    __info__ "  Host directory: $HOST_DIR"
+    __info__ "  Permission: $PERMISSION"
+    __info__ "  Containers: ${CTIDS[*]}"
 
     if [[ "$ro_flag" == "0" ]]; then
         __warn__ "Read-write access will be granted"
@@ -126,8 +119,8 @@ main() {
     local mounted=0
     local failed=0
 
-    for ctid in "${containers[@]}"; do
-        if process_container "$ctid" "$host_dir" "$ro_flag"; then
+    for ctid in "${CTIDS[@]}"; do
+        if process_container "$ctid" "$HOST_DIR" "$ro_flag"; then
             ((mounted++))
         else
             ((failed++))
@@ -147,4 +140,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

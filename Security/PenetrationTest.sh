@@ -23,6 +23,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -32,16 +34,17 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# Hybrid parsing: "all" or variable hosts
+if [[ $# -lt 1 ]]; then
+    __err__ "Missing required argument"
+    echo "Usage: $0 <host> [<host2> ...] | all"
+    exit 64
+fi
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
-
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument"
-        echo "Usage: $0 <host> [<host2> ...] | all"
-        exit 64
-    fi
 
     __install_or_prompt__ "nmap"
 
@@ -100,4 +103,9 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Pending validation
+
+
+# Testing status:
+#   - ArgumentParser.sh sourced (hybrid for "all" or variable hosts)
 #   - Pending validation

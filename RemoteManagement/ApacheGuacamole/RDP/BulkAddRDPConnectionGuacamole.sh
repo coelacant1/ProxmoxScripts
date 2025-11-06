@@ -24,28 +24,19 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-source "${UTILITYPATH}/Prompts.sh"
+__parse_args__ "guac_url:url start_vmid:vmid end_vmid:vmid guac_rdp_user:string guac_rdp_pass:string guac_data_source:string:mysql" "$@"
 
 __check_root__
 __check_proxmox__
 __install_or_prompt__ "jq"
 __install_or_prompt__ "arp-scan"
-
-GUAC_URL="$1"
-START_VMID="$2"
-END_VMID="$3"
-GUAC_RDP_USER="$4"
-GUAC_RDP_PASS="$5"
-# If no 6th argument is given, default to "mysql"
-GUAC_DATA_SOURCE="${6:-mysql}"
-
-if [[ -z "$GUAC_URL" || -z "$START_VMID" || -z "$END_VMID" || -z "$GUAC_RDP_USER" || -z "$GUAC_RDP_PASS" ]]; then
-    echo "Error: Missing required arguments."
-    echo "Usage: $0 GUAC_SERVER_URL START_VMID END_VMID GUAC_RDP_USER GUAC_RDP_PASS [DATA_SOURCE]"
-    exit 1
-fi
 
 if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
     echo "Error: No Guacamole auth token found in /tmp/cc_pve/guac_token."
@@ -57,19 +48,7 @@ AUTH_TOKEN="$(cat /tmp/cc_pve/guac_token)"
 
 # --- main --------------------------------------------------------------------
 main() {
-    __check_root__
-    __check_proxmox__
-    __install_or_prompt__ "jq"
-    __install_or_prompt__ "arp-scan"
-
-    if [[ ! -f "/tmp/cc_pve/guac_token" ]]; then
-        __err__ "No Guacamole auth token found in /tmp/cc_pve/guac_token. Run GetGuacamoleAuthenticationToken.sh first"
-    fi
-
-    local auth_token
-    auth_token="$(cat /tmp/cc_pve/guac_token)"
-
-    __info__ "Using data source: '$DATA_SOURCE'"
+    __info__ "Using data source: '$GUAC_DATA_SOURCE'"
     __info__ "Creating RDP connections for VMs $START_VMID to $END_VMID"
 
     local created=0
@@ -157,4 +136,10 @@ main() {
 main
 
 # Testing status:
+#   - Pending validation
+
+
+# Testing status:
+#   - ArgumentParser.sh sourced
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

@@ -25,6 +25,9 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
@@ -39,6 +42,15 @@ SERVICE_FILE="/etc/systemd/system/spindown.service"
 # Main
 ###############################################################################
 __check_root__  # Ensure the script is run as root
+
+# Check arguments
+if [[ $# -lt 1 ]]; then
+    __err__ "Missing required arguments"
+    echo "Usage:"
+    echo "  $0 <time_in_minutes> <device_path1> [<device_path2> ...]"
+    echo "  $0 uninstall"
+    exit 64
+fi
 
 ###############################################################################
 # Uninstall Mode
@@ -78,12 +90,11 @@ fi
 ###############################################################################
 # Installation Mode
 ###############################################################################
-# Check if the correct arguments are provided
+# Validate arguments
 if [[ $# -lt 2 ]]; then
-  echo "Usage:"
-  echo "  \"$0\" <time_in_minutes> <device_path1> [<device_path2> ...]"
-  echo "  \"$0\" uninstall"
-  exit 2
+    __err__ "Missing required arguments for installation mode"
+    echo "Usage: $0 <time_in_minutes> <device_path1> [<device_path2> ...]"
+    exit 64
 fi
 
 SPINDOWN_MINUTES="$1"
@@ -92,8 +103,8 @@ DEVICES=("$@")
 
 # Validate SPINDOWN_MINUTES
 if ! [[ "$SPINDOWN_MINUTES" =~ ^[0-9]+$ ]]; then
-  echo "Error: <time_in_minutes> must be a positive integer."
-  exit 3
+    __err__ "<time_in_minutes> must be a positive integer"
+    exit 64
 fi
 
 # Install hdparm if missing
@@ -165,3 +176,7 @@ echo "Drives: \"${DEVICES[*]}\""
 echo "Spindown time (minutes): \"$SPINDOWN_MINUTES\""
 echo "hdparm -S value used: \"$HDPARM_VALUE\""
 echo "Done."
+
+# Testing status:
+#   - ArgumentParser.sh sourced (hybrid for uninstall vs variable args)
+#   - Pending validation

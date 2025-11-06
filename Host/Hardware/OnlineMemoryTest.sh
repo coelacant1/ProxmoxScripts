@@ -20,6 +20,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -27,30 +29,18 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "test_size_gb:number" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: size_in_gb"
-        echo "Usage: $0 <size_in_gb>"
-        exit 64
-    fi
-
-    local test_size_gb="$1"
-
-    # Validate input is a positive integer
-    if ! [[ "$test_size_gb" =~ ^[0-9]+$ ]]; then
-        __err__ "Size must be a positive integer"
-        exit 1
-    fi
-
-    local test_size_mb=$((test_size_gb * 1024))
+    local test_size_mb=$((TEST_SIZE_GB * 1024))
 
     __install_or_prompt__ "memtester"
 
-    __warn__ "Testing ${test_size_gb}GB (${test_size_mb}MB) of RAM"
+    __warn__ "Testing ${TEST_SIZE_GB}GB (${test_size_mb}MB) of RAM"
     __warn__ "This may temporarily reduce available memory for other processes"
 
     __info__ "Starting memory test"
@@ -69,4 +59,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

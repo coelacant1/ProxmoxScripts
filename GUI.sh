@@ -216,7 +216,7 @@ run_script() {
         escaped_args+=("$(printf '%q' "$arg")")
     done
     cmd_string="$(printf '%s ' "${escaped_args[@]}")"
-    cmd_string="${script_path} ${cmd_string}"
+    cmd_string="bash ${script_path} ${cmd_string}"
 
     script -q -c "$cmd_string" .log/out.log
 

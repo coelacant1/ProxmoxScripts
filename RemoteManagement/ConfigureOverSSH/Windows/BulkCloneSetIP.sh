@@ -20,44 +20,28 @@
 
 set -euo pipefail
 
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
 
-###############################################################################
-# Check prerequisites and parse arguments
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "template_ip:ip start_ip_cidr:string new_gateway:ip count:number template_id:vmid base_vm_id:vmid ssh_username:string ssh_password:string vm_name_prefix:string interface_name:string dns1:ip dns2:ip" "$@"
+
+###############################################################################
+# Check prerequisites
+###############################################################################
 __check_root__
 __check_proxmox__
 __ensure_dependencies__ sshpass
 
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [ "$#" -lt 12 ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix> <interfaceName> <dns1> <dns2>"
-  exit 1
-fi
+# Strip quotes from interface name if present
+INTERFACE_NAME="${INTERFACE_NAME//\"/}"
 
-templateIpAddr="$1"
-startIpCidr="$2"
-newGateway="$3"
-instanceCount="$4"
-templateId="$5"
-baseVmId="$6"
-sshUsername="$7"
-sshPassword="$8"
-vmNamePrefix="$9"
-interfaceName="${10}"
-# Strip quotes from interfaceName if present
-interfaceName="${interfaceName//\"/}"
-dns1="${11}"
-dns2="${12}"
-
-IFS='/' read -r startIpAddrOnly startMask <<<"$startIpCidr"
+IFS='/' read -r startIpAddrOnly startMask <<<"$START_IP_CIDR"
 ipInt="$(__ip_to_int__ "$startIpAddrOnly")"
 netmask="$(__cidr_to_netmask__ "$startMask")"
 
@@ -91,10 +75,10 @@ netsh interface ip set dns name="%IFACE%" static %DNS1% primary
 netsh interface ip add dns name="%IFACE%" %DNS2% index=2
 EOF
 
-ssh-keygen -f "/root/.ssh/known_hosts" -R "${templateIpAddr}"
+ssh-keygen -f "/root/.ssh/known_hosts" -R "${TEMPLATE_IP}"
 
-remoteBatPath="C:/Users/${sshUsername}/ChangeIP.bat"
-remoteBatPathCmd="C:\\Users\\${sshUsername}\\ChangeIP.bat"
+remoteBatPath="C:/Users/${SSH_USERNAME}/ChangeIP.bat"
+remoteBatPathCmd="C:\\Users\\${SSH_USERNAME}\\ChangeIP.bat"
 
 ###############################################################################
 # Main logic: Clone and configure Windows VMs
@@ -105,39 +89,45 @@ for (( i=0; i<instanceCount; i++ )); do
 
   ssh-keygen -f "/root/.ssh/known_hosts" -R "${currentIp}"
 
-  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
-  qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}"
+  echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
+  qm clone "$TEMPLATE_ID" "$currentVmId" --name "${VM_NAME_PREFIX}${currentVmId}"
   qm start "$currentVmId"
 
-  echo "Waiting for SSH on template IP: \"$templateIpAddr\"..."
-  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
+  echo "Waiting for SSH on template IP: \"$TEMPLATE_IP\"..."
+  __wait_for_ssh__ "$TEMPLATE_IP" "$SSH_USERNAME" "$SSH_PASSWORD"
 
   echo "Uploading 'ChangeIP.bat' to Windows VM..."
   __scp_send__ \
-    --host "$templateIpAddr" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
+    --host "$TEMPLATE_IP" \
+    --user "$SSH_USERNAME" \
+    --password "$SSH_PASSWORD" \
     --source "$tempBat" \
     --destination "$remoteBatPath"
 
   echo "Starting IP change script in the background via 'start /b'..."
-  echo "DEBUG: interfaceName='${interfaceName}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${newGateway}' dns1='${dns1}' dns2='${dns2}'"
-  remoteCmd="cmd /c \"${remoteBatPathCmd} ${interfaceName} ${currentIp} ${netmask} ${newGateway} ${dns1} ${dns2}\""
+  echo "DEBUG: interfaceName='${INTERFACE_NAME}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${NEW_GATEWAY}' dns1='${DNS1}' dns2='${DNS2}'"
+  remoteCmd="cmd /c \"${remoteBatPathCmd} ${INTERFACE_NAME} ${currentIp} ${netmask} ${NEW_GATEWAY} ${DNS1} ${DNS2}\""
   echo "DEBUG: remoteCmd='${remoteCmd}'"
 
   __ssh_exec__ \
-    --host "$templateIpAddr" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
+    --host "$TEMPLATE_IP" \
+    --user "$SSH_USERNAME" \
+    --password "$SSH_PASSWORD" \
     --extra-ssh-arg "-o ServerAliveInterval=3" \
     --extra-ssh-arg "-o ServerAliveCountMax=1" \
     --command "$remoteCmd" || true
 
   echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
-  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
+  __wait_for_ssh__ "$currentIp" "$SSH_USERNAME" "$SSH_PASSWORD"
 
   ipInt=$(( ipInt + 1 ))
 done
 
 rm -f "$tempBat"
 __prompt_keep_installed_packages__
+
+
+# Testing status:
+#   - ArgumentParser.sh sourced
+#   - Updated to use ArgumentParser.sh
+#   - Pending validation

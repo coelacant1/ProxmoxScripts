@@ -39,32 +39,25 @@
 
 set -euo pipefail
 
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Conversion.sh
 source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "template_ip:ip start_ip_cidr:string new_gateway:ip count:number template_id:vmid base_vm_id:vmid" "$@"
+
 ###############################################################################
-# Check prerequisites and parse arguments
+# Check prerequisites
 ###############################################################################
 __check_root__
 __check_proxmox__
 
-if [ $# -lt 6 ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId>"
-  exit 1
-fi
-
-templateIpAddr="$1"
-startIpCidr="$2"
-newGateway="$3"
-instanceCount="$4"
-templateId="$5"
-baseVmId="$6"
-
 # Split the starting IP and CIDR (e.g., 192.168.1.10/24 -> 192.168.1.10 and 24)
-IFS='/' read -r startIpAddrOnly startMask <<< "$startIpCidr"
+IFS='/' read -r startIpAddrOnly startMask <<< "$START_IP_CIDR"
 
 # Convert the starting IP to an integer for incrementing
 ipInt="$( __ip_to_int__ "$startIpAddrOnly" )"
@@ -77,20 +70,20 @@ for (( i=0; i<instanceCount; i++ )); do
   currentIp="$( __int_to_ip__ "$ipInt" )"
   currentIpCidr="$currentIp/$startMask"
 
-  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
-  qm clone "$templateId" "$currentVmId" --name "cloned-$currentVmId"
+  echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
+  qm clone "$TEMPLATE_ID" "$currentVmId" --name "cloned-$currentVmId"
   qm start "$currentVmId"
 
-  echo "Configuring VM ID \"$currentVmId\" to use IP \"$currentIpCidr\" and gateway \"$newGateway\"..."
+  echo "Configuring VM ID \"$currentVmId\" to use IP \"$currentIpCidr\" and gateway \"$NEW_GATEWAY\"..."
   # Over SSH to the template VM:
   #   1) Remove lines referencing 'gateway4:'
   #   2) Replace lines matching 'addresses: [templateIp/NN]' with the new IP/CIDR
   #   3) Insert the new gateway4 line after the 'addresses:' line
   #   4) Apply netplan changes
-  ssh "root@$templateIpAddr" bash -c "'
+  ssh "root@$TEMPLATE_IP" bash -c "'
     sed -i \"/gateway4:/d\" /etc/netplan/*.yaml
-    sed -i \"s|addresses: \\[${templateIpAddr}/[0-9]\\+\\]|addresses: [${currentIpCidr}]|g\" /etc/netplan/*.yaml
-    sed -i \"/addresses: \\[${currentIpCidr}\\]/a \ \ \ \ gateway4: ${newGateway}\" /etc/netplan/*.yaml
+    sed -i \"s|addresses: \\[${TEMPLATE_IP}/[0-9]\\+\\]|addresses: [${currentIpCidr}]|g\" /etc/netplan/*.yaml
+    sed -i \"/addresses: \\[${currentIpCidr}\\]/a \ \ \ \ gateway4: ${NEW_GATEWAY}\" /etc/netplan/*.yaml
     netplan apply
   '"
 

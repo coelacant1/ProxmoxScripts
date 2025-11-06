@@ -22,6 +22,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -31,26 +33,18 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "dns1:ip dns2:ip search_domain:fqdn" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
 
-    if [[ $# -lt 3 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <dns1> <dns2> <search_domain>"
-        exit 64
-    fi
-
-    local dns1="$1"
-    local dns2="$2"
-    local search_domain="$3"
-
     __info__ "Setting DNS cluster-wide"
-    __info__ "  DNS1: $dns1"
-    __info__ "  DNS2: $dns2"
-    __info__ "  Search domain: $search_domain"
+    __info__ "  DNS1: $DNS1"
+    __info__ "  DNS2: $DNS2"
+    __info__ "  Search domain: $SEARCH_DOMAIN"
 
     # Get remote node IPs
     local -a remote_nodes
@@ -63,7 +57,7 @@ main() {
     for node_ip in "${remote_nodes[@]}"; do
         __update__ "Setting DNS on $node_ip"
         if ssh -o StrictHostKeyChecking=no "root@${node_ip}" \
-            "echo -e 'search ${search_domain}\nnameserver ${dns1}\nnameserver ${dns2}' > /etc/resolv.conf" 2>&1; then
+            "echo -e 'search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}' > /etc/resolv.conf" 2>&1; then
             __ok__ "DNS configured on $node_ip"
             ((success++))
         else
@@ -74,7 +68,7 @@ main() {
 
     # Update DNS on local node
     __update__ "Setting DNS on local node"
-    if echo -e "search ${search_domain}\nnameserver ${dns1}\nnameserver ${dns2}" > /etc/resolv.conf 2>&1; then
+    if echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" > /etc/resolv.conf 2>&1; then
         __ok__ "DNS configured on local node"
         ((success++))
     else
@@ -95,4 +89,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

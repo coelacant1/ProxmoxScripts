@@ -24,12 +24,22 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "pool:string start_vm:number end_vm:number disk_num:number" "$@"
+
+# Validate range
+if ((START_VM > END_VM)); then
+    __err__ "Start VM index must be <= end VM index"
+    exit 64
+fi
 
 # --- delete_disk -------------------------------------------------------------
 delete_disk() {
@@ -50,36 +60,14 @@ main() {
     __check_root__
     __check_proxmox__
 
-    if [[ $# -lt 4 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <pool> <start_vm> <end_vm> <disk_num>"
-        exit 64
-    fi
-
-    local pool="$1"
-    local start_vm="$2"
-    local end_vm="$3"
-    local disk_num="$4"
-
-    # Validate numeric inputs
-    if ! [[ "$start_vm" =~ ^[0-9]+$ ]] || ! [[ "$end_vm" =~ ^[0-9]+$ ]] || ! [[ "$disk_num" =~ ^[0-9]+$ ]]; then
-        __err__ "VM indices and disk number must be numeric"
-        exit 1
-    fi
-
-    if ((start_vm > end_vm)); then
-        __err__ "Start VM index must be <= end VM index"
-        exit 1
-    fi
-
-    local disk_count=$((end_vm - start_vm + 1))
+    local disk_count=$((END_VM - START_VM + 1))
 
     __warn__ "DESTRUCTIVE OPERATION: Bulk disk deletion"
-    __info__ "Pool: $pool"
-    __info__ "VM range: $start_vm to $end_vm ($disk_count VMs)"
-    __info__ "Disk number: $disk_num"
+    __info__ "Pool: $POOL"
+    __info__ "VM range: $START_VM to $END_VM ($disk_count VMs)"
+    __info__ "Disk number: $DISK_NUM"
 
-    if ! __prompt_yes_no__ "Delete $disk_count disk(s) from pool $pool?"; then
+    if ! __prompt_yes_no__ "Delete $disk_count disk(s) from pool $POOL?"; then
         __info__ "Operation cancelled"
         exit 0
     fi
@@ -89,10 +77,10 @@ main() {
     local deleted=0
     local failed=0
 
-    for vm_index in $(seq "$start_vm" "$end_vm"); do
-        local disk_name="vm-${vm_index}-disk-${disk_num}"
+    for vm_index in $(seq "$START_VM" "$END_VM"); do
+        local disk_name="vm-${vm_index}-disk-${DISK_NUM}"
 
-        if delete_disk "$pool" "$disk_name"; then
+        if delete_disk "$POOL" "$disk_name"; then
             ((deleted++))
         else
             ((failed++))
@@ -112,4 +100,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

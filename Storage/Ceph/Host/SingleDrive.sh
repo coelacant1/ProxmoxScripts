@@ -24,9 +24,20 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-source "${UTILITYPATH}/Prompts.sh"
+__parse_args__ "step:string" "$@"
+
+# Validate step argument
+if [[ "$STEP" != "create_osd" && "$STEP" != "clear_local_lvm" ]]; then
+    __err__ "Invalid step: $STEP (must be: create_osd or clear_local_lvm)"
+    exit 64
+fi
 
 __check_root__
 __check_proxmox__
@@ -67,22 +78,11 @@ function create_osd() {
 ###############################################################################
 # Main
 ###############################################################################
-STEP="$1"
-
-if [ -z "$STEP" ]; then
-    echo "Usage: $0 <create_osd|clear_local_lvm>"
-    exit 1
-fi
-
 case "$STEP" in
     create_osd)
         create_osd
         ;;
     clear_local_lvm)
         clear_local_lvm
-        ;;
-    *)
-        echo "Invalid step. Use 'create_osd' or 'clear_local_lvm'."
-        exit 2
         ;;
 esac

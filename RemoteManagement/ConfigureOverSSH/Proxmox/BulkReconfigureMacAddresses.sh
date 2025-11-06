@@ -24,23 +24,19 @@
 
 set -euo pipefail
 
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
 
-###############################################################################
-# Environment Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument Parsing
-###############################################################################
+# Hybrid parsing: complex SSH auth pattern
 if [[ $# -lt 4 ]]; then
-  echo "Usage: $0 <startVMID> <endVMID> <sshUser> <sshPasswordOrDash> [sshKeyPath]" >&2
-  exit 1
+    echo "Usage: $0 <startVMID> <endVMID> <sshUser> <sshPasswordOrDash> [sshKeyPath]" >&2
+    exit 64
 fi
 
 START_VMID="$1"
@@ -50,20 +46,26 @@ SSH_PASS="$4"
 SSH_KEY="${5:-}"
 
 ###############################################################################
+# Environment Checks
+###############################################################################
+__check_root__
+__check_proxmox__
+
+###############################################################################
 # Helpers
 ###############################################################################
 if [[ "$SSH_PASS" == "-" ]]; then
-  if [[ -z "$SSH_KEY" ]]; then
-    echo "Error: SSH key path required when password is '-'" >&2
-    exit 1
-  fi
-  if [[ ! -f "$SSH_KEY" ]]; then
-    echo "Error: SSH key '$SSH_KEY' not found." >&2
-    exit 1
-  fi
-  __ensure_dependencies__ jq
+    if [[ -z "$SSH_KEY" ]]; then
+        echo "Error: SSH key path required when password is '-'" >&2
+        exit 1
+    fi
+    if [[ ! -f "$SSH_KEY" ]]; then
+        echo "Error: SSH key '$SSH_KEY' not found." >&2
+        exit 1
+    fi
+    __ensure_dependencies__ jq
 else
-  __ensure_dependencies__ jq sshpass
+    __ensure_dependencies__ jq sshpass
 fi
 
 read -r -d '' macUpdateScript <<'EOF' || true

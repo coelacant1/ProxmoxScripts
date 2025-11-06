@@ -35,7 +35,24 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+
+# Parse action argument
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 <install|remove>"
+    exit 64
+fi
+
+ACTION="$1"
+
+# Validate action
+if [[ "$ACTION" != "install" && "$ACTION" != "remove" ]]; then
+    echo "Usage: $0 <install|remove>"
+    exit 64
+fi
 
 ###############################################################################
 # Global Variables
@@ -276,7 +293,7 @@ show_usage() {
 ###############################################################################
 # Main
 ###############################################################################
-case "$1" in
+case "$ACTION" in
     install)
         __check_root__          # Ensure script is run as root
         __check_proxmox__       # Ensure we are on a Proxmox node
@@ -292,8 +309,9 @@ case "$1" in
         __check_proxmox__
         remove_service_and_files
         ;;
-    *)
-        show_usage
-        exit 1
-        ;;
 esac
+
+# Testing status:
+#   - ArgumentParser.sh sourced
+#   - Action validation added
+#   - Pending validation

@@ -25,31 +25,25 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-source "${UTILITYPATH}/Prompts.sh"
+__parse_args__ "disk:path" "$@"
+
+# Validate disk path
+if [[ ! "$DISK" =~ ^/dev/ ]]; then
+    __err__ "Invalid disk specified. Please provide a valid /dev/sdX path."
+    exit 64
+fi
 
 __check_root__
 __check_proxmox__
 
-###############################################################################
-# Validate arguments
-###############################################################################
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 /dev/sdX"
-  exit 1
-fi
-
-DISK="$1"
-
-if [[ ! "$DISK" =~ ^/dev/ ]]; then
-  echo "Error: Invalid disk specified. Please provide a valid /dev/sdX path."
-  exit 2
-fi
-
-###############################################################################
 # Check and/or install required commands
-###############################################################################
 __install_or_prompt__ "parted"
 __install_or_prompt__ "util-linux"  # Provides wipefs
 __install_or_prompt__ "coreutils"

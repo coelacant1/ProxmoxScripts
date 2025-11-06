@@ -21,6 +21,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -30,27 +32,20 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "storage_name:storage mount_path:path" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
 
-    if [[ $# -lt 2 ]]; then
-        __err__ "Missing required arguments"
-        echo "Usage: $0 <storage_name> <mount_path>"
-        exit 64
-    fi
-
-    local storage_name="$1"
-    local mount_path="$2"
-
-    __info__ "Fixing stale mount for storage: $storage_name"
-    __info__ "Mount path: $mount_path"
+    __info__ "Fixing stale mount for storage: $STORAGE_NAME"
+    __info__ "Mount path: $MOUNT_PATH"
 
     # Disable storage
-    __update__ "Disabling storage: $storage_name"
-    if pvesm set "${storage_name}" --disable 1 2>&1; then
+    __update__ "Disabling storage: $STORAGE_NAME"
+    if pvesm set "${STORAGE_NAME}" --disable 1 2>&1; then
         __ok__ "Storage disabled"
     else
         __err__ "Failed to disable storage"
@@ -75,7 +70,7 @@ main() {
     for node_ip in "${remote_nodes[@]}"; do
         __update__ "Processing node: $node_ip"
 
-        if ssh root@"${node_ip}" "umount -f '${mount_path}' 2>/dev/null && rm -rf '${mount_path}' 2>/dev/null"; then
+        if ssh root@"${node_ip}" "umount -f '${MOUNT_PATH}' 2>/dev/null && rm -rf '${MOUNT_PATH}' 2>/dev/null"; then
             __ok__ "Cleaned up: $node_ip"
             ((success++))
         else
@@ -85,8 +80,8 @@ main() {
     done
 
     # Re-enable storage
-    __update__ "Re-enabling storage: $storage_name"
-    if pvesm set "${storage_name}" --disable 0 2>&1; then
+    __update__ "Re-enabling storage: $STORAGE_NAME"
+    if pvesm set "${STORAGE_NAME}" --disable 0 2>&1; then
         __ok__ "Storage re-enabled"
     else
         __err__ "Failed to re-enable storage"
@@ -105,4 +100,5 @@ main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

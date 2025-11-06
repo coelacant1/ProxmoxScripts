@@ -33,6 +33,9 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
 ###############################################################################
@@ -40,6 +43,32 @@ source "${UTILITYPATH}/Prompts.sh"
 ###############################################################################
 __check_root__
 __check_proxmox__
+
+# Parse action and optional parameters
+if [[ $# -lt 1 ]]; then
+    echo "Usage:"
+    echo "  $0 install [<min-temp> <max-temp> <min-pwm> <max-pwm>]"
+    echo "  $0 uninstall"
+    exit 64
+fi
+
+ACTION="$1"
+
+# Validate action
+if [[ "$ACTION" != "install" && "$ACTION" != "uninstall" ]]; then
+    echo "Usage:"
+    echo "  $0 install [<min-temp> <max-temp> <min-pwm> <max-pwm>]"
+    echo "  $0 uninstall"
+    exit 64
+fi
+
+# Set defaults for install
+if [[ "$ACTION" == "install" ]]; then
+    MIN_TEMP="${2:-30}"
+    MAX_TEMP="${3:-70}"
+    MIN_PWM="${4:-60}"
+    MAX_PWM="${5:-255}"
+fi
 
 ###############################################################################
 # Helper Functions
@@ -126,20 +155,16 @@ uninstall_fancontrol() {
 ###############################################################################
 # Main
 ###############################################################################
-action="$1"
-case "$action" in
+case "$ACTION" in
   install)
-    minTemp="${2:-30}"
-    maxTemp="${3:-70}"
-    minPwm="${4:-60}"
-    maxPwm="${5:-255}"
-    install_fancontrol "$minTemp" "$maxTemp" "$minPwm" "$maxPwm"
+    install_fancontrol "$MIN_TEMP" "$MAX_TEMP" "$MIN_PWM" "$MAX_PWM"
     ;;
   uninstall)
     uninstall_fancontrol
     ;;
-  *)
-    show_usage
-    exit 1
-    ;;
 esac
+
+# Testing status:
+#   - ArgumentParser.sh sourced
+#   - Action validation added
+#   - Pending validation

@@ -24,9 +24,15 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "test_directory:path" "$@"
 
 ###############################################################################
 # Environment and Privilege Checks
@@ -39,18 +45,9 @@ __check_proxmox__
 ###############################################################################
 JQ_AVAILABLE=true
 FIO_INSTALLED=false
-TEST_DIR="$1"
+TEST_DIR="$TEST_DIRECTORY"
 READ_JSON=""
 WRITE_JSON=""
-
-###############################################################################
-# Usage Validation
-###############################################################################
-if [[ -z "$TEST_DIR" ]]; then
-  echo "Error: Missing test directory argument."
-  echo "Usage: $0 <test-directory>"
-  exit 1
-fi
 
 ###############################################################################
 # Prepare Environment

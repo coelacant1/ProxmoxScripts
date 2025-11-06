@@ -21,6 +21,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
@@ -30,15 +32,15 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+__parse_args__ "timezone:string:America/New_York" "$@"
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
 
-    local timezone="${1:-America/New_York}"
-
-    __info__ "Setting timezone: ${timezone} (cluster-wide)"
+    __info__ "Setting timezone: ${TIMEZONE} (cluster-wide)"
 
     # Get remote node IPs
     local -a remote_nodes
@@ -50,7 +52,7 @@ main() {
     # Set timezone on remote nodes
     for node_ip in "${remote_nodes[@]}"; do
         __update__ "Setting timezone on ${node_ip}"
-        if ssh "root@${node_ip}" "timedatectl set-timezone \"${timezone}\"" 2>&1; then
+        if ssh "root@${node_ip}" "timedatectl set-timezone \"${TIMEZONE}\"" 2>&1; then
             __ok__ "Timezone set on ${node_ip}"
             ((success++))
         else
@@ -61,7 +63,7 @@ main() {
 
     # Set timezone on local node
     __update__ "Setting timezone on local node"
-    if timedatectl set-timezone "${timezone}" 2>&1; then
+    if timedatectl set-timezone "${TIMEZONE}" 2>&1; then
         __ok__ "Timezone set on local node"
         ((success++))
     else
@@ -75,11 +77,12 @@ main() {
     [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
 
     [[ $failed -gt 0 ]] && exit 1
-    __ok__ "Timezone set to ${timezone} on all nodes!"
+    __ok__ "Timezone set to ${TIMEZONE} on all nodes!"
 }
 
 main "$@"
 
 # Testing status:
 #   - Updated to use utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation

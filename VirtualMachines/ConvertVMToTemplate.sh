@@ -44,7 +44,6 @@
 #   - Consider cleaning the VM before conversion (remove SSH keys, logs, etc.)
 #
 # Function Index:
-#   - parse_args
 #   - create_backup
 #   - convert_to_template
 #   - main
@@ -52,6 +51,8 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -61,69 +62,7 @@ source "${UTILITYPATH}/Queries.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Global variables
-VMID=""
-CREATE_BACKUP=false
-BACKUP_STORAGE="local"
-DESCRIPTION=""
-FORCE=false
-
-# --- parse_args --------------------------------------------------------------
-# @function parse_args
-# @description Parses command-line arguments
-parse_args() {
-    if [[ $# -lt 1 ]]; then
-        __err__ "Missing required argument: vmid"
-        echo "Usage: $0 <vmid> [options]"
-        echo
-        echo "Options:"
-        echo "  --backup              Create a backup before converting"
-        echo "  --backup-storage <s>  Storage for backup (default: local)"
-        echo "  --description <desc>  Set template description"
-        echo "  --force               Skip confirmation prompt"
-        echo
-        echo "Examples:"
-        echo "  $0 100"
-        echo "  $0 100 --backup --description 'Ubuntu 22.04 Base'"
-        exit 64
-    fi
-
-    VMID="$1"
-    shift
-
-    # Validate VMID is numeric
-    if ! [[ "$VMID" =~ ^[0-9]+$ ]]; then
-        __err__ "Invalid VMID: ${VMID}"
-        __info__ "VMID must be a number"
-        exit 64
-    fi
-
-    # Parse optional arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --backup)
-                CREATE_BACKUP=true
-                shift
-                ;;
-            --backup-storage)
-                BACKUP_STORAGE="$2"
-                shift 2
-                ;;
-            --description)
-                DESCRIPTION="$2"
-                shift 2
-                ;;
-            --force)
-                FORCE=true
-                shift
-                ;;
-            *)
-                __err__ "Unknown option: $1"
-                exit 64
-                ;;
-        esac
-    done
-}
+__parse_args__ "vmid:vmid --backup:flag --backup-storage:storage:local --description:string:? --force:flag" "$@"
 
 # --- create_backup -----------------------------------------------------------
 # @function create_backup
@@ -151,7 +90,7 @@ create_backup() {
         __ok__ "Backup created successfully"
     else
         __err__ "Backup failed"
-        if ! $FORCE && ! __prompt_user_yn__ "Continue with conversion anyway?"; then
+        if [[ "$FORCE" != "true" ]] && ! __prompt_user_yn__ "Continue with conversion anyway?"; then
             __info__ "Operation cancelled"
             exit 1
         fi
@@ -191,8 +130,6 @@ convert_to_template() {
 main() {
     __check_root__
     __check_proxmox__
-
-    parse_args "$@"
 
     # Validate VM exists
     __info__ "Validating VMID ${VMID}"
@@ -236,7 +173,7 @@ main() {
 
     # Check VM status and stop if needed
     __info__ "Checking VM status"
-    if $FORCE; then
+    if [[ "$FORCE" == "true" ]]; then
         if ! __check_vm_status__ "$VMID" --stop --force; then
             __err__ "Failed to stop VM ${VMID}"
             exit 1
@@ -250,7 +187,7 @@ main() {
     __ok__ "VM ${VMID} is stopped and ready for conversion"
 
     # Confirm conversion
-    if ! $FORCE; then
+    if [[ "$FORCE" != "true" ]]; then
         echo
         __warn__ "This will convert VM ${VMID} (${vm_name}) to a template"
         __warn__ "Templates cannot be started, only cloned"
@@ -263,7 +200,7 @@ main() {
     fi
 
     # Create backup if requested
-    if $CREATE_BACKUP; then
+    if [[ "$BACKUP" == "true" ]]; then
         echo
         create_backup
     fi
@@ -290,4 +227,5 @@ main "$@"
 
 # Testing status:
 #   - Uses utility functions
+#   - Updated to use ArgumentParser.sh
 #   - Pending validation
