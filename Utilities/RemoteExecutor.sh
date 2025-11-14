@@ -6,6 +6,38 @@
 # and result collection.
 #
 
+# Global flag for interrupt
+REMOTE_INTERRUPTED=0
+
+# Cleanup function for Ctrl+C interrupt
+__remote_cleanup__() {
+    # Set flag to break out of loop
+    REMOTE_INTERRUPTED=1
+    
+    echo
+    echo
+    __warn__ "Interrupted by user (Ctrl+C)"
+    
+    # Stop any running spinner
+    __stop_spin__ 2>/dev/null || true
+    
+    # Kill any background SSH processes (more aggressive)
+    killall -9 sshpass 2>/dev/null || true
+    killall -9 ssh 2>/dev/null || true
+    pkill -9 -P $$ sshpass 2>/dev/null || true
+    pkill -9 -P $$ ssh 2>/dev/null || true
+    pkill -9 -P $$ scp 2>/dev/null || true
+    
+    # Give processes a moment to die
+    sleep 0.2
+    
+    # Cleanup temp files
+    rm -f /tmp/remote_exec_*.tar.gz 2>/dev/null || true
+    
+    echo
+    echo "Cleanup complete"
+}
+
 # Prompt for script parameters with readline support
 # Args: display_path_result
 # Sets: param_line (global)
@@ -43,65 +75,127 @@ __execute_on_remote_node__() {
     echo
     
     # Setup environment
-    CURRENT_MESSAGE="Setting up remote environment..."
-    __info__ "$CURRENT_MESSAGE"
+    __info__ "Setting up remote environment..."
     __log_info__ "Cleaning and creating remote directory structure on $node_name" "REMOTE"
     
     local ssh_output
     ssh_output=$(sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$node_ip \
         "rm -rf $REMOTE_TEMP_DIR && mkdir -p $REMOTE_TEMP_DIR/{Utilities,Host,LXC,Storage,VirtualMachines,Networking,Cluster,Security,HighAvailability,Firewall,Resources,RemoteManagement}" 2>&1)
     
+    # Check if interrupted
+    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+        return 1
+    fi
+    
     if [[ $? -ne 0 ]]; then
-        __stop_spin__
-        echo "❌ Failed to connect to $node_name"
+        __err__ "Failed to connect to $node_name"
         __log_error__ "Failed to connect/create directories on $node_name: $ssh_output" "REMOTE"
         return 1
     fi
     __ok__ "Remote environment ready"
     __log_info__ "Remote directories created on $node_name" "REMOTE"
     
-    # Transfer utilities
-    CURRENT_MESSAGE="Transferring utilities..."
-    __update__ "$CURRENT_MESSAGE"
-    __log_info__ "Transferring utilities to $node_name" "REMOTE"
-    
-    if ! sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no -r Utilities/*.sh root@$node_ip:$REMOTE_TEMP_DIR/Utilities/ 2>/dev/null; then
-        __stop_spin__
-        echo "❌ Failed to transfer utilities"
-        __log_error__ "Failed to transfer utilities to $node_name" "REMOTE"
+    # Check if interrupted
+    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
         return 1
     fi
-    __ok__ "Utilities transferred"
-    __log_info__ "Utilities transferred successfully" "REMOTE"
     
-    # Transfer script
-    CURRENT_MESSAGE="Transferring script..."
-    __update__ "$CURRENT_MESSAGE"
-    __log_info__ "Transferring $script_relative to $node_name:$REMOTE_TEMP_DIR/$script_dir_relative/" "REMOTE"
+    # Transfer utilities and script
+    __info__ "Transferring files..."
+    __log_info__ "Transferring utilities and script to $node_name" "REMOTE"
     
-    if ! sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no "$script_path" root@$node_ip:$REMOTE_TEMP_DIR/$script_dir_relative/ 2>/dev/null; then
-        __stop_spin__
-        echo "❌ Failed to transfer script"
-        __log_error__ "Failed to transfer $script_path to $node_name" "REMOTE"
+    # Create tarball for faster transfer
+    local temp_tar="/tmp/remote_exec_$$.tar.gz"
+    tar -czf "$temp_tar" -C . Utilities "$script_dir_relative/$(basename "$script_path")" 2>/dev/null || {
+        # Fallback to individual transfers if tar fails
+        __update__ "Tar failed, using individual transfers..."
+        
+        # Check if interrupted
+        if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+            return 1
+        fi
+        
+        if ! sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no -r Utilities/*.sh root@$node_ip:$REMOTE_TEMP_DIR/Utilities/ 2>/dev/null; then
+            # Check if interrupted or actual failure
+            if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+                return 1
+            fi
+            __err__ "Failed to transfer utilities"
+            __log_error__ "Failed to transfer utilities to $node_name" "REMOTE"
+            return 1
+        fi
+        
+        # Check if interrupted
+        if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+            return 1
+        fi
+        
+        if ! sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no "$script_path" root@$node_ip:$REMOTE_TEMP_DIR/$script_dir_relative/ 2>/dev/null; then
+            # Check if interrupted or actual failure
+            if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+                return 1
+            fi
+            __err__ "Failed to transfer script"
+            __log_error__ "Failed to transfer $script_path to $node_name" "REMOTE"
+            return 1
+        fi
+        __ok__ "Files transferred (individual)"
+        __log_info__ "Files transferred successfully (individual)" "REMOTE"
+    }
+    
+    # Check if interrupted
+    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+        rm -f "$temp_tar"
         return 1
     fi
-    __ok__ "Script transferred"
-    __log_info__ "Script transferred successfully" "REMOTE"
+    
+    # If tar succeeded, transfer and extract
+    if [[ -f "$temp_tar" ]]; then
+        if sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no "$temp_tar" root@$node_ip:/tmp/ 2>/dev/null; then
+            # Check if interrupted
+            if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+                rm -f "$temp_tar"
+                return 1
+            fi
+            
+            sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no root@$node_ip \
+                "tar -xzf /tmp/$(basename "$temp_tar") -C $REMOTE_TEMP_DIR && rm /tmp/$(basename "$temp_tar")" 2>/dev/null
+            __ok__ "Files transferred (tarball)"
+            __log_info__ "Files transferred successfully (tarball)" "REMOTE"
+        else
+            # Check if interrupted or actual failure
+            if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+                rm -f "$temp_tar"
+                return 1
+            fi
+            __err__ "Failed to transfer tarball"
+            __log_error__ "Failed to transfer tarball to $node_name" "REMOTE"
+            rm -f "$temp_tar"
+            return 1
+        fi
+        rm -f "$temp_tar"
+    fi
+    
+    # Check if interrupted
+    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+        return 1
+    fi
     
     # Execute script
-    CURRENT_MESSAGE="Executing script..."
-    __update__ "$CURRENT_MESSAGE"
+    __info__ "Executing script..."
     __log_info__ "Executing $script_relative on remote with args: $param_line" "REMOTE"
+    __log_debug__ "REMOTE_LOG_LEVEL in RemoteExecutor: $REMOTE_LOG_LEVEL" "REMOTE"
     
     local remote_log="/tmp/proxmox_remote_execution_$$.log"
+    local remote_debug_log="/tmp/proxmox_remote_debug_$$.log"
     local ssh_exit_code=0
     
     if [[ -n "$param_line" ]]; then
         sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no root@$node_ip \
-            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && echo '=== Remote Execution Start ===' > $remote_log 2>&1 && echo 'Script: bash $script_relative' >> $remote_log 2>&1 && echo 'Arguments: $param_line' >> $remote_log 2>&1 && echo 'Working directory: '\$(pwd) >> $remote_log 2>&1 && echo 'UTILITYPATH: '\$UTILITYPATH >> $remote_log 2>&1 && echo 'LOG_FILE: '\$LOG_FILE >> $remote_log 2>&1 && echo 'LOG_LEVEL: '\$LOG_LEVEL >> $remote_log 2>&1 && echo '===================================' >> $remote_log 2>&1 && eval bash $script_relative $param_line >> $remote_log 2>&1; echo \$? > ${remote_log}.exit"
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && echo '=== Remote Execution Start ===' > $remote_log 2>&1 && echo 'Script: bash $script_relative' >> $remote_log 2>&1 && echo 'Arguments: $param_line' >> $remote_log 2>&1 && echo 'Working directory: '\$(pwd) >> $remote_log 2>&1 && echo 'UTILITYPATH: '\$UTILITYPATH >> $remote_log 2>&1 && echo 'LOG_FILE: '\$LOG_FILE >> $remote_log 2>&1 && echo 'LOG_LEVEL: '\$LOG_LEVEL >> $remote_log 2>&1 && echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL' >> $remote_log 2>&1 && echo '===================================' >> $remote_log 2>&1 && eval bash $script_relative $param_line >> $remote_log 2>&1; echo \$? > ${remote_log}.exit"
     else
         sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no root@$node_ip \
-            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && bash $script_relative > $remote_log 2>&1; echo \$? > ${remote_log}.exit"
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && echo '=== Remote Execution Start ===' > $remote_log 2>&1 && echo 'Script: bash $script_relative' >> $remote_log 2>&1 && echo 'Working directory: '\$(pwd) >> $remote_log 2>&1 && echo 'UTILITYPATH: '\$UTILITYPATH >> $remote_log 2>&1 && echo 'LOG_FILE: '\$LOG_FILE >> $remote_log 2>&1 && echo 'LOG_LEVEL: '\$LOG_LEVEL >> $remote_log 2>&1 && echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL' >> $remote_log 2>&1 && echo '===================================' >> $remote_log 2>&1 && bash $script_relative >> $remote_log 2>&1; echo \$? > ${remote_log}.exit"
     fi
     
     __ok__ "Script execution complete"
@@ -117,8 +211,11 @@ __execute_on_remote_node__() {
     
     __log_info__ "Script execution completed with exit code: $ssh_exit_code" "REMOTE"
     
-    # Retrieve and display remote log
+    # Retrieve and display both log files
     local local_remote_log="/tmp/remote_${node_name}_$$.log"
+    local local_debug_log="/tmp/remote_${node_name}_$$.debug.log"
+    
+    # Retrieve stdout/stderr log
     if sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no root@$node_ip:$remote_log "$local_remote_log" 2>/dev/null; then
         __log_info__ "Retrieved remote execution log from $node_name" "REMOTE"
         echo
@@ -126,7 +223,28 @@ __execute_on_remote_node__() {
         cat "$local_remote_log"
         echo "--- End output ---"
         echo
-        echo "Log saved to: $local_remote_log"
+        
+        # Retrieve debug log if it exists
+        if sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no root@$node_ip:$remote_debug_log "$local_debug_log" 2>/dev/null; then
+            __log_info__ "Retrieved debug log from $node_name" "REMOTE"
+            
+            # Only show debug log if it has content
+            if [[ -s "$local_debug_log" ]]; then
+                echo
+                echo "--- Debug Log from $node_name (LOG_LEVEL=$REMOTE_LOG_LEVEL) ---"
+                cat "$local_debug_log"
+                echo "--- End debug log ---"
+                echo
+            fi
+            
+            # Append debug log to main log file
+            cat "$local_debug_log" >> "$LOG_FILE" 2>/dev/null || true
+            echo "Debug log saved to: $local_debug_log"
+        else
+            __log_debug__ "No debug log available from $node_name" "REMOTE"
+        fi
+        
+        echo "Output log saved to: $local_remote_log"
         cat "$local_remote_log" >> "$LOG_FILE"
     else
         __log_warn__ "Could not retrieve remote log from $node_name" "REMOTE"
@@ -137,19 +255,19 @@ __execute_on_remote_node__() {
     __update__ "$CURRENT_MESSAGE"
     __log_info__ "Cleaning up remote directory: $REMOTE_TEMP_DIR" "REMOTE"
     sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no root@$node_ip \
-        "rm -rf $REMOTE_TEMP_DIR $remote_log ${remote_log}.exit" 2>/dev/null || __log_warn__ "Cleanup failed (non-critical)" "REMOTE"
+        "rm -rf $REMOTE_TEMP_DIR $remote_log $remote_debug_log ${remote_log}.exit" 2>/dev/null || __log_warn__ "Cleanup failed (non-critical)" "REMOTE"
     __ok__ "Cleanup complete"
     
     echo
     if [[ $ssh_exit_code -eq 0 ]]; then
         echo "$node_name completed successfully"
         __log_info__ "$node_name execution successful" "REMOTE"
-        return 0
     else
         echo "$node_name failed (exit code: $ssh_exit_code)"
         __log_error__ "$node_name execution failed with exit code: $ssh_exit_code" "REMOTE"
-        return 1
     fi
+    
+    return $ssh_exit_code
 }
 
 # Execute script on remote target(s)
@@ -165,8 +283,25 @@ __execute_remote_script__() {
     local success_count=0
     local fail_count=0
     
+    # Reset interrupt flag
+    REMOTE_INTERRUPTED=0
+    
+    # Set trap for Ctrl+C
+    trap '__remote_cleanup__' INT
+    
+    # Temporarily disable errexit to ensure loop continues
+    local old_opts=$-
+    set +e
+    
     # Execute on each target
     for target in "${REMOTE_TARGETS[@]}"; do
+        # Check if interrupted
+        if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+            echo
+            echo "Remaining nodes skipped due to interrupt"
+            break
+        fi
+        
         # Parse target safely
         local node_name=""
         local node_ip=""
@@ -186,13 +321,29 @@ __execute_remote_script__() {
             continue
         fi
         
-        # Execute on this node
+        # Execute on this node (always continue to next node regardless of result)
         if __execute_on_remote_node__ "$node_name" "$node_ip" "$node_pass" "$script_path" "$script_relative" "$script_dir_relative" "$param_line"; then
             ((success_count++))
         else
             ((fail_count++))
         fi
+        
+        # Check again after execution in case interrupt happened during execution
+        if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+            echo
+            echo "Remaining nodes skipped due to interrupt"
+            break
+        fi
     done
+    
+    # Restore errexit if it was set
+    [[ $old_opts =~ e ]] && set -e
+    
+    # Remove trap
+    trap - INT
+    
+    # Reset flag
+    REMOTE_INTERRUPTED=0
     
     echo
     echo "========================================" 

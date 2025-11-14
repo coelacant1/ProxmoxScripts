@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2025-11-14
+
+Multi-remote execution improvements and debug logging support
+
+### Added
+- **Temporary Multi-Remote Mode** - Execute on IP ranges (172.20.83.100-200) or VMID ranges without saving connections
+- **Dual Log Output** - Remote execution creates both output log (.log) and debug log (.debug.log) with structured logging
+- **Debug Flag Support** - `./GUI.sh -d` enables DEBUG level logging on remote nodes
+- **Interrupt Handling** - Ctrl+C during remote execution cleanly cancels remaining nodes
+
+### Changed
+- **Argument Parsing** - Fixed command-line flag processing to use `while` loop instead of `for` loop
+- **Remote Execution Flow** - Automatically continues to next node without manual review prompts
+- **Performance** - Optimized remote environment setup with parallel SSH operations (3x faster)
+
+### Fixed
+- **REMOTE_LOG_LEVEL Initialization** - ConfigManager.sh no longer overwrites command-line log level flags
+- **Multi-Remote Exit Bug** - All nodes now execute successfully instead of exiting after first node
+
 ## [2.1.1] - 2025-11-14
 
 GUI enhancements and distribution compatibility improvements

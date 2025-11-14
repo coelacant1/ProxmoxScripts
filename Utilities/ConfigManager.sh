@@ -15,7 +15,10 @@ declare -gA NODE_PASSWORDS=()
 declare -gA AVAILABLE_NODES=()
 declare -g NODES_FILE="nodes.json"
 declare -g REMOTE_TEMP_DIR="/tmp/ProxmoxScripts_gui"
-declare -g REMOTE_LOG_LEVEL="INFO"
+# Only set default if not already set (e.g., from command-line flags)
+if [[ -z "${REMOTE_LOG_LEVEL:-}" ]]; then
+    declare -g REMOTE_LOG_LEVEL="INFO"
+fi
 
 # Initialize configuration from nodes.json
 __init_config__() {

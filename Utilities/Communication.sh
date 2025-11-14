@@ -113,12 +113,17 @@ __spin__() {
 # @return Terminates the spinner and resets SPINNER_PID.
 # @example_output The spinner process is terminated and the cursor is made visible.
 __stop_spin__() {
-    if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
-        kill "$SPINNER_PID" &>/dev/null 2>&1
-        wait "$SPINNER_PID" 2>/dev/null || true
-        __comm_log__ "DEBUG" "Stopped spinner (PID: $SPINNER_PID)"
-        SPINNER_PID=""
+    # Kill any existing spinner process
+    if [[ -n "${SPINNER_PID:-}" ]]; then
+        if ps -p "$SPINNER_PID" &>/dev/null 2>&1; then
+            kill "$SPINNER_PID" &>/dev/null 2>&1 || true
+            wait "$SPINNER_PID" 2>/dev/null || true
+            __comm_log__ "DEBUG" "Stopped spinner (PID: $SPINNER_PID)"
+        fi
     fi
+    
+    # Always reset the PID
+    SPINNER_PID=""
 
     # Clear the spinner line
     printf "\r\033[K"
@@ -150,15 +155,11 @@ __info__() {
     [[ "$QUIET_MODE" == "true" ]] && return 0
 
     # Stop any existing spinner first
-    if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
-        kill "$SPINNER_PID" &>/dev/null 2>&1
-        wait "$SPINNER_PID" 2>/dev/null || true
-        SPINNER_PID=""
-        __comm_log__ "DEBUG" "Stopped existing spinner"
-    fi
+    __stop_spin__
+    __comm_log__ "DEBUG" "Stopped existing spinner (if any)"
 
     # Update message buffer with colored text
-    CURRENT_MESSAGE="  ${YELLOW}${BOLD}${msg}${RESET}"
+    CURRENT_MESSAGE="${YELLOW}${BOLD}${msg}${RESET}"
 
     # Clear any existing line content
     printf "\r\033[K"
@@ -197,7 +198,7 @@ __update__() {
 
     # Update the message buffer
     # The spinner loop will pick it up on next iteration
-    CURRENT_MESSAGE="  $msg"
+    CURRENT_MESSAGE="$msg"
     __comm_log__ "DEBUG" "Message buffer updated"
 }
 
@@ -218,7 +219,7 @@ __ok__() {
     # Skip output in quiet mode
     [[ "$QUIET_MODE" == "true" ]] && return 0
 
-    echo -e "  ${GREEN}${BOLD}✓${RESET} ${msg}"
+    echo -e "${GREEN}${BOLD}✓${RESET} ${msg}"
     __comm_log__ "INFO" "Success: $msg"
 }
 
@@ -237,7 +238,7 @@ __warn__() {
     __stop_spin__
 
     # Always show warnings even in quiet mode
-    echo -e "  ${YELLOW}${BOLD}⚠${RESET} ${msg}" >&2
+    echo -e "${YELLOW}${BOLD}⚠${RESET} ${msg}" >&2
 }
 
 # --- __err__ ------------------------------------------------------------
@@ -255,7 +256,7 @@ __err__() {
     __stop_spin__
 
     # Always show errors even in quiet mode
-    echo -e "  ${RED}${BOLD}✗${RESET} ${msg}" >&2
+    echo -e "${RED}${BOLD}✗${RESET} ${msg}" >&2
 }
 
 # --- __handle_err__ ------------------------------------------------------------

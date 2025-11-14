@@ -48,6 +48,9 @@
 #   - select_execution_mode
 #   - configure_single_remote
 #   - configure_multi_remote
+#   - configure_multi_saved
+#   - configure_multi_ip_range
+#   - configure_multi_vmid_range
 #   - manage_nodes_menu
 #   - settings_menu
 #   - update_scripts
@@ -66,8 +69,8 @@ set -euo pipefail
 # Parse command-line arguments
 CLEAR_LOGS=false
 REMOTE_LOG_LEVEL="INFO"
-for arg in "$@"; do
-    case $arg in
+while [[ $# -gt 0 ]]; do
+    case $1 in
         -c|--clear-logs)
             CLEAR_LOGS=true
             shift
@@ -130,13 +133,20 @@ for arg in "$@"; do
             ;;
         *)
             # Ignore unknown args for now
+            shift
             ;;
     esac
 done
 
+# Export REMOTE_LOG_LEVEL so it's available to sourced scripts
+export REMOTE_LOG_LEVEL
+
+# Debug: Print the log level (can be removed later)
+echo "Debug: REMOTE_LOG_LEVEL is set to: $REMOTE_LOG_LEVEL" >&2
+
 # Clear logs if requested
 if [[ "$CLEAR_LOGS" == "true" ]]; then
-    echo "🗑️  Clearing logs..."
+    echo "Clearing logs..."
     rm -f /tmp/gui_execution.log /tmp/gui_debug.log /tmp/proxmox_scripts.log
     echo "Logs cleared"
     sleep 1
@@ -475,6 +485,55 @@ configure_multi_remote() {
     while true; do
         clear
         show_ascii_art
+        echo "Multiple Remote Nodes Configuration:"
+        echo "----------------------------------------"
+        __line_rgb__ "1) Use saved nodes from nodes.json" 0 200 200
+        __line_rgb__ "2) IP range (e.g., 172.20.83.100-200)" 0 200 200
+        __line_rgb__ "3) VMID range (queries Proxmox cluster)" 0 200 200
+        echo
+        echo "----------------------------------------"
+        echo
+        show_common_footer "b" "none"
+        echo
+        echo "----------------------------------------"
+        read -rp "Choice: " multi_choice
+        
+        # Handle common inputs first
+        if process_common_input "$multi_choice" "b" "none"; then
+            if [[ "$multi_choice" == "b" ]]; then
+                return 1
+            fi
+            continue
+        fi
+        
+        case "$multi_choice" in
+            1)
+                if configure_multi_saved; then
+                    return 0
+                fi
+                ;;
+            2)
+                if configure_multi_ip_range; then
+                    return 0
+                fi
+                ;;
+            3)
+                if configure_multi_vmid_range; then
+                    return 0
+                fi
+                ;;
+            *)
+                echo "Invalid choice!"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+configure_multi_saved() {
+    while true; do
+        clear
+        show_ascii_art
         echo "Available nodes from nodes.json:"
         echo "----------------------------------------"
         echo
@@ -565,6 +624,133 @@ configure_multi_remote() {
         __set_execution_mode__ "multi-remote"
         return 0
     done
+}
+
+configure_multi_ip_range() {
+    clear
+    show_ascii_art
+    echo "Temporary IP Range Configuration:"
+    echo "----------------------------------------"
+    echo
+    echo "Enter IP range in format: 172.20.83.100-200"
+    echo "(Base IP with range of last octet)"
+    echo
+    read -rp "IP Range: " ip_range
+    
+    if [[ -z "$ip_range" ]]; then
+        return 1
+    fi
+    
+    # Parse IP range (e.g., 172.20.83.100-200)
+    if [[ ! "$ip_range" =~ ^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)([0-9]{1,3})-([0-9]{1,3})$ ]]; then
+        echo "Error: Invalid IP range format"
+        echo "Expected format: 172.20.83.100-200"
+        sleep 2
+        return 1
+    fi
+    
+    local base_ip="${BASH_REMATCH[1]}"
+    local start_octet="${BASH_REMATCH[2]}"
+    local end_octet="${BASH_REMATCH[3]}"
+    
+    if [[ $start_octet -gt $end_octet ]]; then
+        echo "Error: Start IP must be less than or equal to end IP"
+        sleep 2
+        return 1
+    fi
+    
+    echo
+    read -rsp "Enter password for all nodes in range: " shared_pass
+    echo
+    
+    # Build targets
+    __clear_remote_targets__
+    for ((octet=start_octet; octet<=end_octet; octet++)); do
+        local ip="${base_ip}${octet}"
+        local node_name="temp-${ip//\./-}"
+        REMOTE_TARGETS+=("$node_name:$ip")
+        NODE_PASSWORDS["$node_name"]="$shared_pass"
+    done
+    
+    echo
+    echo "Configured ${#REMOTE_TARGETS[@]} temporary nodes"
+    sleep 1
+    
+    __set_execution_mode__ "multi-remote"
+    return 0
+}
+
+configure_multi_vmid_range() {
+    clear
+    show_ascii_art
+    echo "Temporary VMID Range Configuration:"
+    echo "----------------------------------------"
+    echo
+    echo "This will query a Proxmox host to find VM/LXC IPs by VMID range"
+    echo
+    read -rp "Proxmox host IP to query: " query_host
+    
+    if [[ -z "$query_host" ]]; then
+        return 1
+    fi
+    
+    read -rp "Start VMID: " start_vmid
+    read -rp "End VMID: " end_vmid
+    
+    if [[ ! "$start_vmid" =~ ^[0-9]+$ ]] || [[ ! "$end_vmid" =~ ^[0-9]+$ ]]; then
+        echo "Error: VMIDs must be numbers"
+        sleep 2
+        return 1
+    fi
+    
+    if [[ $start_vmid -gt $end_vmid ]]; then
+        echo "Error: Start VMID must be less than or equal to end VMID"
+        sleep 2
+        return 1
+    fi
+    
+    echo
+    read -rsp "Enter password for query host: " query_pass
+    echo
+    read -rsp "Enter password for all target nodes: " shared_pass
+    echo
+    
+    echo
+    echo "Querying Proxmox host for VMIDs ${start_vmid}-${end_vmid}..."
+    
+    # Query the Proxmox host for IPs
+    __clear_remote_targets__
+    local found_count=0
+    
+    for ((vmid=start_vmid; vmid<=end_vmid; vmid++)); do
+        # Query for VM/LXC IP address
+        local ip=$(sshpass -p "$query_pass" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            root@"$query_host" \
+            "pvesh get /nodes/\$(hostname)/qemu/$vmid/agent/network-get-interfaces 2>/dev/null | grep -oP '(?<=\"ip-address\":\")[^\"]*' | grep -v '^127\\.' | grep -v '^::' | head -n1 || \
+             pvesh get /nodes/\$(hostname)/lxc/$vmid/interfaces 2>/dev/null | grep -oP '(?<=inet )[0-9.]+' | head -n1" 2>/dev/null)
+        
+        if [[ -n "$ip" ]]; then
+            local node_name="vmid-$vmid"
+            REMOTE_TARGETS+=("$node_name:$ip")
+            NODE_PASSWORDS["$node_name"]="$shared_pass"
+            echo "  Found VMID $vmid: $ip"
+            ((found_count++))
+        fi
+    done
+    
+    if [[ $found_count -eq 0 ]]; then
+        echo
+        echo "No VMs/LXCs found in VMID range $start_vmid-$end_vmid"
+        sleep 2
+        return 1
+    fi
+    
+    echo
+    echo "Configured $found_count temporary nodes from VMIDs"
+    sleep 2
+    
+    __set_execution_mode__ "multi-remote"
+    return 0
 }
 
 manage_nodes_menu() {
@@ -1043,11 +1229,12 @@ navigate() {
         echo "----------------------------------------"
 
         if [ -n "$LAST_OUTPUT" ]; then
-            echo "Last Script Called: $LAST_SCRIPT"
-            echo "Output (truncated if large):"
+            echo
+            echo "Last execution: $LAST_SCRIPT"
             echo "$LAST_OUTPUT"
             echo
             echo "----------------------------------------"
+            echo
         fi
 
         read -rp "Choice: " choice
