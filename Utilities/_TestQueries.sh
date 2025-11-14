@@ -13,12 +13,12 @@
 set -euo pipefail
 
 ################################################################################
-# _TestQueries.sh - Test suite for Queries.sh
+# _TestCluster.sh - Test suite for Cluster.sh
 ################################################################################
 #
-# Test suite for Queries.sh cluster and VM/CT query functions.
+# Test suite for Cluster.sh cluster and VM/CT query functions.
 #
-# Usage: ./_TestQueries.sh
+# Usage: ./_TestCluster.sh
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,7 +55,7 @@ pvesh() {
 export -f pvecm
 export -f pvesh
 
-source "${SCRIPT_DIR}/Queries.sh"
+source "${SCRIPT_DIR}/Cluster.sh"
 
 ################################################################################
 # TEST: QUERIES FUNCTIONS

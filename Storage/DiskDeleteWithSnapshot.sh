@@ -99,7 +99,7 @@ main() {
     __info__ "Pool: $POOL"
     __info__ "Disk: $DISK"
 
-    if ! __prompt_yes_no__ "Delete disk $DISK from pool $POOL?"; then
+    if ! __prompt_user_yn__ "Delete disk $DISK from pool $POOL?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

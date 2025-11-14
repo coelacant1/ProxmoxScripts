@@ -26,8 +26,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 

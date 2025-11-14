@@ -31,8 +31,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
-# shellcheck source=Utilities/ProxmoxAPI.sh
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 

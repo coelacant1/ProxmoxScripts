@@ -23,13 +23,13 @@
 set -euo pipefail
 
 ################################################################################
-# _TestProxmoxAPI.sh - Test suite for ProxmoxAPI.sh
+# _TestOperations.sh - Test suite for Operations.sh
 ################################################################################
 #
-# Test suite for ProxmoxAPI.sh functions.
+# Test suite for Operations.sh functions.
 # Tests validation, error handling, and function behavior with mocked commands.
 #
-# Usage: ./_TestProxmoxAPI.sh
+# Usage: ./_TestOperations.sh
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -114,7 +114,7 @@ export -f __get_vm_node__
 export -f qm
 export -f pct
 
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 
 ################################################################################
 # TEST: VM EXISTS

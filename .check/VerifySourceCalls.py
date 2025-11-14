@@ -129,7 +129,7 @@ def parse_script_for_includes_and_local_funcs(script_path):
             # Check for source statement
             s_match = SOURCE_REGEX.search(line_stripped)
             if s_match:
-                # e.g., "Prompts.sh" or "Queries.sh"
+                # e.g., "Prompts.sh" or "Cluster.sh"
                 includes.add(s_match.group(1))
             
             # Also check for shellcheck directive (for consistency checking)

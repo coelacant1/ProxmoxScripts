@@ -40,7 +40,7 @@ main() {
     if [[ -f "/etc/pve/.members" ]]; then
         __warn__ "Existing cluster config detected (/etc/pve/.members)"
         __warn__ "Creating a new cluster may cause conflicts"
-        if ! __prompt_yes_no__ "Continue anyway?"; then
+        if ! __prompt_user_yn__ "Continue anyway?"; then
             __info__ "Operation cancelled"
             exit 0
         fi

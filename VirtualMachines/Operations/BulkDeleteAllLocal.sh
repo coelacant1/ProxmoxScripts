@@ -28,8 +28,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
-# shellcheck source=Utilities/ProxmoxAPI.sh
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
 
@@ -61,7 +61,7 @@ main() {
 
     # Confirm unless --force
     if [[ -z "${FORCE:-}" ]]; then
-        if ! __prompt_yes_no__ "Are you sure you want to delete all VMs?"; then
+        if ! __prompt_user_yn__ "Are you sure you want to delete all VMs?"; then
             __info__ "Operation canceled"
             exit 0
         fi

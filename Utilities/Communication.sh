@@ -31,6 +31,21 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper - works even if Logger.sh not loaded
+__comm_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "COMM"
+    fi
+}
+
 ###############################################################################
 # GLOBALS
 ###############################################################################
@@ -74,6 +89,7 @@ __spin__() {
     local color_i=0
     local interval=0.05
 
+    __comm_log__ "DEBUG" "Spinner loop started"
     printf "\e[?25l"  # hide cursor
 
     while true; do
@@ -100,6 +116,7 @@ __stop_spin__() {
     if [[ -n "$SPINNER_PID" ]] && ps -p "$SPINNER_PID" &>/dev/null; then
         kill "$SPINNER_PID" &>/dev/null 2>&1
         wait "$SPINNER_PID" 2>/dev/null || true
+        __comm_log__ "DEBUG" "Stopped spinner (PID: $SPINNER_PID)"
         SPINNER_PID=""
     fi
 
@@ -112,12 +129,22 @@ __stop_spin__() {
 # @function __info__
 # @description Prints an informational message in bold yellow and starts the rainbow spinner.
 #              If a spinner is already running, it stops the old one first.
+#              In non-interactive mode, prints a simple text message without spinner.
 # @usage __info__ "message"
 # @param msg The message to display.
-# @return Displays the message and starts the spinner.
+# @return Displays the message and starts the spinner (or simple text in non-interactive mode).
 # @example_output "Processing..." is displayed in bold yellow with an active spinner.
 __info__() {
     local msg="$1"
+    
+    __comm_log__ "DEBUG" "__info__ called: $msg"
+
+    # Skip spinner in non-interactive mode or when not a TTY
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] || [[ ! -t 1 ]]; then
+        echo "[INFO] $msg"
+        __comm_log__ "INFO" "$msg"
+        return 0
+    fi
 
     # Skip in quiet mode
     [[ "$QUIET_MODE" == "true" ]] && return 0
@@ -127,6 +154,7 @@ __info__() {
         kill "$SPINNER_PID" &>/dev/null 2>&1
         wait "$SPINNER_PID" 2>/dev/null || true
         SPINNER_PID=""
+        __comm_log__ "DEBUG" "Stopped existing spinner"
     fi
 
     # Update message buffer with colored text
@@ -138,6 +166,7 @@ __info__() {
     # Start new spinner (it will read CURRENT_MESSAGE)
     __spin__ &
     SPINNER_PID=$!
+    __comm_log__ "DEBUG" "Started spinner (PID: $SPINNER_PID)"
 
     # Give spinner a moment to render first frame
     sleep 0.01
@@ -146,12 +175,22 @@ __info__() {
 # --- __update__ ------------------------------------------------------------
 # @function __update__
 # @description Updates the text displayed next to the spinner without stopping it.
+#              In non-interactive mode, prints a simple text message.
 # @usage __update__ "new message"
 # @param new message The updated text to display.
 # @return Updates the spinner line text.
 # @example_output The text next to the spinner is replaced with "new message".
 __update__() {
     local msg="$1"
+    
+    __comm_log__ "DEBUG" "__update__ called: $msg"
+
+    # Simple echo in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+        echo "[INFO] $msg"
+        __comm_log__ "INFO" "Update (non-interactive): $msg"
+        return 0
+    fi
 
     # Skip in quiet mode
     [[ "$QUIET_MODE" == "true" ]] && return 0
@@ -159,6 +198,7 @@ __update__() {
     # Update the message buffer
     # The spinner loop will pick it up on next iteration
     CURRENT_MESSAGE="  $msg"
+    __comm_log__ "DEBUG" "Message buffer updated"
 }
 
 # --- __ok__ ------------------------------------------------------------
@@ -170,6 +210,8 @@ __update__() {
 # @example_output The spinner stops and "Completed successfully!" is printed in green bold.
 __ok__() {
     local msg="$1"
+    
+    __comm_log__ "DEBUG" "__ok__ called: $msg"
 
     __stop_spin__
 
@@ -177,6 +219,7 @@ __ok__() {
     [[ "$QUIET_MODE" == "true" ]] && return 0
 
     echo -e "  ${GREEN}${BOLD}✓${RESET} ${msg}"
+    __comm_log__ "INFO" "Success: $msg"
 }
 
 # --- __warn__ ----------------------------------------------------------------
@@ -188,6 +231,8 @@ __ok__() {
 # @example_output The spinner stops and "Warning: check configuration!" is printed in yellow bold.
 __warn__() {
     local msg="$1"
+    
+    __comm_log__ "WARN" "$msg"
 
     __stop_spin__
 
@@ -204,6 +249,8 @@ __warn__() {
 # @example_output The spinner stops and "Operation failed!" is printed in red bold.
 __err__() {
     local msg="$1"
+    
+    __comm_log__ "ERROR" "$msg"
 
     __stop_spin__
 
@@ -224,6 +271,8 @@ __handle_err__() {
     local line_number="$1"
     local command="$2"
     local exit_code="$?"
+    
+    __comm_log__ "ERROR" "Error at line $line_number, exit code $exit_code: $command"
 
     __stop_spin__
 
@@ -242,6 +291,8 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 # @example_output Shows script description, usage, arguments, etc. in green.
 __show_script_header__() {
     local script_path="$1"
+    
+    __comm_log__ "DEBUG" "Displaying script header for: $script_path"
 
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
@@ -251,6 +302,7 @@ __show_script_header__() {
     fi
 
     local printing=false
+    local line_count=0
     while IFS= read -r line; do
         # Skip shebang line
         if [[ "$line" =~ ^#!/bin/bash$ ]]; then
@@ -264,11 +316,14 @@ __show_script_header__() {
         if [[ "$line" =~ ^# ]]; then
             __line_rgb__ "${line#\# }" 0 255 0
             printing=true
+            ((line_count++))
         else
             # Stop at first non-comment line after comments started
             [[ $printing == true ]] && break
         fi
     done <"$script_path"
+    
+    __comm_log__ "DEBUG" "Displayed $line_count header lines"
 }
 
 # --- __show_script_examples__ ----------------------------------------------------------
@@ -280,6 +335,8 @@ __show_script_header__() {
 # @example_output Shows lines like "./script.sh arg1 arg2" in green.
 __show_script_examples__() {
     local script_path="$1"
+    
+    __comm_log__ "DEBUG" "Displaying script examples for: $script_path"
 
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
@@ -289,14 +346,19 @@ __show_script_examples__() {
     fi
 
     local found_any=false
+    local example_count=0
     grep -E '^# *\./' "$script_path" 2>/dev/null | sed -E 's/^# *//' | while IFS= read -r line; do
         __line_rgb__ "$line" 0 255 0
         found_any=true
+        ((example_count++))
     done
+    
+    __comm_log__ "DEBUG" "Displayed $example_count examples"
 
     # If no examples found, show message
     if [[ $found_any == false ]]; then
         echo "(none)"
+        __comm_log__ "DEBUG" "No examples found"
     fi
 }
 
@@ -311,6 +373,8 @@ __show_script_examples__() {
 __display_script_info__() {
     local script_path="$1"
     local display_name="${2:-$script_path}"
+    
+    __comm_log__ "DEBUG" "Displaying script info for: $display_name (path: $script_path)"
 
     # Source Colors.sh if __line_rgb__ is not available
     if ! declare -f __line_rgb__ >/dev/null 2>&1; then
@@ -330,5 +394,7 @@ __display_script_info__() {
     echo
     __show_script_examples__ "$script_path"
     echo
+    
+    __comm_log__ "DEBUG" "Script info display complete"
 }
 

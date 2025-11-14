@@ -118,7 +118,7 @@ main() {
     __warn__ "Reboot required for GRUB changes to take effect"
     echo
 
-    if __prompt_yes_no__ "Reboot now?"; then
+    if __prompt_user_yn__ "Reboot now?"; then
         __info__ "Rebooting..."
         reboot
     else

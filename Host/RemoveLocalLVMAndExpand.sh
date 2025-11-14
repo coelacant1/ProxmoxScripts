@@ -6,10 +6,16 @@
 # WARNING: This is DESTRUCTIVE. Backup all VMs/containers on local-lvm first.
 #
 # Usage:
-#   RemoveLocalLVMAndExpand.sh
+#   RemoveLocalLVMAndExpand.sh [--force]
 #
 # Examples:
-#   RemoveLocalLVMAndExpand.sh
+#   RemoveLocalLVMAndExpand.sh                    # Interactive mode with prompts
+#   RemoveLocalLVMAndExpand.sh --force            # Skip confirmation prompt
+#   
+# Note:
+#   - When running from GUI, NON_INTERACTIVE is automatically set
+#   - Destructive operations require --force in non-interactive mode
+#   - This prevents accidental data loss in automated contexts
 #
 # Function Index:
 #   - main
@@ -24,6 +30,26 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# Parse flags
+FORCE=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)
+            FORCE=1
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: RemoveLocalLVMAndExpand.sh [--force]"
+            echo ""
+            echo "Note: Non-interactive mode is detected via NON_INTERACTIVE environment variable"
+            echo "      (automatically set by GUI and remote execution frameworks)"
+            exit 1
+            ;;
+    esac
+done
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
@@ -36,7 +62,19 @@ main() {
     __warn__ "DESTRUCTIVE: This will remove 'local-lvm' (pve/data) and ALL data on it"
     __warn__ "Ensure you have backups of all VMs/containers on local-lvm"
 
-    if ! __prompt_yes_no__ "Proceed with removing local-lvm?"; then
+    # Safety check for non-interactive + destructive operation
+    # Use NON_INTERACTIVE environment variable (set by GUI and remote execution frameworks)
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: RemoveLocalLVMAndExpand.sh --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
+    fi
+
+    # Prompt for confirmation (unless force is set)
+    if [[ $FORCE -eq 1 ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Proceed with removing local-lvm?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

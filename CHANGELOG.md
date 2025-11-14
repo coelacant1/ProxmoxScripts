@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-11-13
+
+Utility library consolidation and dependency cleanup
+
+### Added
+- **Logger integration in Utility Scripts** - Added structured logging support with safe fallback
+  - New `__*_log__()` wrapper for logging events
+- **Enhanced ArgumentParser.sh** - Improved argument validation, error handling, and help text generation
+- **Enhanced TestFramework.sh** - Improved test assertions and result reporting
+
+### Changed
+- **Utility consolidation**
+  - Renamed `ProxmoxAPI.sh` -> `Operations.sh`
+  - Renamed `Queries.sh` -> `Cluster.sh`
+  - Renamed `NetworkHelper.sh` -> `Network.sh`
+  - Removed `BatchRunCLI.sh` - functionality integrated in GUI.sh
+- **Source dependency cleanup** - Updated scripts with correct utility imports
+  - Replaced `ProxmoxAPI.sh` -> `Operations.sh` across all VM/LXC bulk operations
+  - Fixed `Queries.sh` → `Cluster.sh` references in storage scripts
+  - Updated `NetworkHelper.sh` -> `Network.sh` references
+- **Function standardization** - Unified prompt API across all scripts
+  - Updated `__prompt_yes_no__` -> `__prompt_user_yn__`
+  - Consistent user interaction patterns throughout codebase
+- **Enhanced utilities** - Improvements to core libraries
+  - BulkOperations.sh: Better error handling and progress reporting
+  - Communication.sh: Enhanced messaging and logging
+  - Prompts.sh: Improved input validation and dialogs
+  - SSH.sh: Streamlined remote execution
+  - GUI.sh: Better menu structure and user experience
+
+### Fixed
+- **Auto-confirm support** - Added `--yes` flag for non-interactive bulk deletion
+- **Import corrections** - Fixed incorrect source dependencies and shellcheck directives
+- **Storage improvements** - Enhanced validation and error handling in storage operations
+
+### Removed
+- BatchRunCLI.sh and associated test files
+
 ## [2.0.2] - 2025-11-06
 
 ArgumentParser migration
@@ -97,12 +135,12 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - Built-in progress reporting and operation summaries
   - Automatic success/failure tracking with detailed statistics
   - Support for both range and pool-based operations
-- **Utilities/ProxmoxAPI.sh** - Centralized Proxmox API wrapper functions
+- **Utilities/Operations.sh** - Centralized Proxmox API wrapper functions
   - Consistent VM/LXC operations (start, stop, reset, migrate, etc.)
   - Standardized disk and hardware management functions
   - Pool and node management utilities
   - Improved error handling and validation
-- **Utilities/NetworkHelper.sh** - Network utility functions for IP and network operations
+- **Utilities/Network.sh** - Network utility functions for IP and network operations
   - IP address validation and manipulation
   - Network configuration helpers
   - DNS and network interface utilities
@@ -117,8 +155,8 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - Automated test discovery and execution
 - **Utilities/_TestArgumentParser.sh** - Test suite for ArgumentParser functionality
 - **Utilities/_TestBulkOperations.sh** - Test suite for BulkOperations framework
-- **Utilities/_TestNetworkHelper.sh** - Test suite for NetworkHelper utilities
-- **Utilities/_TestProxmoxAPI.sh** - Test suite for ProxmoxAPI functions
+- **Utilities/_TestNetwork.sh** - Test suite for Network utilities
+- **Utilities/_TestOperations.sh** - Test suite for ProxmoxAPI functions
 - **Utilities/_TestRemoteExec.sh** - Test suite for remote execution utilities
 - **Utilities/_TestStateManager.sh** - Test suite for StateManager functionality
 - **Utilities/_TestIntegrationExample.sh** - Example integration test demonstrating framework usage
@@ -159,7 +197,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - LXC/Options/: BulkToggleProtectionMode.sh, BulkToggleStartAtBoot.sh
 - **Enhanced Utilities/Communication.sh** - Improved messaging functions and formatting
 - **Enhanced Utilities/Prompts.sh** - Better user interaction and input validation
-- **Enhanced Utilities/Queries.sh** - Extended query capabilities for VM/LXC/node information
+- **Enhanced Utilities/Cluster.sh** - Extended query capabilities for VM/LXC/node information
 - **Enhanced Utilities/Conversion.sh** - Additional conversion and formatting utilities
 - **Enhanced Utilities/Colors.sh** - Improved color output and terminal formatting
 - **Enhanced Utilities/SSH.sh** - Better SSH connection handling and remote execution
@@ -226,7 +264,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - Options scripts: BulkEnableGuestAgent.sh, BulkToggleProtectionMode.sh, BulkToggleStartAtBoot.sh
   - Storage scripts: BulkChangeStorage.sh, BulkMoveDisk.sh, BulkResizeStorage.sh
   - Backup scripts: BulkBackup.sh
-- **Networking/BulkPrintVMIDMacAddresses.sh** - Removed unused Prompts.sh and Queries.sh dependencies
+- **Networking/BulkPrintVMIDMacAddresses.sh** - Removed unused Prompts.sh and Cluster.sh dependencies
 - **Storage/Ceph/** - Cleaned up dependencies in Ceph cluster management scripts
   - RestartManagers.sh, RestartMetadata.sh, RestartMonitors.sh, RestartOSDs.sh
 - **RemoteManagement/ApacheGuacamole/RDP/** - Fixed dependencies in multiple scripts
@@ -258,7 +296,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
 ### Changed
 - Major refactoring of VirtualMachines directory structure with improved organization
 - Updated multiple VM management scripts:
-  - Utilities/Queries.sh - Enhanced query functionality
+  - Utilities/Cluster.sh - Enhanced query functionality
   - VirtualMachines/BulkAddIPToNote.sh - Improved IP note management
   - CloudInit scripts: BulkAddSSHKey.sh, BulkChangeDNS.sh, BulkChangeIP.sh, BulkChangeUserPass.sh, BulkMoveCloudInit.sh, BulkTogglePackageUpgrade.sh
   - Hardware scripts: BulkChangeNetwork.sh, BulkSetCPUTypeCoreCount.sh, BulkSetMemoryConfig.sh, BulkUnmountISOs.sh
@@ -288,7 +326,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
 - **Utilities/SSH.sh** - Comprehensive SSH utilities library for remote operation
 - **Utilities/Conversion.sh** - Data conversion utilities
 - **Utilities/Prompts.sh** - User prompt utilities
-- **Utilities/Queries.sh** - Query utilities for system information
+- **Utilities/Cluster.sh** - Query utilities for system information
 - Test scripts for new utilities (_TestConversion.sh, _TestPrompts.sh, _TestSSH.sh)
 
 ### Changed
@@ -405,7 +443,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - CephSparsifyDisk.sh -> SparsifyDisk.sh
   - CephStartStoppedOSDs.sh -> StartStoppedOSDs.sh
   - CephWipeDisk.sh -> WipeDisk.sh
-- Enhanced Queries.sh utility with improved functionality
+- Enhanced Cluster.sh utility with improved functionality
 - Updated _Utilities.md documentation
 
 ### Fixed
@@ -424,7 +462,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
 
 ### Changed
 - Renamed BulkAddRDPConnectionGuacamole.sh for consistency
-- Significantly enhanced Queries.sh utility with additional query functions
+- Significantly enhanced Cluster.sh utility with additional query functions
 - Improved Apache Guacamole automation capabilities
 
 ## [v1.37] - 2025-02-16
@@ -453,7 +491,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
   - Communication.sh
   - Conversion.sh
   - Prompts.sh
-  - Queries.sh
+  - Cluster.sh
   - SSH.sh
 - Updated VerifySourceCalls.py for better cross-platform support
 - Enhanced GUI.sh
@@ -491,7 +529,7 @@ Version 2.0 introduces new utility frameworks that standardize script behavior a
 - Automatic RDP connection creation for specified VMID ranges
 
 ### Changed
-- Enhanced Queries.sh with Guacamole integration functions
+- Enhanced Cluster.sh with Guacamole integration functions
 - Moved installation of required tools to top of file for better user experience
 
 

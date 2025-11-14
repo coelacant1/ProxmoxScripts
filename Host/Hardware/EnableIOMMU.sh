@@ -63,7 +63,7 @@ main() {
     fi
 
     # Optional: Blacklist nouveau driver
-    if __prompt_yes_no__ "Blacklist nouveau driver for NVIDIA GPU passthrough?"; then
+    if __prompt_user_yn__ "Blacklist nouveau driver for NVIDIA GPU passthrough?"; then
         local blacklist_file="/etc/modprobe.d/blacklist.conf"
         if ! grep -q "blacklist nouveau" "$blacklist_file" 2>/dev/null; then
             {

@@ -63,6 +63,7 @@ set -euo pipefail
 #
 # DEPENDENCIES:
 #   - Colors.sh (for colored output)
+#   - Logger.sh (for logging)
 #
 # USAGE:
 #   source "${SCRIPT_DIR}/Utilities/TestFramework.sh"
@@ -82,6 +83,20 @@ set -euo pipefail
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/Colors.sh" 2>/dev/null || true
+
+# Source Logger for structured logging
+if [[ -f "${SCRIPT_DIR}/Logger.sh" ]]; then
+    source "${SCRIPT_DIR}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__test_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "TEST"
+    fi
+}
 
 ################################################################################
 # GLOBALS AND STATE
@@ -125,6 +140,7 @@ declare -ga FAILED_TESTS=()
 
 # Initialize test framework
 test_framework_init() {
+    __test_log__ "INFO" "Initializing test framework"
     TEST_TOTAL=0
     TEST_PASSED=0
     TEST_FAILED=0
@@ -137,21 +153,25 @@ test_framework_init() {
     TEST_TEMP_DIR=$(mktemp -d -t proxmox_tests.XXXXXX)
     MOCK_DIR="${TEST_TEMP_DIR}/mocks"
     mkdir -p "$MOCK_DIR"
+    __test_log__ "DEBUG" "Created test temp directory: $TEST_TEMP_DIR"
 
     # Register cleanup trap
     if [[ "$CLEANUP_ON_EXIT" == true ]]; then
         trap test_framework_cleanup EXIT
+        __test_log__ "DEBUG" "Registered cleanup trap"
     fi
 }
 
 # Cleanup test framework
 test_framework_cleanup() {
+    __test_log__ "INFO" "Cleaning up test framework"
     # Restore mocked commands
     restore_all_mocks
 
     # Remove temporary directory
     if [[ -n "$TEST_TEMP_DIR" ]] && [[ -d "$TEST_TEMP_DIR" ]]; then
         rm -rf "$TEST_TEMP_DIR"
+        __test_log__ "DEBUG" "Removed test temp directory: $TEST_TEMP_DIR"
     fi
 }
 
@@ -162,6 +182,7 @@ test_framework_cleanup() {
 # Run a test suite
 # Usage: run_test_suite "Suite Name" test_func1 test_func2 ...
 run_test_suite() {
+    __test_log__ "INFO" "Starting test suite: $1"
     local suite_name=$1
     shift
     local test_functions=("$@")
@@ -175,6 +196,8 @@ run_test_suite() {
     echo "${BOLD}${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 
+    __test_log__ "DEBUG" "Test suite contains ${#test_functions[@]} tests"
+
     # Run each test function
     for test_func in "${test_functions[@]}"; do
         run_test "$test_func"
@@ -182,11 +205,13 @@ run_test_suite() {
 
     # Print suite summary
     print_suite_summary
+    __test_log__ "INFO" "Test suite '$suite_name' completed: Passed=$TEST_PASSED, Failed=$TEST_FAILED, Skipped=$TEST_SKIPPED"
 }
 
 # Run a single test
 run_test() {
     local test_func=$1
+    __test_log__ "DEBUG" "Running test: $test_func"
 
     CURRENT_TEST="$test_func"
     TEST_START_TIME=$(date +%s)
@@ -224,14 +249,17 @@ run_test() {
         ((TEST_PASSED++))
         echo "${GREEN}✓${NC} ${test_func} ${DIM}(${test_time}s, ${ASSERT_COUNT} assertions)${NC}"
         TEST_RESULTS+=("PASS:$test_func:${test_time}:${ASSERT_COUNT}")
+        __test_log__ "INFO" "Test PASSED: $test_func (${test_time}s, ${ASSERT_COUNT} assertions)"
     else
         ((TEST_FAILED++))
         echo "${RED}✗${NC} ${BOLD}${test_func}${NC} ${DIM}(${test_time}s)${NC}"
         FAILED_TESTS+=("$test_func")
         TEST_RESULTS+=("FAIL:$test_func:${test_time}:${ASSERT_COUNT}")
+        __test_log__ "ERROR" "Test FAILED: $test_func (${test_time}s)"
 
         if [[ "$STOP_ON_FAILURE" == true ]]; then
             echo "${RED}${BOLD}Stopping on failure${NC}"
+            __test_log__ "INFO" "Stopping test execution due to failure"
             exit 1
         fi
     fi
@@ -242,6 +270,7 @@ run_test() {
 # Skip a test
 skip_test() {
     local reason=${1:-"No reason provided"}
+    __test_log__ "INFO" "Test skipped: $CURRENT_TEST (reason: $reason)"
     ((TEST_SKIPPED++))
     echo "${YELLOW}⊘${NC} ${CURRENT_TEST} ${DIM}(skipped: $reason)${NC}"
     exit 0
@@ -282,16 +311,19 @@ assert_equals() {
     local message=${3:-"Values should be equal"}
 
     ((ASSERT_COUNT++))
+    __test_log__ "TRACE" "assert_equals: '$expected' == '$actual'"
 
     if [[ "$expected" == "$actual" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
+        __test_log__ "TRACE" "Assertion passed: $message"
         return 0
     else
         echo "  ${RED}FAILED:${NC} $message"
         echo "    ${DIM}Expected:${NC} ${YELLOW}$expected${NC}"
         echo "    ${DIM}Actual:${NC}   ${RED}$actual${NC}"
+        __test_log__ "DEBUG" "Assertion failed: $message (expected: '$expected', actual: '$actual')"
         return 1
     fi
 }
@@ -303,15 +335,18 @@ assert_not_equals() {
     local message=${3:-"Values should not be equal"}
 
     ((ASSERT_COUNT++))
+    __test_log__ "TRACE" "assert_not_equals: '$expected' != '$actual'"
 
     if [[ "$expected" != "$actual" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
+        __test_log__ "TRACE" "Assertion passed: $message"
         return 0
     else
         echo "  ${RED}FAILED:${NC} $message"
         echo "    ${DIM}Both values:${NC} ${RED}$actual${NC}"
+        __test_log__ "DEBUG" "Assertion failed: $message (both values: '$actual')"
         return 1
     fi
 }
@@ -323,16 +358,19 @@ assert_contains() {
     local message=${3:-"String should contain substring"}
 
     ((ASSERT_COUNT++))
+    __test_log__ "TRACE" "assert_contains: checking if '$haystack' contains '$needle'"
 
     if [[ "$haystack" == *"$needle"* ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
+        __test_log__ "TRACE" "Assertion passed: $message"
         return 0
     else
         echo "  ${RED}FAILED:${NC} $message"
         echo "    ${DIM}String:${NC}    ${YELLOW}$haystack${NC}"
         echo "    ${DIM}Expected:${NC}  ${RED}$needle${NC}"
+        __test_log__ "DEBUG" "Assertion failed: $message (haystack: '$haystack', needle: '$needle')"
         return 1
     fi
 }
@@ -344,16 +382,19 @@ assert_not_contains() {
     local message=${3:-"String should not contain substring"}
 
     ((ASSERT_COUNT++))
+    __test_log__ "TRACE" "assert_not_contains: checking if '$haystack' does not contain '$needle'"
 
     if [[ "$haystack" != *"$needle"* ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
+        __test_log__ "TRACE" "Assertion passed: $message"
         return 0
     else
         echo "  ${RED}FAILED:${NC} $message"
         echo "    ${DIM}String:${NC}      ${YELLOW}$haystack${NC}"
         echo "    ${DIM}Should not contain:${NC} ${RED}$needle${NC}"
+        __test_log__ "DEBUG" "Assertion failed: $message (haystack: '$haystack', unwanted: '$needle')"
         return 1
     fi
 }
@@ -570,6 +611,8 @@ mock_command() {
     local mock_output=${2:-""}
     local mock_exit_code=${3:-0}
 
+    __test_log__ "DEBUG" "Mocking command: $command (exit: $mock_exit_code)"
+
     # Create mock script
     local mock_script="${MOCK_DIR}/${command}"
     cat > "$mock_script" << EOF
@@ -587,6 +630,7 @@ EOF
 
     # Initialize call count
     MOCK_CALL_COUNT[$command]=0
+    __test_log__ "DEBUG" "Mock created for: $command"
 }
 
 # Stub a function
@@ -594,6 +638,7 @@ stub_function() {
     local func_name=$1
     local return_value=${2:-0}
 
+    __test_log__ "DEBUG" "Stubbing function: $func_name (return: $return_value)"
     eval "${func_name}() { return $return_value; }"
 }
 
@@ -606,27 +651,32 @@ assert_mock_called() {
     ((ASSERT_COUNT++))
 
     local actual_count=${MOCK_CALL_COUNT[$command]:-0}
+    __test_log__ "TRACE" "assert_mock_called: $command (expected: $expected_count, actual: $actual_count)"
 
     if [[ "$actual_count" -eq "$expected_count" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
+        __test_log__ "TRACE" "Assertion passed: $message"
         return 0
     else
         echo "  ${RED}FAILED:${NC} $message"
         echo "    ${DIM}Expected calls:${NC} ${YELLOW}$expected_count${NC}"
         echo "    ${DIM}Actual calls:${NC}   ${RED}$actual_count${NC}"
+        __test_log__ "DEBUG" "Assertion failed: $message (expected: $expected_count, actual: $actual_count)"
         return 1
     fi
 }
 
 # Restore all mocks
 restore_all_mocks() {
+    __test_log__ "DEBUG" "Restoring all mocks (${#MOCKED_COMMANDS[@]} commands)"
     for command in "${!MOCKED_COMMANDS[@]}"; do
         export PATH="${MOCKED_COMMANDS[$command]}"
     done
     MOCKED_COMMANDS=()
     MOCK_CALL_COUNT=()
+    __test_log__ "DEBUG" "All mocks restored"
 }
 
 ################################################################################
@@ -636,6 +686,8 @@ restore_all_mocks() {
 # Print test suite summary
 print_suite_summary() {
     local suite_time=$(($(date +%s) - SUITE_START_TIME))
+    
+    __test_log__ "INFO" "Printing test summary (Total: $TEST_TOTAL, Passed: $TEST_PASSED, Failed: $TEST_FAILED, Skipped: $TEST_SKIPPED)"
 
     echo ""
     echo "${BOLD}${BLUE}═══════════════════════════════════════════════════════════════${NC}"
@@ -677,9 +729,11 @@ print_suite_summary() {
 
     # Exit with error if tests failed
     if [[ $TEST_FAILED -gt 0 ]]; then
+        __test_log__ "WARN" "Test suite completed with failures"
         return 1
     fi
 
+    __test_log__ "INFO" "Test suite completed successfully"
     return 0
 }
 
@@ -687,6 +741,8 @@ print_suite_summary() {
 generate_test_report() {
     local format=${1:-"console"}
     local output_file=${2:-""}
+
+    __test_log__ "INFO" "Generating test report (format: $format, output: ${output_file:-console})"
 
     case "$format" in
         junit)
@@ -817,6 +873,7 @@ create_temp_file() {
     local content=${1:-""}
     local temp_file="${TEST_TEMP_DIR}/test_file_$(date +%s%N)"
 
+    __test_log__ "DEBUG" "Creating temp file: $temp_file"
     echo "$content" > "$temp_file"
     echo "$temp_file"
 }
@@ -824,6 +881,7 @@ create_temp_file() {
 # Create temporary test directory
 create_temp_dir() {
     local temp_dir="${TEST_TEMP_DIR}/test_dir_$(date +%s%N)"
+    __test_log__ "DEBUG" "Creating temp directory: $temp_dir"
     mkdir -p "$temp_dir"
     echo "$temp_dir"
 }

@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# NetworkHelper.sh
+# Network.sh
 #
 # Network management framework for VM/CT network configuration, IP management,
 # and network validation.
 #
 # Usage:
-#   source "${UTILITYPATH}/NetworkHelper.sh"
+#   source "${UTILITYPATH}/Network.sh"
 #
 # Features:
 #   - Configure network interfaces
@@ -45,8 +45,23 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__net_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "NET"
+    fi
+}
+
 # Source dependencies
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 source "${UTILITYPATH}/Communication.sh"
 
 ###############################################################################
@@ -69,7 +84,10 @@ __net_vm_add_interface__() {
     local net_id="$2"
     shift 2
 
+    __net_log__ "DEBUG" "Adding interface $net_id to VM $vmid"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -113,17 +131,22 @@ __net_vm_add_interface__() {
 
     if [[ -n "$mac" ]]; then
         if ! __net_validate_mac__ "$mac"; then
+            __net_log__ "ERROR" "Invalid MAC address: $mac"
             echo "Error: Invalid MAC address: $mac" >&2
             return 1
         fi
         net_config="${net_config},macaddr=${mac}"
     fi
 
+    __net_log__ "INFO" "Applying network config: $net_config"
+
     # Apply configuration
     if __vm_set_config__ "$vmid" "--${net_id}" "$net_config"; then
+        __net_log__ "INFO" "Added interface $net_id to VM $vmid successfully"
         echo "Added interface $net_id to VM $vmid: $net_config"
         return 0
     else
+        __net_log__ "ERROR" "Failed to add interface $net_id to VM $vmid"
         echo "Error: Failed to add interface" >&2
         return 1
     fi
@@ -140,15 +163,20 @@ __net_vm_remove_interface__() {
     local vmid="$1"
     local net_id="$2"
 
+    __net_log__ "DEBUG" "Removing interface $net_id from VM $vmid"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
     if __vm_set_config__ "$vmid" "--delete" "$net_id"; then
+        __net_log__ "INFO" "Removed interface $net_id from VM $vmid"
         echo "Removed interface $net_id from VM $vmid"
         return 0
     else
+        __net_log__ "ERROR" "Failed to remove interface $net_id from VM $vmid"
         echo "Error: Failed to remove interface" >&2
         return 1
     fi
@@ -167,7 +195,10 @@ __net_vm_set_bridge__() {
     local net_id="$2"
     local new_bridge="$3"
 
+    __net_log__ "DEBUG" "Setting bridge for VM $vmid $net_id to $new_bridge"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -176,17 +207,21 @@ __net_vm_set_bridge__() {
     local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
+        __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
         echo "Error: Interface $net_id not found" >&2
         return 1
     fi
 
     # Replace bridge in config
     local new_config=$(echo "$current_config" | sed "s/bridge=[^,]*/bridge=${new_bridge}/")
+    __net_log__ "DEBUG" "New config: $new_config"
 
     if __vm_set_config__ "$vmid" "--${net_id}" "$new_config"; then
+        __net_log__ "INFO" "Changed bridge for VM $vmid $net_id to $new_bridge"
         echo "Changed bridge for $net_id to $new_bridge"
         return 0
     else
+        __net_log__ "ERROR" "Failed to change bridge for VM $vmid $net_id"
         echo "Error: Failed to change bridge" >&2
         return 1
     fi
@@ -205,7 +240,10 @@ __net_vm_set_vlan__() {
     local net_id="$2"
     local vlan="$3"
 
+    __net_log__ "DEBUG" "Setting VLAN for VM $vmid $net_id to $vlan"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -214,6 +252,7 @@ __net_vm_set_vlan__() {
     local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
+        __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
         echo "Error: Interface $net_id not found" >&2
         return 1
     fi
@@ -222,20 +261,25 @@ __net_vm_set_vlan__() {
 
     if [[ "$vlan" == "none" ]]; then
         # Remove VLAN tag
+        __net_log__ "DEBUG" "Removing VLAN tag from $net_id"
         new_config=$(echo "$current_config" | sed 's/,tag=[^,]*//g')
     else
         # Add or replace VLAN tag
         if echo "$current_config" | grep -q "tag="; then
+            __net_log__ "DEBUG" "Replacing existing VLAN tag with $vlan"
             new_config=$(echo "$current_config" | sed "s/tag=[^,]*/tag=${vlan}/")
         else
+            __net_log__ "DEBUG" "Adding VLAN tag $vlan"
             new_config="${current_config},tag=${vlan}"
         fi
     fi
 
     if __vm_set_config__ "$vmid" "--${net_id}" "$new_config"; then
+        __net_log__ "INFO" "Set VLAN tag for VM $vmid $net_id to $vlan"
         echo "Set VLAN tag for $net_id to $vlan"
         return 0
     else
+        __net_log__ "ERROR" "Failed to set VLAN tag for VM $vmid $net_id"
         echo "Error: Failed to set VLAN tag" >&2
         return 1
     fi
@@ -254,12 +298,16 @@ __net_vm_set_mac__() {
     local net_id="$2"
     local mac="$3"
 
+    __net_log__ "DEBUG" "Setting MAC for VM $vmid $net_id to $mac"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
     if ! __net_validate_mac__ "$mac"; then
+        __net_log__ "ERROR" "Invalid MAC address: $mac"
         echo "Error: Invalid MAC address: $mac" >&2
         return 1
     fi
@@ -268,6 +316,7 @@ __net_vm_set_mac__() {
     local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
+        __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
         echo "Error: Interface $net_id not found" >&2
         return 1
     fi
@@ -276,15 +325,19 @@ __net_vm_set_mac__() {
 
     # Add or replace MAC address
     if echo "$current_config" | grep -q "macaddr="; then
+        __net_log__ "DEBUG" "Replacing existing MAC address"
         new_config=$(echo "$current_config" | sed "s/macaddr=[^,]*/macaddr=${mac}/")
     else
+        __net_log__ "DEBUG" "Adding MAC address"
         new_config="${current_config},macaddr=${mac}"
     fi
 
     if __vm_set_config__ "$vmid" "--${net_id}" "$new_config"; then
+        __net_log__ "INFO" "Set MAC address for VM $vmid $net_id to $mac"
         echo "Set MAC address for $net_id to $mac"
         return 0
     else
+        __net_log__ "ERROR" "Failed to set MAC address for VM $vmid $net_id"
         echo "Error: Failed to set MAC address" >&2
         return 1
     fi
@@ -299,15 +352,21 @@ __net_vm_set_mac__() {
 __net_vm_get_interfaces__() {
     local vmid="$1"
 
+    __net_log__ "DEBUG" "Getting network interfaces for VM $vmid"
+
     if ! __vm_exists__ "$vmid"; then
+        __net_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
+    local count=0
     qm config "$vmid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
         echo "$netid: $config"
+        ((count++))
     done
 
+    __net_log__ "DEBUG" "Found $count network interface(s) for VM $vmid"
     return 0
 }
 
@@ -331,7 +390,10 @@ __net_ct_add_interface__() {
     local net_id="$2"
     shift 2
 
+    __net_log__ "DEBUG" "Adding interface $net_id to CT $ctid"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
@@ -366,8 +428,11 @@ __net_ct_add_interface__() {
         esac
     done
 
+    __net_log__ "DEBUG" "Interface config: bridge=$bridge, ip=$ip, gateway=$gateway, vlan=$vlan"
+
     # Validate IP if not DHCP
     if [[ "$ip" != "dhcp" ]] && ! __net_validate_cidr__ "$ip"; then
+        __net_log__ "ERROR" "Invalid IP address: $ip"
         echo "Error: Invalid IP address: $ip" >&2
         return 1
     fi
@@ -387,9 +452,11 @@ __net_ct_add_interface__() {
 
     # Apply configuration
     if pct set "$ctid" "-${net_id}" "$net_config" 2>/dev/null; then
+        __net_log__ "INFO" "Added interface $net_id to CT $ctid"
         echo "Added interface $net_id to CT $ctid: $net_config"
         return 0
     else
+        __net_log__ "ERROR" "Failed to add interface $net_id to CT $ctid"
         echo "Error: Failed to add interface" >&2
         return 1
     fi
@@ -406,15 +473,20 @@ __net_ct_remove_interface__() {
     local ctid="$1"
     local net_id="$2"
 
+    __net_log__ "DEBUG" "Removing interface $net_id from CT $ctid"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if pct set "$ctid" "--delete" "$net_id" 2>/dev/null; then
+        __net_log__ "INFO" "Removed interface $net_id from CT $ctid"
         echo "Removed interface $net_id from CT $ctid"
         return 0
     else
+        __net_log__ "ERROR" "Failed to remove interface $net_id from CT $ctid"
         echo "Error: Failed to remove interface" >&2
         return 1
     fi
@@ -433,13 +505,17 @@ __net_ct_set_ip__() {
     local net_id="$2"
     local ip="$3"
 
+    __net_log__ "DEBUG" "Setting IP for CT $ctid $net_id to $ip"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     # Validate IP if not DHCP
     if [[ "$ip" != "dhcp" ]] && ! __net_validate_cidr__ "$ip"; then
+        __net_log__ "ERROR" "Invalid IP address: $ip"
         echo "Error: Invalid IP address: $ip" >&2
         return 1
     fi
@@ -448,6 +524,7 @@ __net_ct_set_ip__() {
     local current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
+        __net_log__ "ERROR" "Interface $net_id not found on CT $ctid"
         echo "Error: Interface $net_id not found" >&2
         return 1
     fi
@@ -456,9 +533,11 @@ __net_ct_set_ip__() {
     local new_config=$(echo "$current_config" | sed "s/ip=[^,]*/ip=${ip}/")
 
     if pct set "$ctid" "-${net_id}" "$new_config" 2>/dev/null; then
+        __net_log__ "INFO" "Set IP for CT $ctid $net_id to $ip"
         echo "Set IP for $net_id to $ip"
         return 0
     else
+        __net_log__ "ERROR" "Failed to set IP for CT $ctid $net_id"
         echo "Error: Failed to set IP address" >&2
         return 1
     fi
@@ -477,12 +556,16 @@ __net_ct_set_gateway__() {
     local net_id="$2"
     local gateway="$3"
 
+    __net_log__ "DEBUG" "Setting gateway for CT $ctid $net_id to $gateway"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __net_validate_ip__ "$gateway"; then
+        __net_log__ "ERROR" "Invalid gateway address: $gateway"
         echo "Error: Invalid gateway address: $gateway" >&2
         return 1
     fi
@@ -491,6 +574,7 @@ __net_ct_set_gateway__() {
     local current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
+        __net_log__ "ERROR" "Interface $net_id not found on CT $ctid"
         echo "Error: Interface $net_id not found" >&2
         return 1
     fi
@@ -499,15 +583,19 @@ __net_ct_set_gateway__() {
 
     # Add or replace gateway
     if echo "$current_config" | grep -q "gw="; then
+        __net_log__ "DEBUG" "Replacing existing gateway"
         new_config=$(echo "$current_config" | sed "s/gw=[^,]*/gw=${gateway}/")
     else
+        __net_log__ "DEBUG" "Adding gateway"
         new_config="${current_config},gw=${gateway}"
     fi
 
     if pct set "$ctid" "-${net_id}" "$new_config" 2>/dev/null; then
+        __net_log__ "INFO" "Set gateway for CT $ctid $net_id to $gateway"
         echo "Set gateway for $net_id to $gateway"
         return 0
     else
+        __net_log__ "ERROR" "Failed to set gateway for CT $ctid $net_id"
         echo "Error: Failed to set gateway" >&2
         return 1
     fi
@@ -524,20 +612,26 @@ __net_ct_set_nameserver__() {
     local ctid="$1"
     local nameserver="$2"
 
+    __net_log__ "DEBUG" "Setting nameserver for CT $ctid to $nameserver"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __net_validate_ip__ "$nameserver"; then
+        __net_log__ "ERROR" "Invalid nameserver address: $nameserver"
         echo "Error: Invalid nameserver address: $nameserver" >&2
         return 1
     fi
 
     if pct set "$ctid" "-nameserver" "$nameserver" 2>/dev/null; then
+        __net_log__ "INFO" "Set nameserver for CT $ctid to $nameserver"
         echo "Set nameserver to $nameserver"
         return 0
     else
+        __net_log__ "ERROR" "Failed to set nameserver for CT $ctid"
         echo "Error: Failed to set nameserver" >&2
         return 1
     fi
@@ -552,14 +646,21 @@ __net_ct_set_nameserver__() {
 __net_ct_get_interfaces__() {
     local ctid="$1"
 
+    __net_log__ "DEBUG" "Getting network interfaces for CT $ctid"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
+    local count=0
     pct config "$ctid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
         echo "$netid: $config"
+        ((count++))
     done
+
+    __net_log__ "DEBUG" "Found $count network interface(s) for CT $ctid"
 
     return 0
 }
@@ -577,8 +678,11 @@ __net_ct_get_interfaces__() {
 __net_validate_ip__() {
     local ip="$1"
 
+    __net_log__ "TRACE" "Validating IP address: $ip"
+
     # Check format: xxx.xxx.xxx.xxx
     if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        __net_log__ "DEBUG" "IP validation failed (format): $ip"
         return 1
     fi
 
@@ -588,10 +692,12 @@ __net_validate_ip__() {
 
     for octet in "${octets[@]}"; do
         if (( octet > 255 )); then
+            __net_log__ "DEBUG" "IP validation failed (octet > 255): $ip"
             return 1
         fi
     done
 
+    __net_log__ "DEBUG" "IP validation passed: $ip"
     return 0
 }
 
@@ -604,8 +710,11 @@ __net_validate_ip__() {
 __net_validate_cidr__() {
     local cidr="$1"
 
+    __net_log__ "TRACE" "Validating CIDR: $cidr"
+
     # Check format: IP/mask
     if [[ ! "$cidr" =~ ^([0-9.]+)/([0-9]+)$ ]]; then
+        __net_log__ "DEBUG" "CIDR validation failed (format): $cidr"
         return 1
     fi
 
@@ -614,14 +723,17 @@ __net_validate_cidr__() {
 
     # Validate IP
     if ! __net_validate_ip__ "$ip"; then
+        __net_log__ "DEBUG" "CIDR validation failed (invalid IP): $cidr"
         return 1
     fi
 
     # Validate mask (0-32)
     if (( mask < 0 || mask > 32 )); then
+        __net_log__ "DEBUG" "CIDR validation failed (mask out of range): $cidr"
         return 1
     fi
 
+    __net_log__ "DEBUG" "CIDR validation passed: $cidr"
     return 0
 }
 
@@ -634,11 +746,15 @@ __net_validate_cidr__() {
 __net_validate_mac__() {
     local mac="$1"
 
+    __net_log__ "TRACE" "Validating MAC address: $mac"
+
     # Check format: xx:xx:xx:xx:xx:xx or XX:XX:XX:XX:XX:XX
     if [[ "$mac" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+        __net_log__ "DEBUG" "MAC validation passed: $mac"
         return 0
     fi
 
+    __net_log__ "DEBUG" "MAC validation failed: $mac"
     return 1
 }
 
@@ -651,9 +767,12 @@ __net_validate_mac__() {
 __net_is_ip_in_use__() {
     local search_ip="$1"
 
+    __net_log__ "DEBUG" "Checking if IP is in use: $search_ip"
+
     # Search in all VM configs
     for vmid in $(qm list 2>/dev/null | awk 'NR>1 {print $1}'); do
         if qm config "$vmid" 2>/dev/null | grep -q "$search_ip"; then
+            __net_log__ "INFO" "IP $search_ip in use by VM $vmid"
             echo "IP $search_ip in use by VM $vmid"
             return 0
         fi
@@ -662,6 +781,7 @@ __net_is_ip_in_use__() {
     # Search in all CT configs
     for ctid in $(pct list 2>/dev/null | awk 'NR>1 {print $1}'); do
         if pct config "$ctid" 2>/dev/null | grep -q "$search_ip"; then
+            __net_log__ "INFO" "IP $search_ip in use by CT $ctid"
             echo "IP $search_ip in use by CT $ctid"
             return 0
         fi
@@ -681,6 +801,8 @@ __net_get_next_ip__() {
     local base_ip="$1"
     local start_host="${2:-1}"
 
+    __net_log__ "DEBUG" "Finding next available IP from $base_ip starting at host $start_host"
+
     # Extract base network
     local IFS='.'
     local octets=($base_ip)
@@ -691,11 +813,13 @@ __net_get_next_ip__() {
         local test_ip="${base}.${host}"
 
         if ! __net_is_ip_in_use__ "$test_ip" &>/dev/null; then
+            __net_log__ "INFO" "Found available IP: $test_ip"
             echo "$test_ip"
             return 0
         fi
     done
 
+    __net_log__ "ERROR" "No available IPs in subnet $base.0"
     echo "Error: No available IPs in subnet" >&2
     return 1
 }
@@ -715,13 +839,17 @@ __net_test_connectivity__() {
     local id="$1"
     local target="$2"
 
+    __net_log__ "DEBUG" "Testing connectivity from $id to $target"
+
     # Try as VM first
     if __vm_exists__ "$id" &>/dev/null; then
         if __vm_is_running__ "$id"; then
             # For VMs, we'd need guest agent
+            __net_log__ "INFO" "VM connectivity testing requires guest agent"
             echo "Note: VM connectivity testing requires guest agent"
             return 2
         else
+            __net_log__ "ERROR" "VM $id is not running"
             echo "Error: VM $id is not running" >&2
             return 1
         fi
@@ -729,17 +857,21 @@ __net_test_connectivity__() {
     elif __ct_exists__ "$id" &>/dev/null; then
         if __ct_is_running__ "$id"; then
             if pct exec "$id" -- ping -c 1 -W 2 "$target" &>/dev/null; then
+                __net_log__ "INFO" "CT $id can reach $target"
                 echo "CT $id can reach $target"
                 return 0
             else
+                __net_log__ "WARN" "CT $id cannot reach $target"
                 echo "CT $id cannot reach $target"
                 return 1
             fi
         else
+            __net_log__ "ERROR" "CT $id is not running"
             echo "Error: CT $id is not running" >&2
             return 1
         fi
     else
+        __net_log__ "ERROR" "ID $id not found"
         echo "Error: ID $id not found" >&2
         return 1
     fi
@@ -756,20 +888,26 @@ __net_test_dns__() {
     local ctid="$1"
     local hostname="$2"
 
+    __net_log__ "DEBUG" "Testing DNS resolution for $hostname from CT $ctid"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __ct_is_running__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid is not running"
         echo "Error: CT $ctid is not running" >&2
         return 1
     fi
 
     if pct exec "$ctid" -- nslookup "$hostname" &>/dev/null; then
+        __net_log__ "INFO" "DNS resolution successful for $hostname from CT $ctid"
         echo "DNS resolution successful for $hostname"
         return 0
     else
+        __net_log__ "WARN" "DNS resolution failed for $hostname from CT $ctid"
         echo "DNS resolution failed for $hostname"
         return 1
     fi
@@ -784,12 +922,16 @@ __net_test_dns__() {
 __net_test_gateway__() {
     local ctid="$1"
 
+    __net_log__ "DEBUG" "Testing gateway reachability for CT $ctid"
+
     if ! __ct_exists__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __ct_is_running__ "$ctid"; then
+        __net_log__ "ERROR" "CT $ctid is not running"
         echo "Error: CT $ctid is not running" >&2
         return 1
     fi
@@ -798,14 +940,18 @@ __net_test_gateway__() {
     local gateway=$(pct config "$ctid" | grep "gw=" | head -1 | sed 's/.*gw=\([^,]*\).*/\1/')
 
     if [[ -z "$gateway" ]]; then
+        __net_log__ "ERROR" "No gateway configured for CT $ctid"
         echo "Error: No gateway configured" >&2
         return 1
     fi
 
+    __net_log__ "DEBUG" "Testing gateway $gateway"
     if pct exec "$ctid" -- ping -c 1 -W 2 "$gateway" &>/dev/null; then
+        __net_log__ "INFO" "Gateway $gateway is reachable from CT $ctid"
         echo "Gateway $gateway is reachable"
         return 0
     else
+        __net_log__ "WARN" "Gateway $gateway is not reachable from CT $ctid"
         echo "Gateway $gateway is not reachable"
         return 1
     fi
@@ -822,10 +968,14 @@ __net_ping__() {
     local host="$1"
     local count="${2:-4}"
 
+    __net_log__ "DEBUG" "Pinging $host (count=$count)"
+
     if ping -c "$count" -W 2 "$host" &>/dev/null; then
+        __net_log__ "INFO" "Host $host is reachable"
         echo "Host $host is reachable"
         return 0
     else
+        __net_log__ "WARN" "Host $host is not reachable"
         echo "Host $host is not reachable"
         return 1
     fi
@@ -850,6 +1000,8 @@ __net_bulk_set_bridge__() {
     local net_id="$3"
     local bridge="$4"
 
+    __net_log__ "INFO" "Bulk bridge change: range=$start_vmid-$end_vmid, interface=$net_id, bridge=$bridge"
+
     local success=0
     local failed=0
 
@@ -861,6 +1013,7 @@ __net_bulk_set_bridge__() {
         fi
     done
 
+    __net_log__ "INFO" "Bulk bridge change complete: $success succeeded, $failed failed"
     echo "Bulk bridge change complete: $success succeeded, $failed failed"
 
     if (( failed > 0 )); then
@@ -885,6 +1038,8 @@ __net_bulk_set_vlan__() {
     local net_id="$3"
     local vlan="$4"
 
+    __net_log__ "INFO" "Bulk VLAN change: range=$start_vmid-$end_vmid, interface=$net_id, vlan=$vlan"
+
     local success=0
     local failed=0
 
@@ -896,6 +1051,7 @@ __net_bulk_set_vlan__() {
         fi
     done
 
+    __net_log__ "INFO" "Bulk VLAN change complete: $success succeeded, $failed failed"
     echo "Bulk VLAN change complete: $success succeeded, $failed failed"
 
     if (( failed > 0 )); then
@@ -928,6 +1084,8 @@ __net_migrate_network__() {
     local from_vlan=""
     local to_vlan=""
 
+    __net_log__ "DEBUG" "Network migration: range=$start_vmid-$end_vmid, interface=$net_id"
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --from-bridge)
@@ -936,6 +1094,7 @@ __net_migrate_network__() {
                 ;;
             --to-bridge)
                 to_bridge="$2"
+                __net_log__ "DEBUG" "Migrating to bridge: $to_bridge"
                 shift 2
                 ;;
             --from-vlan)
@@ -944,6 +1103,7 @@ __net_migrate_network__() {
                 ;;
             --to-vlan)
                 to_vlan="$2"
+                __net_log__ "DEBUG" "Migrating to VLAN: $to_vlan"
                 shift 2
                 ;;
             *)
@@ -984,6 +1144,8 @@ __net_migrate_network__() {
             ((failed++))
         fi
     done
+
+    __net_log__ "INFO" "Network migration complete: $success succeeded, $failed failed, $skipped skipped"
 
     echo "Network migration complete:"
     echo "  Success: $success"

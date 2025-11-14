@@ -118,7 +118,7 @@ main() {
     __info__ "Backup directory: $backup_dir"
 
     echo
-    if ! __prompt_yes_no__ "Update all VM/LXC MAC addresses to use prefix $prefix_upper?"; then
+    if ! __prompt_user_yn__ "Update all VM/LXC MAC addresses to use prefix $prefix_upper?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

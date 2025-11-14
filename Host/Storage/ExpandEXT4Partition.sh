@@ -53,7 +53,7 @@ main() {
     __warn__ "This will resize partition ${partition} to use all available space"
     __warn__ "Ensure you have backups before proceeding"
 
-    if ! __prompt_yes_no__ "Proceed with partition expansion?"; then
+    if ! __prompt_user_yn__ "Proceed with partition expansion?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

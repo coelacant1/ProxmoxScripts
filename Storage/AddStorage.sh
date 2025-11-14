@@ -6,18 +6,18 @@
 # This script configures the storage in the datacenter and makes it available across all nodes.
 #
 # Usage:
-#   AddStorage.sh nfs NFS-Storage 192.168.1.100 /mnt/nfs-share
-#   AddStorage.sh nfs NFS-Backup 192.168.1.100 /backup --content backup
-#   AddStorage.sh smb SMB-Storage 192.168.1.200 SharedFolder --username admin --password pass123
-#   AddStorage.sh cifs CIFS-ISO 192.168.1.200 ISOs --username admin --password pass123 --domain WORKGROUP
+#   AddStorage.sh nfs NFS-Storage 192.168.1.100 --export /mnt/nfs-share
+#   AddStorage.sh nfs NFS-Backup 192.168.1.100 --export /backup --content backup
+#   AddStorage.sh smb SMB-Storage 192.168.1.200 --export SharedFolder --username admin --password pass123
+#   AddStorage.sh cifs CIFS-ISO 192.168.1.200 --export ISOs --username admin --password pass123 --domain WORKGROUP
 #   AddStorage.sh pbs PBS-Backup 192.168.1.50 --username backup@pbs --password secret --datastore main --fingerprint "AA:BB:CC:DD..."
 #
 # Arguments:
 #   storage_type         - Type of storage: 'nfs', 'smb', 'cifs', or 'pbs'
 #   storage_id           - Unique identifier/name for this storage in Proxmox
 #   server               - Server hostname or IP address
-#   path                 - Export path for NFS (e.g., /mnt/storage) or share name for SMB/CIFS
-#                          (Not required for PBS, use empty string "" if using PBS)
+#   --export <path>      - Export path for NFS (e.g., /mnt/storage) or share name for SMB/CIFS
+#                          (Required for NFS/SMB/CIFS, not used for PBS)
 #   --content <types>    - Content types (default: vztmpl,backup,iso,snippets for NFS/SMB, backup for PBS)
 #   --username <user>    - Username for SMB/CIFS or PBS authentication (required for PBS)
 #   --password <pass>    - Password for SMB/CIFS or PBS authentication (required for PBS)
@@ -30,8 +30,8 @@
 # Content Types: images, rootdir, vztmpl, backup, iso, snippets
 #
 # Notes:
-#   - For PBS storage, path can be empty string ""
-#   - PBS requires username, password, and should have fingerprint for security
+#   - For PBS storage, --export is not required (PBS doesn't use export paths)
+#   - PBS requires --username and --password, should have --fingerprint for security
 #   - Get PBS fingerprint: proxmox-backup-manager cert info | grep Fingerprint
 #
 # Function Index:
@@ -45,13 +45,28 @@
 
 set -euo pipefail
 
+# Ensure Proxmox binaries are in PATH
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+# Define error handler before sourcing (in case sourcing fails)
+__early_err__() {
+    echo "[ERROR] Failed to initialize script at line $1: $2" >&2
+    echo "UTILITYPATH=${UTILITYPATH:-not set}" >&2
+    echo "Check that utilities were transferred correctly" >&2
+    exit 1
+}
+trap '__early_err__ $LINENO "$BASH_COMMAND"' ERR
+
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Logger.sh
+source "${UTILITYPATH}/Logger.sh"
 
+# Now use the proper error handler from Communication.sh
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # --- validate_custom_options -------------------------------------------------
@@ -74,9 +89,9 @@ validate_custom_options() {
     # Validate storage ID format (alphanumeric, hyphen, underscore)
     validate_storage_id "$STORAGE_ID"
 
-    # For non-PBS storage, path is required
-    if [[ "$STORAGE_TYPE" != "pbs" && -z "$PATH" ]]; then
-        __err__ "Path/export/share is required for ${STORAGE_TYPE} storage"
+    # For non-PBS storage, export path is required
+    if [[ "$STORAGE_TYPE" != "pbs" && -z "$EXPORT" ]]; then
+        __err__ "Export path/share is required for ${STORAGE_TYPE} storage (use --export)"
         exit 64
     fi
 
@@ -108,10 +123,12 @@ validate_storage_id() {
         exit 64
     fi
 
-    # Check if storage already exists
-    if pvesm status | grep -q "^${id} "; then
-        __err__ "Storage '${id}' already exists"
-        exit 64
+    # Check if storage already exists (only if pvesm is available)
+    if command -v pvesm >/dev/null 2>&1; then
+        if pvesm status 2>/dev/null | grep -q "^${id} "; then
+            __err__ "Storage '${id}' already exists"
+            exit 64
+        fi
     fi
 }
 
@@ -121,11 +138,11 @@ validate_storage_id() {
 add_nfs_storage() {
     __info__ "Adding NFS storage '${STORAGE_ID}'..."
 
-    local cmd="pvesm add nfs ${STORAGE_ID} --server ${SERVER} --export ${PATH}"
+    local cmd="pvesm add nfs ${STORAGE_ID} --server ${SERVER} --export ${EXPORT}"
 
     [[ -n "$CONTENT" ]] && cmd+=" --content ${CONTENT}"
     [[ -n "$NODES" ]] && cmd+=" --nodes ${NODES}"
-    [[ -n "$MOUNT_OPTIONS" ]] && cmd+=" --options ${MOUNT_OPTIONS}"
+    [[ -n "$OPTIONS" ]] && cmd+=" --options ${OPTIONS}"
 
     if eval "$cmd"; then
         __ok__ "NFS storage '${STORAGE_ID}' added successfully"
@@ -140,9 +157,9 @@ add_nfs_storage() {
 # @function add_smb_storage
 # @description Adds SMB/CIFS storage to the cluster.
 add_smb_storage() {
-    __info__ "Adding ${STORAGE_TYPE^^} storage '${STORAGE_ID}'..."
+    __info__ "Adding SMB/CIFS storage '${STORAGE_ID}'..."
 
-    local cmd="pvesm add cifs ${STORAGE_ID} --server ${SERVER} --share ${PATH}"
+    local cmd="pvesm add cifs ${STORAGE_ID} --server ${SERVER} --share ${EXPORT}"
 
     [[ -n "$USERNAME" ]] && cmd+=" --username ${USERNAME}"
     [[ -n "$PASSWORD" ]] && cmd+=" --password ${PASSWORD}"
@@ -184,27 +201,35 @@ add_pbs_storage() {
 
 # --- main --------------------------------------------------------------------
 main() {
+    __log_function_entry__ "$@"
+    
     __check_root__
+    __log_debug__ "Root check passed" "STORAGE"
+    
     __check_proxmox__
+    __log_debug__ "Proxmox check passed" "STORAGE"
 
     # Parse arguments using ArgumentParser
-    # Note: path is optional for PBS, so we make it optional with :?
-    __parse_args__ "storage_type:string storage_id:string server:string path:string:? --content:string:? --username:string:? --password:string:? --domain:string:? --fingerprint:string:? --datastore:string:? --nodes:string:? --options:string:?" "$@"
+    __log_debug__ "Parsing arguments: $*" "STORAGE"
+    __parse_args__ "storage_type:string storage_id:string server:string --export:string:? --content:string:? --username:string:? --password:string:? --domain:string:? --fingerprint:string:? --datastore:string:? --nodes:string:? --options:string:?" "$@"
+    __log_debug__ "Arguments parsed successfully" "STORAGE"
 
     # Additional custom validation
+    __log_debug__ "Validating custom options" "STORAGE"
     validate_custom_options
+    __log_debug__ "Custom validation passed" "STORAGE"
 
     __info__ "Storage Configuration:"
     __info__ "  Type: ${STORAGE_TYPE}"
     __info__ "  ID: ${STORAGE_ID}"
     __info__ "  Server: ${SERVER}"
-    [[ -n "$PATH" ]] && __info__ "  Path/Share: ${PATH}"
+    [[ -n "$EXPORT" ]] && __info__ "  Export/Share: ${EXPORT}"
     [[ -n "$CONTENT" ]] && __info__ "  Content: ${CONTENT}"
     [[ -n "$USERNAME" ]] && __info__ "  Username: ${USERNAME}"
     [[ -n "$DOMAIN" ]] && __info__ "  Domain: ${DOMAIN}"
     [[ -n "$DATASTORE" ]] && __info__ "  Datastore: ${DATASTORE}"
     [[ -n "$NODES" ]] && __info__ "  Nodes: ${NODES}"
-    [[ -n "$MOUNT_OPTIONS" ]] && __info__ "  Options: ${MOUNT_OPTIONS}"
+    [[ -n "$OPTIONS" ]] && __info__ "  Options: ${OPTIONS}"
 
     # Confirm action
     if ! __prompt_user_yn__ "Add ${STORAGE_TYPE^^} storage '${STORAGE_ID}'?"; then

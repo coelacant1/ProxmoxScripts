@@ -40,7 +40,7 @@ This repository contains Bash scripts (`.sh` files) that help automate and manag
 
 **Key Rule: Use Utilities First**
 Before writing any logic, check `Utilities/_Utilities.md` for existing functions. The utilities provide:
-- Cluster-aware VM/CT operations (ProxmoxAPI.sh)
+- Cluster-aware VM/CT operations (Operations.sh)
 - Bulk operation frameworks (BulkOperations.sh)
 - Declarative argument parsing (ArgumentParser.sh)
 - Progress tracking and error handling (Communication.sh)
@@ -111,7 +111,7 @@ Example:
 source "${UTILITYPATH}/ArgumentParser.sh"
 
 # If using __vm_start__ or __ct_exists__
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 
 # If using __info__ or __err__
 source "${UTILITYPATH}/Communication.sh"
@@ -405,44 +405,152 @@ All `__validate_*__` functions are still available for manual validation when ne
 - `__validate_numeric__`, `__validate_ip__`, `__validate_vmid_range__`, etc.
 - Only use these if ArgumentParser doesn't support your use case
 
-### 3.11 Interactive vs. CLI Mode
+### 3.11 Non-Interactive Mode Support
 
-**IMPORTANT: All scripts MUST support a CLI mode that allows non-interactive execution.**
+**IMPORTANT: All scripts MUST support non-interactive execution through environment variable detection.**
 
-Scripts may be interactive (prompting users for input), but they **MUST** also support a command-line interface mode where all required information can be provided via arguments, bypassing all prompts.
+Scripts automatically detect whether they're running in an interactive or automated context via the `NON_INTERACTIVE` environment variable. This is set automatically by:
+- GUI.sh (for all remote executions)
+- Remote execution frameworks
+- CI/CD pipelines
+- Automation tools
 
-**Requirements:**
-- Scripts MUST accept all required parameters as command-line arguments
-- When all required arguments are provided, scripts MUST run without prompting
-- Interactive prompts are only acceptable when arguments are missing
-- Include a `--non-interactive` or `--yes` flag to force non-interactive mode when prompts might otherwise appear
-F
-**Good Pattern:**
+**The Standard:**
+
+**DO THIS** - Use `__prompt_user_yn__` from Prompts.sh:
 ```bash
-# Parse arguments
-VMID="$1"
-STORAGE="$2"
-NON_INTERACTIVE="${3:-false}"
+source "${UTILITYPATH}/Prompts.sh"
+source "${UTILITYPATH}/Communication.sh"
 
-# Use arguments if provided, otherwise prompt
-if [[ -z "$VMID" ]]; then
-    read -p "Enter VMID: " VMID
-fi
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Confirmation prompt only in interactive mode
-if [[ "$NON_INTERACTIVE" != "true" ]]; then
-    __prompt_user_yn "Continue with operation?" || exit 0
-fi
+main() {
+    __check_root__
+    __check_proxmox__
+    
+    # This automatically works in both interactive and non-interactive modes
+    if __prompt_user_yn__ "Proceed with operation?"; then
+        perform_operation
+    fi
+    
+    __ok__ "Operation complete"
+}
 
-# Rest of script proceeds automatically
+main "$@"
 ```
 
+**DON'T DO THIS** - Don't parse `--non-interactive` flags:
+```bash
+# WRONG! Don't add this
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --non-interactive)
+            export NON_INTERACTIVE=1
+            shift
+            ;;
+    esac
+done
+```
+
+**For Destructive Operations:**
+
+Destructive operations MUST require explicit confirmation to prevent accidental data loss. There are two approaches:
+
+**Option 1: Use `--force` flag (Recommended for single operations)**
+```bash
+# Parse --force flag
+FORCE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)
+            FORCE=1
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
+
+main() {
+    __check_root__
+    
+    __warn__ "DESTRUCTIVE: This will delete all data"
+    
+    # Safety check: Require --force in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: $0 --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
+    fi
+    
+    # Prompt for confirmation (unless force is set)
+    if [[ $FORCE -eq 1 ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Really delete?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+    
+    perform_deletion
+}
+```
+
+**Option 2: Use `--yes` flag (For bulk operations with ArgumentParser)**
+```bash
+# Use ArgumentParser with --yes flag
+__parse_args__ "vmid:vmid --yes:flag" "$@"
+
+main() {
+    __check_root__
+    
+    __warn__ "DESTRUCTIVE: This will delete VM $VMID"
+    
+    # Safety check: Require --yes in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "$YES" != "true" ]]; then
+        __err__ "Destructive operation requires --yes flag in non-interactive mode"
+        __err__ "Usage: $0 $VMID --yes"
+        __err__ "Or add '--yes' to parameters in GUI"
+        exit 1
+    fi
+    
+    # Prompt for confirmation (unless --yes provided)
+    if [[ "$YES" == "true" ]]; then
+        __info__ "Auto-confirm enabled (--yes flag) - proceeding without prompt"
+    elif ! __prompt_user_yn__ "Really delete VM $VMID?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+    
+    perform_deletion
+}
+```
+
+**When to Use Each:**
+
+| Flag | Use Case | Example Scripts |
+|------|----------|-----------------|
+| `--force` | Single destructive operations | WipeDisk.sh, RemoveLocalLVMAndExpand.sh, DeleteCluster.sh |
+| `--yes` | Bulk operations with ArgumentParser | BulkDelete.sh, BulkDeleteRange.sh |
+
+**Both patterns provide:**
+- Protection in non-interactive mode (requires explicit flag)
+- User confirmation in interactive mode (unless flag provided)
+- Clear error messages for GUI users
+- Consistent behavior across repository
+
 **Benefits:**
-- Scripts can be automated and scheduled
-- Can be called from other scripts
-- Supports CI/CD pipelines
-- Allows batch operations
-- Enables GUI.sh integration
+- Consistent behavior across all scripts
+- Automatic detection by GUI and automation tools
+- No manual flags needed for non-interactive execution
+- Destructive operations protected by explicit --force
+- Simpler code (no flag parsing needed)
+
+**See Also:**
+- `NON_INTERACTIVE_STANDARD.md` - Complete specification
+- `Utilities/Prompts.sh` - Functions that auto-detect mode
 
 ### 3.12 Testing Notes
 
@@ -573,7 +681,7 @@ USAGE
    - Use instead of: manual conversion calculations
    - Common functions: `__ip_to_int__`, `__int_to_ip__`, `__cidr_to_netmask__`, `__vmid_to_mac_prefix__`
 
-   **NetworkHelper.sh** - *Network configuration and management*
+   **Network.sh** - *Network configuration and management*
    - Configure VM/CT network interfaces
    - Set IP addresses, gateways, VLANs
    - Test network connectivity
@@ -584,10 +692,12 @@ USAGE
    - Check if script is running as root
    - Verify Proxmox environment
    - Check/install dependencies
-   - Use instead of: custom if statements checking $EUID
-   - Common functions: `__check_root__`, `__check_proxmox__`, `__ensure_dependencies__`
+   - **Prompt user with automatic non-interactive support**
+   - Use instead of: custom if statements checking $EUID, manual `read -p` prompts
+   - Common functions: `__check_root__`, `__check_proxmox__`, `__ensure_dependencies__`, `__prompt_user_yn__`
+   - **Important:** `__prompt_user_yn__` automatically detects NON_INTERACTIVE mode and returns "yes"
 
-   **ProxmoxAPI.sh** - *VM and Container operations* **(MOST COMMONLY USED)**
+   **Operations.sh** - *VM and Container operations* **(MOST COMMONLY USED)**
    - Start, stop, restart VMs or containers
    - Check if VM/CT exists or is running
    - Get or set VM/CT configuration
@@ -597,7 +707,7 @@ USAGE
    - Remote execution: `__vm_node_exec__`, `__ct_node_exec__`, `__node_exec__`, `__pve_exec__`
    - **Use remote execution for commands without utility wrappers** (e.g., `qm destroy`, `qm unlock`, `pct destroy`)
 
-   **Queries.sh** - *Cluster information and VM/CT queries*
+   **Cluster.sh** - *Cluster information and VM/CT queries*
    - Find which node a VM/CT is on
    - Get cluster node information
    - List VMs/CTs on specific nodes
@@ -640,7 +750,7 @@ Basic requirements:
 - [ ] All required utilities are sourced; no duplicated helper logic.
 - [ ] **All utility functions used have their corresponding utility file sourced** (check `Utilities/_Utilities.md` for reference).
 - [ ] **For bulk operations: Using BulkOperations.sh framework, not manual loops.**
-- [ ] **For VM/CT operations: Using ProxmoxAPI.sh functions, not direct qm/pct calls.**
+- [ ] **For VM/CT operations: Using Operations.sh functions, not direct qm/pct calls.**
 - [ ] **Script supports CLI mode** - can run non-interactively with all arguments provided.
 - [ ] Variables are quoted and scoped appropriately.
 - [ ] Error handling and cleanup paths are present.

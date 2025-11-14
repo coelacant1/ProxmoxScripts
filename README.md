@@ -9,7 +9,7 @@ Explore the scripts for Proxmox VE management on the website:
 
 ## Getting Started
 
-These instructions will guide you on how to clone this repository and start using the scripts on your Proxmox server for development, testing, or production purposes.
+These instructions will guide you on how to start using the scripts on your Proxmox server for development, testing, or production purposes.
 
 ### Prerequisites
 
@@ -124,6 +124,44 @@ To execute these scripts offline on your system, follow these steps:
 
 ## Usage
 
+### GUI Interactive Mode
+
+The recommended way to use ProxmoxScripts is through the interactive GUI:
+
+```bash
+./GUI.sh
+```
+
+**GUI Features:**
+- **Execution Modes**: Run scripts locally, on a single remote node, or across multiple nodes simultaneously
+- **Built-in Manuals**: Press `h` or `?` anywhere to access comprehensive help documentation
+- **Node Management**: Configure and manage Proxmox nodes via `nodes.json`
+- **Parameter History**: Edit command parameters with readline shortcuts (Ctrl+A/E, Ctrl+K/U, etc.)
+- **Real-time Output**: View script execution with colored output and progress indicators
+
+**Quick Tips:**
+- Press `h` or `?` to access the manual system
+- Press `l` to change log level (debug/info/quiet) for remote execution
+- Use `./GUI.sh -c` to clear logs before starting
+- Configure remote nodes by pressing `m` in the execution mode menu
+
+### Remote Execution
+
+Configure remote nodes in `nodes.json` (auto-created from template):
+
+```json
+{
+  "nodes": [
+    {"name": "pve01", "ip": "192.168.1.101"},
+    {"name": "pve02", "ip": "192.168.1.102"}
+  ]
+}
+```
+
+Then select remote execution mode in GUI.sh to run scripts across your cluster.
+
+### Script Usage
+
 Each script includes detailed usage information in its header comments. Scripts automatically source required utility functions from the `Utilities/` directory.
 
 Example for description and example commands in each script in this repository:
@@ -166,4 +204,10 @@ For questions, open an issue in the GitHub repository.
 
 ## Support
 
-For support, please open an issue in the GitHub repository.
+For support:
+- **In-GUI Help**: Press `h` or `?` in GUI.sh to access built-in manuals
+- **Troubleshooting**: See `Manuals/troubleshooting.txt` for common issues
+- **GitHub Issues**: Open an issue with logs and reproduction steps
+- **Documentation**: Check CONTRIBUTING.md and Utilities/_Utilities.md
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.

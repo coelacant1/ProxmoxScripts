@@ -29,7 +29,7 @@
 set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+source "${UTILITYPATH}/Cluster.sh"
 
 ###############################################################################
 # Preliminary Checks

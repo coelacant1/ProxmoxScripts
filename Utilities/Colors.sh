@@ -14,6 +14,21 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__color_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "COLOR"
+    fi
+}
+
 ###############################################################################
 # GLOBALS
 ###############################################################################
@@ -39,6 +54,7 @@ __int_lerp__() {
     local fraction=$3
     local diff=$((end - start))
     local val=$((start + (diff * fraction) / 100))
+    __color_log__ "TRACE" "Lerp: $start -> $end @ $fraction% = $val"
     echo "$val"
 }
 
@@ -67,6 +83,8 @@ __gradient_print__() {
     local G2="$6"
     local B2="$7"
     local excluded_chars="${8:-}"  # string of characters to exclude from coloring
+    
+    __color_log__ "DEBUG" "Printing gradient: RGB($R1,$G1,$B1) -> RGB($R2,$G2,$B2)"
 
     # Read multiline input into an array
     mapfile -t lines <<< "$text"
@@ -145,6 +163,8 @@ __line_gradient__() {
   local R2="$5"
   local G2="$6"
   local B2="$7"
+  
+  __color_log__ "DEBUG" "Line gradient: '$text' RGB($R1,$G1,$B1) -> RGB($R2,$G2,$B2)"
 
   local length=${#text}
 
@@ -186,6 +206,8 @@ __line_rgb__() {
   local R="$2"
   local G="$3"
   local B="$4"
+  
+  __color_log__ "TRACE" "RGB print: '$text' RGB($R,$G,$B)"
 
   echo -e "\033[38;2;${R};${G};${B}m${text}${RESET}"
 }
@@ -205,6 +227,11 @@ __line_rgb__() {
 #   For __simulate_blink_async__ "Blinking" 5 0.3,
 #   the output is "Blinking" toggling between bright and dim (observed asynchronously).
 __simulate_blink_async__() {
+  local text="$1"
+  local times="${2:-5}"
+  local delay="${3:-0.3}"
+  
+  __color_log__ "DEBUG" "Starting async blink: '$text' x$times delay=$delay"
     local text="$1"
     local times="${2:-5}"
     local delay="${3:-0.3}"

@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# ProxmoxAPI.sh
+# Operations.sh
 #
 # Wrapper functions for common Proxmox operations with built-in error handling,
 # validation, and cluster-awareness. Reduces code duplication and provides
 # consistent patterns for VM/CT operations.
 #
 # Usage:
-#   source "${UTILITYPATH}/ProxmoxAPI.sh"
+#   source "${UTILITYPATH}/Operations.sh"
 #
 # Features:
 #   - Cluster-aware operations (automatic node detection)
@@ -54,9 +54,24 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__api_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "API"
+    fi
+}
+
 # Source dependencies
 source "${UTILITYPATH}/ArgumentParser.sh"
-source "${UTILITYPATH}/Queries.sh"
+source "${UTILITYPATH}/Cluster.sh"
 
 ###############################################################################
 # VM Operations
@@ -70,16 +85,25 @@ source "${UTILITYPATH}/Queries.sh"
 # @return 0 if exists, 1 if not
 __vm_exists__() {
     local vmid="$1"
+    
+    __api_log__ "DEBUG" "Checking if VM $vmid exists"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "DEBUG" "Invalid VMID: $vmid"
         return 1
     fi
 
     # Use __get_vm_node__ to check existence
     local node
     node=$(__get_vm_node__ "$vmid" 2>/dev/null)
-
-    [[ -n "$node" ]]
+    
+    if [[ -n "$node" ]]; then
+        __api_log__ "DEBUG" "VM $vmid exists on node $node"
+        return 0
+    else
+        __api_log__ "DEBUG" "VM $vmid does not exist"
+        return 1
+    fi
 }
 
 # --- __vm_get_status__ -------------------------------------------------------
@@ -90,13 +114,17 @@ __vm_exists__() {
 # @return Prints status to stdout, returns 1 on error
 __vm_get_status__() {
     local vmid="$1"
+    
+    __api_log__ "DEBUG" "Getting status for VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
         echo "Error: VM $vmid does not exist" >&2
+        __api_log__ "ERROR" "VM $vmid does not exist"
         return 1
     fi
 
@@ -116,9 +144,21 @@ __vm_get_status__() {
 __vm_is_running__() {
     local vmid="$1"
     local status
+    
+    __api_log__ "DEBUG" "Checking if VM $vmid is running"
 
-    status=$(__vm_get_status__ "$vmid" 2>/dev/null) || return 1
-    [[ "$status" == "running" ]]
+    status=$(__vm_get_status__ "$vmid" 2>/dev/null) || {
+        __api_log__ "ERROR" "Failed to get status for VM $vmid"
+        return 1
+    }
+    
+    if [[ "$status" == "running" ]]; then
+        __api_log__ "DEBUG" "VM $vmid is running"
+        return 0
+    else
+        __api_log__ "DEBUG" "VM $vmid is not running (status: $status)"
+        return 1
+    fi
 }
 
 # --- __vm_start__ ------------------------------------------------------------
@@ -131,29 +171,38 @@ __vm_is_running__() {
 __vm_start__() {
     local vmid="$1"
     shift
+    
+    __api_log__ "INFO" "Starting VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
         echo "Error: VM $vmid does not exist" >&2
+        __api_log__ "ERROR" "VM $vmid does not exist"
         return 1
     fi
 
     # Check if already running
     if __vm_is_running__ "$vmid"; then
         echo "VM $vmid is already running" >&2
+        __api_log__ "DEBUG" "VM $vmid already running"
         return 0
     fi
 
     local node
     node=$(__get_vm_node__ "$vmid")
+    
+    __api_log__ "DEBUG" "Executing: qm start $vmid --node $node $*"
 
     if qm start "$vmid" --node "$node" "$@" 2>/dev/null; then
+        __api_log__ "INFO" "VM $vmid started successfully on node $node"
         return 0
     else
         echo "Error: Failed to start VM $vmid on node $node" >&2
+        __api_log__ "ERROR" "Failed to start VM $vmid on node $node"
         return 1
     fi
 }
@@ -172,16 +221,20 @@ __vm_stop__() {
 
     local timeout=""
     local force=false
+    
+    __api_log__ "INFO" "Stopping VM $vmid"
 
     # Parse options
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --timeout)
                 timeout="$2"
+                __api_log__ "DEBUG" "Using timeout: $timeout seconds"
                 shift 2
                 ;;
             --force)
                 force=true
+                __api_log__ "DEBUG" "Force stop enabled"
                 shift
                 ;;
             *)
@@ -191,30 +244,38 @@ __vm_stop__() {
     done
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
     # Check if already stopped
     if ! __vm_is_running__ "$vmid"; then
+        __api_log__ "INFO" "VM $vmid is already stopped"
         echo "VM $vmid is already stopped" >&2
         return 0
     fi
 
     local node
     node=$(__get_vm_node__ "$vmid")
+    __api_log__ "DEBUG" "VM $vmid is on node: $node"
 
     local cmd="qm stop \"$vmid\" --node \"$node\""
     [[ -n "$timeout" ]] && cmd+=" --timeout \"$timeout\""
     [[ "$force" == true ]] && cmd+=" --force"
+    
+    __api_log__ "DEBUG" "Executing: $cmd"
 
     if eval "$cmd" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully stopped VM $vmid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to stop VM $vmid on node $node"
         echo "Error: Failed to stop VM $vmid on node $node" >&2
         return 1
     fi
@@ -230,22 +291,29 @@ __vm_stop__() {
 __vm_set_config__() {
     local vmid="$1"
     shift
+    
+    __api_log__ "INFO" "Setting configuration for VM $vmid: $*"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
     local node
     node=$(__get_vm_node__ "$vmid")
+    __api_log__ "DEBUG" "Setting config for VM $vmid on node: $node"
 
     if qm set "$vmid" --node "$node" "$@" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set configuration for VM $vmid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to set configuration for VM $vmid"
         echo "Error: Failed to set configuration for VM $vmid" >&2
         return 1
     fi
@@ -261,12 +329,16 @@ __vm_set_config__() {
 __vm_get_config__() {
     local vmid="$1"
     local param="$2"
+    
+    __api_log__ "DEBUG" "Getting config parameter '$param' for VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -274,7 +346,10 @@ __vm_get_config__() {
     local node
     node=$(__get_vm_node__ "$vmid")
 
-    qm config "$vmid" --node "$node" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-
+    local value
+    value=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-)
+    __api_log__ "DEBUG" "VM $vmid config $param: ${value:-<not set>}"
+    echo "$value"
 }
 
 ###############################################################################
@@ -289,12 +364,21 @@ __vm_get_config__() {
 # @return 0 if exists, 1 if not
 __ct_exists__() {
     local ctid="$1"
+    
+    __api_log__ "DEBUG" "Checking if CT $ctid exists"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
-    pct config "$ctid" &>/dev/null
+    if pct config "$ctid" &>/dev/null; then
+        __api_log__ "DEBUG" "CT $ctid exists"
+        return 0
+    else
+        __api_log__ "DEBUG" "CT $ctid does not exist"
+        return 1
+    fi
 }
 
 # --- __ct_get_status__ -------------------------------------------------------
@@ -305,17 +389,24 @@ __ct_exists__() {
 # @return Prints status to stdout, returns 1 on error
 __ct_get_status__() {
     local ctid="$1"
+    
+    __api_log__ "DEBUG" "Getting status for CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
-    pct status "$ctid" 2>/dev/null | awk '/^status:/ {print $2}'
+    local status_output
+    status_output=$(pct status "$ctid" 2>/dev/null | awk '/^status:/ {print $2}')
+    __api_log__ "DEBUG" "CT $ctid status: ${status_output:-<none>}"
+    echo "$status_output"
 }
 
 # --- __ct_is_running__ -------------------------------------------------------
@@ -327,9 +418,21 @@ __ct_get_status__() {
 __ct_is_running__() {
     local ctid="$1"
     local status
+    
+    __api_log__ "DEBUG" "Checking if CT $ctid is running"
 
-    status=$(__ct_get_status__ "$ctid" 2>/dev/null) || return 1
-    [[ "$status" == "running" ]]
+    status=$(__ct_get_status__ "$ctid" 2>/dev/null) || {
+        __api_log__ "ERROR" "Failed to get status for CT $ctid"
+        return 1
+    }
+    
+    if [[ "$status" == "running" ]]; then
+        __api_log__ "DEBUG" "CT $ctid is running"
+        return 0
+    else
+        __api_log__ "DEBUG" "CT $ctid is not running (status: $status)"
+        return 1
+    fi
 }
 
 # --- __ct_start__ ------------------------------------------------------------
@@ -340,24 +443,31 @@ __ct_is_running__() {
 # @return 0 on success, 1 on error
 __ct_start__() {
     local ctid="$1"
+    
+    __api_log__ "INFO" "Starting CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if __ct_is_running__ "$ctid"; then
+        __api_log__ "INFO" "CT $ctid is already running"
         echo "CT $ctid is already running" >&2
         return 0
     fi
 
     if pct start "$ctid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully started CT $ctid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to start CT $ctid"
         echo "Error: Failed to start CT $ctid" >&2
         return 1
     fi
@@ -375,11 +485,14 @@ __ct_stop__() {
     shift
 
     local force=false
+    
+    __api_log__ "INFO" "Stopping CT $ctid"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force)
                 force=true
+                __api_log__ "DEBUG" "Force stop enabled"
                 shift
                 ;;
             *)
@@ -389,25 +502,32 @@ __ct_stop__() {
     done
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __ct_is_running__ "$ctid"; then
+        __api_log__ "INFO" "CT $ctid is already stopped"
         echo "CT $ctid is already stopped" >&2
         return 0
     fi
 
     local cmd="pct stop \"$ctid\""
     [[ "$force" == true ]] && cmd+=" --force"
+    
+    __api_log__ "DEBUG" "Executing: $cmd"
 
     if eval "$cmd" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully stopped CT $ctid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to stop CT $ctid"
         echo "Error: Failed to stop CT $ctid" >&2
         return 1
     fi
@@ -423,19 +543,25 @@ __ct_stop__() {
 __ct_set_config__() {
     local ctid="$1"
     shift
+    
+    __api_log__ "INFO" "Setting configuration for CT $ctid: $*"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if pct set "$ctid" "$@" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set configuration for CT $ctid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to set configuration for CT $ctid"
         echo "Error: Failed to set configuration for CT $ctid" >&2
         return 1
     fi
@@ -451,17 +577,24 @@ __ct_set_config__() {
 __ct_get_config__() {
     local ctid="$1"
     local param="$2"
+    
+    __api_log__ "DEBUG" "Getting config parameter '$param' for CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
-    pct config "$ctid" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-
+    local value
+    value=$(pct config "$ctid" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-)
+    __api_log__ "DEBUG" "CT $ctid config $param: ${value:-<not set>}"
+    echo "$value"
 }
 
 ###############################################################################
@@ -485,7 +618,10 @@ __iterate_vms__() {
     local callback="$3"
     shift 3
 
+    __api_log__ "INFO" "Iterating VMs: range=$start_id-$end_id, callback=$callback"
+
     if ! __validate_vmid_range__ "$start_id" "$end_id"; then
+        __api_log__ "ERROR" "Invalid VMID range"
         return 1
     fi
 
@@ -494,6 +630,7 @@ __iterate_vms__() {
 
     for ((vmid=start_id; vmid<=end_id; vmid++)); do
         if __vm_exists__ "$vmid"; then
+            __api_log__ "DEBUG" "Calling $callback for VM $vmid"
             if "$callback" "$vmid" "$@"; then
                 ((success_count++))
             else
@@ -502,6 +639,7 @@ __iterate_vms__() {
         fi
     done
 
+    __api_log__ "INFO" "Iteration complete: $success_count succeeded, $failed_count failed"
     # Return success only if no failures
     return "$failed_count"
 }
@@ -523,7 +661,10 @@ __iterate_cts__() {
     local callback="$3"
     shift 3
 
+    __api_log__ "INFO" "Iterating CTs: range=$start_id-$end_id, callback=$callback"
+
     if ! __validate_vmid_range__ "$start_id" "$end_id"; then
+        __api_log__ "ERROR" "Invalid CTID range"
         return 1
     fi
 
@@ -532,6 +673,7 @@ __iterate_cts__() {
 
     for ((ctid=start_id; ctid<=end_id; ctid++)); do
         if __ct_exists__ "$ctid"; then
+            __api_log__ "DEBUG" "Calling $callback for CT $ctid"
             if "$callback" "$ctid" "$@"; then
                 ((success_count++))
             else
@@ -540,6 +682,7 @@ __iterate_cts__() {
         fi
     done
 
+    __api_log__ "INFO" "Iteration complete: $success_count succeeded, $failed_count failed"
     # Return success only if no failures
     return "$failed_count"
 }
@@ -582,11 +725,14 @@ __vm_shutdown__() {
     shift
 
     local timeout=60
+    
+    __api_log__ "INFO" "Shutting down VM $vmid"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --timeout)
                 timeout="$2"
+                __api_log__ "DEBUG" "Using timeout: $timeout seconds"
                 shift 2
                 ;;
             *)
@@ -596,25 +742,31 @@ __vm_shutdown__() {
     done
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
     if ! __vm_is_running__ "$vmid"; then
+        __api_log__ "INFO" "VM $vmid is already stopped"
         echo "VM $vmid is already stopped" >&2
         return 0
     fi
 
     local node
     node=$(__get_vm_node__ "$vmid")
+    __api_log__ "DEBUG" "Shutting down VM $vmid on node: $node"
 
     if qm shutdown "$vmid" --node "$node" --timeout "$timeout" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully shut down VM $vmid"
         return 0
     else
+        __api_log__ "ERROR" "Failed to shutdown VM $vmid"
         echo "Error: Failed to shutdown VM $vmid" >&2
         return 1
     fi
@@ -631,11 +783,15 @@ __vm_restart__() {
     local vmid="$1"
     shift
 
+    __api_log__ "INFO" "Restarting VM $vmid"
+
     if ! __vm_shutdown__ "$vmid" "$@"; then
+        __api_log__ "ERROR" "Failed to shutdown VM $vmid for restart"
         return 1
     fi
 
     # Wait a moment for clean shutdown
+    __api_log__ "DEBUG" "Waiting for clean shutdown"
     sleep 2
 
     __vm_start__ "$vmid"
@@ -650,11 +806,15 @@ __vm_restart__() {
 __vm_suspend__() {
     local vmid="$1"
 
+    __api_log__ "INFO" "Suspending VM $vmid"
+
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -663,8 +823,10 @@ __vm_suspend__() {
     node=$(__get_vm_node__ "$vmid")
 
     if qm suspend "$vmid" --node "$node" 2>/dev/null; then
+        __api_log__ "INFO" "VM $vmid suspended successfully"
         return 0
     else
+        __api_log__ "ERROR" "Failed to suspend VM $vmid"
         echo "Error: Failed to suspend VM $vmid" >&2
         return 1
     fi
@@ -679,11 +841,15 @@ __vm_suspend__() {
 __vm_resume__() {
     local vmid="$1"
 
+    __api_log__ "INFO" "Resuming VM $vmid"
+
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -692,8 +858,10 @@ __vm_resume__() {
     node=$(__get_vm_node__ "$vmid")
 
     if qm resume "$vmid" --node "$node" 2>/dev/null; then
+        __api_log__ "INFO" "VM $vmid resumed successfully"
         return 0
     else
+        __api_log__ "ERROR" "Failed to resume VM $vmid"
         echo "Error: Failed to resume VM $vmid" >&2
         return 1
     fi
@@ -708,6 +876,8 @@ __vm_resume__() {
 # @return Prints VM IDs to stdout, one per line
 __vm_list_all__() {
     local filter=""
+    
+    __api_log__ "DEBUG" "Listing all VMs with filter: ${1:-<none>}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -725,11 +895,16 @@ __vm_list_all__() {
         esac
     done
 
+    local vm_list
     if [[ -n "$filter" ]]; then
-        qm list 2>/dev/null | awk -v status="$filter" 'NR>1 && $3==status {print $1}'
+        vm_list=$(qm list 2>/dev/null | awk -v status="$filter" 'NR>1 && $3==status {print $1}')
     else
-        qm list 2>/dev/null | awk 'NR>1 {print $1}'
+        vm_list=$(qm list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
+    
+    local count=$(echo "$vm_list" | grep -c .)
+    __api_log__ "DEBUG" "Found $count VMs matching filter: ${filter:-all}"
+    echo "$vm_list"
 }
 
 # --- __vm_wait_for_status__ --------------------------------------------------
@@ -744,6 +919,8 @@ __vm_wait_for_status__() {
     local vmid="$1"
     local desired_status="$2"
     shift 2
+
+    __api_log__ "DEBUG" "Waiting for VM $vmid to reach status: $desired_status"
 
     local timeout=60
     local interval=2
@@ -761,10 +938,12 @@ __vm_wait_for_status__() {
     done
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -775,6 +954,7 @@ __vm_wait_for_status__() {
         current_status=$(__vm_get_status__ "$vmid" 2>/dev/null)
 
         if [[ "$current_status" == "$desired_status" ]]; then
+            __api_log__ "INFO" "VM $vmid reached status: $desired_status (elapsed: ${elapsed}s)"
             return 0
         fi
 
@@ -782,6 +962,7 @@ __vm_wait_for_status__() {
         ((elapsed += interval))
     done
 
+    __api_log__ "ERROR" "Timeout waiting for VM $vmid to reach status $desired_status after ${timeout}s"
     echo "Error: Timeout waiting for VM $vmid to reach status $desired_status" >&2
     return 1
 }
@@ -801,6 +982,8 @@ __ct_shutdown__() {
     local ctid="$1"
     shift
 
+    __api_log__ "INFO" "Shutting down CT $ctid"
+
     local timeout=60
 
     while [[ $# -gt 0 ]]; do
@@ -816,22 +999,27 @@ __ct_shutdown__() {
     done
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __ct_is_running__ "$ctid"; then
+        __api_log__ "INFO" "CT $ctid is already stopped"
         echo "CT $ctid is already stopped" >&2
         return 0
     fi
 
     if pct shutdown "$ctid" --timeout "$timeout" 2>/dev/null; then
+        __api_log__ "INFO" "CT $ctid shutdown successfully"
         return 0
     else
+        __api_log__ "ERROR" "Failed to shutdown CT $ctid"
         echo "Error: Failed to shutdown CT $ctid" >&2
         return 1
     fi
@@ -846,10 +1034,14 @@ __ct_shutdown__() {
 __ct_restart__() {
     local ctid="$1"
 
+    __api_log__ "INFO" "Restarting CT $ctid"
+
     if ! __ct_shutdown__ "$ctid"; then
+        __api_log__ "ERROR" "Failed to shutdown CT $ctid for restart"
         return 1
     fi
 
+    __api_log__ "DEBUG" "Waiting for clean shutdown"
     sleep 2
 
     __ct_start__ "$ctid"
@@ -864,6 +1056,8 @@ __ct_restart__() {
 # @return Prints CT IDs to stdout, one per line
 __ct_list_all__() {
     local filter=""
+
+    __api_log__ "DEBUG" "Listing all CTs with filter: ${1:-<none>}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -881,11 +1075,16 @@ __ct_list_all__() {
         esac
     done
 
+    local ct_list
     if [[ -n "$filter" ]]; then
-        pct list 2>/dev/null | awk -v status="$filter" 'NR>1 && $2==status {print $1}'
+        ct_list=$(pct list 2>/dev/null | awk -v status="$filter" 'NR>1 && $2==status {print $1}')
     else
-        pct list 2>/dev/null | awk 'NR>1 {print $1}'
+        ct_list=$(pct list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
+    
+    local count=$(echo "$ct_list" | grep -c .)
+    __api_log__ "DEBUG" "Found $count CTs matching filter: ${filter:-all}"
+    echo "$ct_list"
 }
 
 # --- __ct_wait_for_status__ --------------------------------------------------
@@ -900,6 +1099,8 @@ __ct_wait_for_status__() {
     local ctid="$1"
     local desired_status="$2"
     shift 2
+
+    __api_log__ "DEBUG" "Waiting for CT $ctid to reach status: $desired_status"
 
     local timeout=60
     local interval=2
@@ -917,10 +1118,12 @@ __ct_wait_for_status__() {
     done
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
@@ -931,6 +1134,7 @@ __ct_wait_for_status__() {
         current_status=$(__ct_get_status__ "$ctid" 2>/dev/null)
 
         if [[ "$current_status" == "$desired_status" ]]; then
+            __api_log__ "INFO" "CT $ctid reached status: $desired_status (elapsed: ${elapsed}s)"
             return 0
         fi
 
@@ -938,6 +1142,7 @@ __ct_wait_for_status__() {
         ((elapsed += interval))
     done
 
+    __api_log__ "ERROR" "Timeout waiting for CT $ctid to reach status $desired_status after ${timeout}s"
     echo "Error: Timeout waiting for CT $ctid to reach status $desired_status" >&2
     return 1
 }
@@ -953,21 +1158,29 @@ __ct_exec__() {
     local ctid="$1"
     local command="$2"
 
+    __api_log__ "DEBUG" "Executing command in CT $ctid: $command"
+
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
 
     if ! __ct_is_running__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid is not running"
         echo "Error: CT $ctid is not running" >&2
         return 1
     fi
 
     pct exec "$ctid" -- bash -c "$command"
+    local exit_code=$?
+    __api_log__ "DEBUG" "Command execution completed with exit code: $exit_code"
+    return $exit_code
 }
 
 ###############################################################################
@@ -983,11 +1196,15 @@ __ct_exec__() {
 __get_vm_info__() {
     local vmid="$1"
 
+    __api_log__ "DEBUG" "Getting info for VM $vmid"
+
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -1004,6 +1221,8 @@ __get_vm_info__() {
     echo "memory=$(__vm_get_config__ "$vmid" "memory")"
     echo "cores=$(__vm_get_config__ "$vmid" "cores")"
     echo "sockets=$(__vm_get_config__ "$vmid" "sockets")"
+    
+    __api_log__ "DEBUG" "Retrieved info for VM $vmid: node=$node, status=$status"
 }
 
 # --- __get_ct_info__ ---------------------------------------------------------
@@ -1015,11 +1234,15 @@ __get_vm_info__() {
 __get_ct_info__() {
     local ctid="$1"
 
+    __api_log__ "DEBUG" "Getting info for CT $ctid"
+
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
@@ -1032,6 +1255,8 @@ __get_ct_info__() {
     echo "memory=$(__ct_get_config__ "$ctid" "memory")"
     echo "cores=$(__ct_get_config__ "$ctid" "cores")"
     echo "hostname=$(__ct_get_config__ "$ctid" "hostname")"
+    
+    __api_log__ "DEBUG" "Retrieved info for CT $ctid: status=$status"
 }
 
 ###############################################################################
@@ -1052,7 +1277,10 @@ __node_exec__() {
     local node="$1"
     local command="$2"
 
+    __api_log__ "DEBUG" "Executing on node $node: $command"
+
     if [[ -z "$node" || -z "$command" ]]; then
+        __api_log__ "ERROR" "Missing node or command parameter"
         echo "Error: __node_exec__ requires node and command parameters" >&2
         return 1
     fi
@@ -1062,11 +1290,13 @@ __node_exec__() {
 
     # If target node is local, execute directly
     if [[ "$node" == "$local_hostname" ]]; then
+        __api_log__ "DEBUG" "Executing locally on $node"
         eval "$command"
         return $?
     fi
 
     # Remote execution via SSH
+    __api_log__ "DEBUG" "Executing remotely on $node via SSH"
     ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${node}" "$command"
     return $?
 }
@@ -1085,11 +1315,15 @@ __vm_node_exec__() {
     local vmid="$1"
     local command="$2"
 
+    __api_log__ "DEBUG" "Executing command for VM $vmid: $command"
+
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
         return 1
     fi
 
     if ! __vm_exists__ "$vmid"; then
+        __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
@@ -1098,12 +1332,15 @@ __vm_node_exec__() {
     node=$(__get_vm_node__ "$vmid")
 
     if [[ -z "$node" ]]; then
+        __api_log__ "ERROR" "Could not determine node for VM $vmid"
         echo "Error: Could not determine node for VM $vmid" >&2
         return 1
     fi
 
     # Replace {vmid} placeholder in command
     command="${command//\{vmid\}/$vmid}"
+    
+    __api_log__ "DEBUG" "Executing on node $node for VM $vmid"
 
     __node_exec__ "$node" "$command"
 }
@@ -1122,11 +1359,15 @@ __ct_node_exec__() {
     local ctid="$1"
     local command="$2"
 
+    __api_log__ "DEBUG" "Executing command for CT $ctid: $command"
+
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
         return 1
     fi
 
     if ! __ct_exists__ "$ctid"; then
+        __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
@@ -1135,6 +1376,7 @@ __ct_node_exec__() {
     node=$(__get_vm_node__ "$ctid")  # Works for CTs too
 
     if [[ -z "$node" ]]; then
+        __api_log__ "ERROR" "Could not determine node for CT $ctid"
         echo "Error: Could not determine node for CT $ctid" >&2
         return 1
     fi
@@ -1142,6 +1384,7 @@ __ct_node_exec__() {
     # Replace {ctid} placeholder in command
     command="${command//\{ctid\}/$ctid}"
 
+    __api_log__ "DEBUG" "Executing on node $node for CT $ctid"
     __node_exec__ "$node" "$command"
 }
 
@@ -1159,16 +1402,22 @@ __pve_exec__() {
     local id="$1"
     local command="$2"
 
+    __api_log__ "DEBUG" "Executing Proxmox command for ID $id: $command"
+
     if ! __validate_numeric__ "$id" "VM/CT ID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VM/CT ID: $id"
         return 1
     fi
 
     # Determine if it's a VM or CT
     if __vm_exists__ "$id"; then
+        __api_log__ "DEBUG" "ID $id is a VM, routing to __vm_node_exec__"
         __vm_node_exec__ "$id" "$command"
     elif __ct_exists__ "$id"; then
+        __api_log__ "DEBUG" "ID $id is a CT, routing to __ct_node_exec__"
         __ct_node_exec__ "$id" "$command"
     else
+        __api_log__ "ERROR" "VM/CT $id does not exist"
         echo "Error: VM/CT $id does not exist" >&2
         return 1
     fi

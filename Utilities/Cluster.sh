@@ -1,42 +1,63 @@
 #!/bin/bash
 #
-# Queries.sh
+# Cluster.sh
 #
-# This script provides functions for prompting users, querying node/cluster
-# information, and other utility tasks on Proxmox or Debian systems.
+# Proxmox Cluster Topology and Node Resolution Utilities
+# Provides functions for cluster membership, node queries, VM/CT listing, and validation
+#
+# Note: IP discovery functions have been moved to Discovery.sh
+#   - get_ip_from_vmid → Discovery.sh
+#   - __get_ip_from_guest_agent__ → Discovery.sh  
+#   - __get_ip_from_name__ → Discovery.sh
+#   - __get_name_from_ip__ → Discovery.sh
+#
+# Dependencies:
+#   - Logger.sh (for logging)
+#   - API.sh (for VM/CT operations)
 #
 # Usage:
-#   source "./Queries.sh"
-#
-# Generally, this script is meant to be sourced by other scripts rather than
-# run directly. For example:
-#   source ./Queries.sh
-#   readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
+#   source "${UTILITYPATH}/Cluster.sh"
 #
 # Function Index:
+#   Cluster Topology:
 #   - __get_remote_node_ips__
 #   - __check_cluster_membership__
 #   - __get_number_of_cluster_nodes__
 #   - __init_node_mappings__
-#   - __get_ip_from_name__
-#   - __get_name_from_ip__
+#   
+#   VM/CT Listing:
 #   - __get_cluster_lxc__
 #   - __get_server_lxc__
 #   - __get_cluster_vms__
 #   - __get_server_vms__
 #   - __get_vm_node__
+#   
+#   Node Resolution:
 #   - __resolve_node_name__
+#   
+#   Validation:
 #   - __validate_vm_id_range__
-#   - __get_ip_from_vmid__
-#   - __get_ip_from_guest_agent__
 #   - __validate_vmid__
 #   - __check_vm_status__
 #   - __validate_ctid__
 #   - __check_ct_status__
-#   - __is_local_ip__
-#
 
 set -euo pipefail
+
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__query_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "QUERY"
+    fi
+}
 
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -63,11 +84,13 @@ MAPPINGS_INITIALIZED=0
 #   192.168.1.2
 #   192.168.1.3
 __get_remote_node_ips__() {
+    __query_log__ "DEBUG" "Getting remote node IPs from cluster"
     local -a remote_nodes=()
     while IFS= read -r ip; do
         remote_nodes+=("$ip")
     done < <(pvecm status | awk '/^0x/ && !/\(local\)/ {print $3}')
 
+    __query_log__ "DEBUG" "Found ${#remote_nodes[@]} remote node(s)"
     for node_ip in "${remote_nodes[@]}"; do
         echo "$node_ip"
     done
@@ -82,13 +105,16 @@ __get_remote_node_ips__() {
 # @example_output If the node is in a cluster, the output is:
 #   Node is in a cluster named: MyClusterName
 __check_cluster_membership__() {
+    __query_log__ "DEBUG" "Checking cluster membership"
     local cluster_name
     cluster_name=$(pvecm status 2>/dev/null | awk -F': ' '/^Name:/ {print $2}' | xargs)
 
     if [[ -z "$cluster_name" ]]; then
+        __query_log__ "ERROR" "Node is not recognized as part of a cluster"
         echo "Error: This node is not recognized as part of a cluster by pvecm."
         exit 3
     else
+        __query_log__ "INFO" "Node is in cluster: $cluster_name"
         echo "Node is in a cluster named: $cluster_name"
     fi
 }
@@ -101,7 +127,11 @@ __check_cluster_membership__() {
 # @example_output If there are 3 nodes in the cluster, the output is:
 #   3
 __get_number_of_cluster_nodes__() {
-    echo "$(pvecm nodes | awk '/^[[:space:]]*[0-9]/ {count++} END {print count}')"
+    __query_log__ "DEBUG" "Counting cluster nodes"
+    local node_count
+    node_count=$(pvecm nodes | awk '/^[[:space:]]*[0-9]/ {count++} END {print count}')
+    __query_log__ "DEBUG" "Found $node_count node(s) in cluster"
+    echo "$node_count"
 }
 
 # --- __init_node_mappings__ ------------------------------------------------------------
@@ -113,6 +143,7 @@ __get_number_of_cluster_nodes__() {
 # @return Populates the associative arrays with node information.
 # @example_output No direct output; internal mappings are initialized for later queries.
 __init_node_mappings__() {
+    __query_log__ "DEBUG" "Initializing node mappings"
     # Reset the arrays.
     NODEID_TO_IP=()
     NODEID_TO_NAME=()
@@ -158,72 +189,12 @@ __init_node_mappings__() {
         if [[ -n "$name" && -n "$ip" ]]; then
             NAME_TO_IP["$name"]="$ip"
             IP_TO_NAME["$ip"]="$name"
+            __query_log__ "TRACE" "Mapped node: $name -> $ip"
         fi
     done
 
     MAPPINGS_INITIALIZED=1
-}
-
-# --- __get_ip_from_name__ ------------------------------------------------------------
-# @function __get_ip_from_name__
-# @description Given a node’s name (e.g., "pve01"), prints its link0 IP address.
-#   Exits if not found.
-# @usage __get_ip_from_name__ "pve03"
-# @param 1 The node name.
-# @return Prints the IP to stdout or exits 1 if not found.
-# @example_output For __get_ip_from_name__ "pve03", the output is:
-#   192.168.83.23
-__get_ip_from_name__() {
-    local node_name
-    node_name=$(echo "$1" | xargs)
-    if [[ -z "$node_name" ]]; then
-        echo "Error: __get_ip_from_name__ requires a node name argument." >&2
-        return 1
-    fi
-
-    # Ensure that the node mappings are initialized.
-    if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
-        __init_node_mappings__
-    fi
-
-    local ip="${NAME_TO_IP[$node_name]}"
-    if [[ -z "$ip" ]]; then
-        echo "Error: Could not find IP for node name '$node_name'." >&2
-        return 1
-    fi
-
-    echo "$ip"
-}
-
-# --- __get_name_from_ip__ ------------------------------------------------------------
-# @function __get_name_from_ip__
-# @description Given a node’s link0 IP (e.g., "172.20.83.23"), prints its name.
-#   Exits if not found.
-# @usage __get_name_from_ip__ "172.20.83.23"
-# @param 1 The node IP.
-# @return Prints the node name to stdout or exits 1 if not found.
-# @example_output For __get_name_from_ip__ "172.20.83.23", the output is:
-#   pve03
-__get_name_from_ip__() {
-    local node_ip
-    node_ip=$(echo "$1" | xargs)
-    if [[ -z "$node_ip" ]]; then
-        echo "Error: __get_name_from_ip__ requires an IP argument." >&2
-        return 1
-    fi
-
-    # Initialize mappings if needed.
-    if [[ "$MAPPINGS_INITIALIZED" -eq 0 ]]; then
-        __init_node_mappings__
-    fi
-
-    local name="${IP_TO_NAME[$node_ip]}"
-    if [[ -z "$name" ]]; then
-        echo "Error: Could not find node name for IP '$node_ip'." >&2
-        return 1
-    fi
-
-    echo "$name"
+    __query_log__ "INFO" "Node mappings initialized: ${#NAME_TO_IP[@]} nodes"
 }
 
 # --- __get_cluster_lxc__ ------------------------------------------------------------
@@ -235,8 +206,13 @@ __get_name_from_ip__() {
 #   101
 #   102
 __get_cluster_lxc__() {
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r '.[] | select(.type=="lxc") | .vmid'
+    __query_log__ "DEBUG" "Retrieving cluster LXC containers"
+    local lxc_list
+    lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r '.[] | select(.type=="lxc") | .vmid')
+    local count=$(echo "$lxc_list" | grep -c '^' || echo 0)
+    __query_log__ "DEBUG" "Found $count LXC containers in cluster"
+    echo "$lxc_list"
 }
 
 # --- __get_server_lxc__ ------------------------------------------------------------
@@ -252,6 +228,8 @@ __get_cluster_lxc__() {
 __get_server_lxc__() {
     local nodeSpec="$1"
     local nodeName
+    
+    __query_log__ "DEBUG" "Retrieving LXC containers for node: $nodeSpec"
 
     if [[ "$nodeSpec" == "local" ]]; then
         nodeName="$(hostname -s)"
@@ -262,13 +240,20 @@ __get_server_lxc__() {
     fi
 
     if [[ -z "$nodeName" ]]; then
+        __query_log__ "ERROR" "Unable to determine node name for: $nodeSpec"
         echo "Error: Unable to determine node name for '$nodeSpec'." >&2
         return 1
     fi
+    
+    __query_log__ "DEBUG" "Resolved node name: $nodeName"
 
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+    local lxc_list
+    lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
         jq -r --arg NODENAME "$nodeName" \
-            '.[] | select(.type=="lxc" and .node==$NODENAME) | .vmid'
+            '.[] | select(.type=="lxc" and .node==$NODENAME) | .vmid')
+    local count=$(echo "$lxc_list" | grep -c '^' || echo 0)
+    __query_log__ "DEBUG" "Found $count LXC containers on $nodeName"
+    echo "$lxc_list"
 }
 
 # --- __get_cluster_vms__ ------------------------------------------------------------
@@ -280,9 +265,14 @@ __get_server_lxc__() {
 #   301
 #   302
 __get_cluster_vms__() {
+    __query_log__ "DEBUG" "Retrieving cluster QEMU VMs"
     __install_or_prompt__ "jq"
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r '.[] | select(.type=="qemu") | .vmid'
+    local vm_list
+    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+        jq -r '.[] | select(.type=="qemu") | .vmid')
+    local count=$(echo "$vm_list" | grep -c '^' || echo 0)
+    __query_log__ "DEBUG" "Found $count QEMU VMs in cluster"
+    echo "$vm_list"
 }
 
 # --- __get_server_vms__ ------------------------------------------------------------
@@ -298,6 +288,8 @@ __get_cluster_vms__() {
 __get_server_vms__() {
     local nodeSpec="$1"
     local nodeName
+    
+    __query_log__ "DEBUG" "Retrieving QEMU VMs for node: $nodeSpec"
 
     if [[ "$nodeSpec" == "local" ]]; then
         nodeName="$(hostname -s)"
@@ -308,13 +300,20 @@ __get_server_vms__() {
     fi
 
     if [[ -z "$nodeName" ]]; then
+        __query_log__ "ERROR" "Unable to determine node name for: $nodeSpec"
         echo "Error: Unable to determine node name for '$nodeSpec'." >&2
         return 1
     fi
+    
+    __query_log__ "DEBUG" "Resolved node name: $nodeName"
 
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
+    local vm_list
+    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
         jq -r --arg NODENAME "$nodeName" \
-            '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid'
+            '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid')
+    local count=$(echo "$vm_list" | grep -c '^' || echo 0)
+    __query_log__ "DEBUG" "Found $count QEMU VMs on $nodeName"
+    echo "$vm_list"
 }
 
 # --- __get_vm_node__ ---------------------------------------------------------
@@ -328,15 +327,27 @@ __get_server_vms__() {
 #   pve01
 __get_vm_node__() {
     local vmid="$1"
+    __query_log__ "TRACE" "Getting node for VM: $vmid"
+    
     if [[ -z "$vmid" ]]; then
+        __query_log__ "ERROR" "No VMID provided"
         echo "Error: __get_vm_node__ requires a VMID argument." >&2
         return 1
     fi
 
     __install_or_prompt__ "jq"
 
-    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
-        jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true
+    local node
+    node=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
+        jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true)
+    
+    if [[ -n "$node" ]]; then
+        __query_log__ "DEBUG" "VM $vmid is on node: $node"
+    else
+        __query_log__ "WARN" "VM $vmid not found in cluster"
+    fi
+    
+    echo "$node"
 }
 
 # --- __resolve_node_name__ ---------------------------------------------------
@@ -353,22 +364,28 @@ __get_vm_node__() {
 __resolve_node_name__() {
     local node_spec="$1"
     local node_name
+    
+    __query_log__ "TRACE" "Resolving node spec: $node_spec"
 
     if [[ -z "$node_spec" ]]; then
+        __query_log__ "ERROR" "No node specification provided"
         echo "Error: __resolve_node_name__ requires a node specification argument." >&2
         return 1
     fi
 
     if [[ "$node_spec" == "local" ]]; then
         node_name="$(hostname -s)"
+        __query_log__ "DEBUG" "Resolved 'local' to: $node_name"
     elif [[ "$node_spec" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         node_name="$(__get_name_from_ip__ "$node_spec")"
         if [[ -z "$node_name" ]]; then
+            __query_log__ "ERROR" "Unable to resolve IP to node name: $node_spec"
             echo "Error: Unable to resolve node name from IP: ${node_spec}" >&2
             return 1
         fi
     else
         node_name="$node_spec"
+        __query_log__ "DEBUG" "Using node spec as-is: $node_name"
     fi
 
     echo "$node_name"
@@ -385,327 +402,29 @@ __resolve_node_name__() {
 __validate_vm_id_range__() {
     local start_id="$1"
     local end_id="$2"
+    
+    __query_log__ "TRACE" "Validating VM ID range: $start_id to $end_id"
 
     if [[ -z "$start_id" ]] || [[ -z "$end_id" ]]; then
+        __query_log__ "ERROR" "Missing start or end VM ID"
         echo "Error: __validate_vm_id_range__ requires start and end VM IDs." >&2
         return 1
     fi
 
     if ! [[ "$start_id" =~ ^[0-9]+$ ]] || ! [[ "$end_id" =~ ^[0-9]+$ ]]; then
+        __query_log__ "ERROR" "Non-numeric VM IDs: start=$start_id, end=$end_id"
         echo "Error: VM IDs must be numeric (got start='$start_id', end='$end_id')." >&2
         return 1
     fi
 
     if (( start_id > end_id )); then
+        __query_log__ "ERROR" "Invalid range: start ($start_id) > end ($end_id)"
         echo "Error: Start VM ID must be less than or equal to end VM ID (got start=$start_id, end=$end_id)." >&2
         return 1
     fi
-
+    
+    __query_log__ "DEBUG" "VM ID range validated: $start_id-$end_id"
     return 0
-}
-
-# --- get_ip_from_vmid ------------------------------------------------------------
-# @function get_ip_from_vmid
-# @description Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).
-#   Prints the IP if found.
-# @usage get_ip_from_vmid 100
-# @param 1 The VMID.
-# @return Prints the discovered IP or exits 1 if not found.
-# @example_output For get_ip_from_vmid 100, the output might be:
-#   192.168.1.100
-__get_ip_from_vmid__() {
-    local vmid="$1"
-    if [[ -z "$vmid" ]]; then
-        echo "Error: get_ip_from_vmid requires a VMID argument." >&2
-        return 1
-    fi
-
-    #
-    # Check whether the VMID belongs to an LXC container or a QEMU VM.
-    # (This example assumes that container configs live in /etc/pve/lxc/ and
-    # QEMU configs in /etc/pve/qemu-server/.)
-    #
-    if [ -f "/etc/pve/lxc/${vmid}.conf" ]; then
-        # --- LXC CONTAINER -------------------------------------------------
-        echo "Detected LXC container VMID '$vmid'..." >&2
-
-        # 1) Try to get the IP by executing 'hostname -I' inside the container.
-        local guest_ip
-        guest_ip=$(pct exec "$vmid" -- hostname -I 2>/dev/null |
-            awk '{ for(i=1;i<=NF;i++) { if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i != "127.0.0.1") { print $i; exit } } }')
-        if [[ -n "$guest_ip" ]]; then
-            echo "$guest_ip"
-            return 0
-        fi
-
-        echo " - Unable to retrieve IP from container via hostname -I. Falling back to ARP scan..." >&2
-
-        # 2) Retrieve MAC address from container configuration (net0)
-        local mac
-        mac=$(pct config "$vmid" |
-            grep -E '^net[0-9]+:' |
-            grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}')
-        if [[ -z "$mac" ]]; then
-            echo "Error: Could not retrieve net0 MAC address for container VMID '$vmid'." >&2
-            return 1
-        fi
-
-        # 3) Determine the bridge from container config
-        local bridge
-        bridge=$(pct config "$vmid" |
-            grep -E '^net[0-9]+:' |
-            grep -oP 'bridge=\K[^,]+')
-        if [[ -z "$bridge" ]]; then
-            echo "Error: Could not determine which bridge interface is used by container VMID '$vmid'." >&2
-            return 1
-        fi
-
-        # 4) Check whether the host’s bridge has an IP address.
-        local interface_ip
-        interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)
-
-        local subnet_to_scan
-        if [[ -z "$interface_ip" ]]; then
-            if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
-                subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
-                echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'" >&2
-            else
-                read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
-                BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
-            fi
-        else
-            subnet_to_scan="--localnet"
-        fi
-
-        # 5) Run arp-scan on the determined subnet to find the matching MAC address.
-        local scannedIp
-        if [[ "$subnet_to_scan" == "--localnet" ]]; then
-            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
-        else
-            local base_ip
-            base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
-            base_ip="${base_ip%.*}.1"
-            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
-        fi
-
-        if [[ -z "$scannedIp" ]]; then
-            echo "Error: Could not find an IP for container VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
-            return 1
-        fi
-
-        echo "$scannedIp"
-        return 0
-    elif [ -f "/etc/pve/qemu-server/${vmid}.conf" ]; then
-        # --- QEMU VM --------------------------------------------------------
-        echo "Detected QEMU VM VMID '$vmid'..." >&2
-
-        # 1) Retrieve MAC address from net0
-        local mac
-        mac=$(
-            qm config "$vmid" |
-                grep -E '^net[0-9]+:' |
-                grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
-        )
-        if [[ -z "$mac" ]]; then
-            echo "Error: Could not retrieve net0 MAC address for VMID '$vmid'." >&2
-            return 1
-        fi
-
-        # 2) Try to retrieve IP via QEMU Guest Agent: network-get-interfaces
-        local guest_ip
-        guest_ip=$(
-            qm guest cmd "$vmid" network-get-interfaces 2>/dev/null |
-                jq -r --arg mac "$mac" '
-                .[]
-                | select((.["hardware-address"] // "")
-                         | ascii_downcase == ($mac | ascii_downcase))
-                | .["ip-addresses"][]?
-                | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
-                | .["ip-address"]
-            ' |
-                head -n1
-        )
-        if [[ -n "$guest_ip" && "$guest_ip" != "null" ]]; then
-            echo "$guest_ip"
-            return 0
-        fi
-
-        echo " - Unable to retrieve IP via guest agent. Falling back to ARP scan..." >&2
-
-        # 3) Identify the bridge from net0 config
-        local bridge
-        bridge=$(
-            qm config "$vmid" |
-                grep -E '^net[0-9]+:' |
-                grep -oP 'bridge=\K[^,]+'
-        )
-        if [[ -z "$bridge" ]]; then
-            echo "Error: Could not determine which bridge interface is used by VMID '$vmid'." >&2
-            return 1
-        fi
-
-        # 4) Check if the bridge has an IP address on the host
-        local interface_ip
-        interface_ip=$(ip -o -4 addr show dev "$bridge" | awk '{print $4}' | head -n1)
-
-        local subnet_to_scan
-        if [[ -z "$interface_ip" ]]; then
-            if [[ -n "${BRIDGE_SUBNET_CACHE[$bridge]}" ]]; then
-                subnet_to_scan="${BRIDGE_SUBNET_CACHE[$bridge]}"
-                echo " - Using cached subnet '$subnet_to_scan' for bridge '$bridge'" >&2
-            else
-                read -r -p "Bridge '$bridge' has no IP. Enter the subnet to scan (e.g. 192.168.13.0/24): " subnet_to_scan
-                BRIDGE_SUBNET_CACHE[$bridge]="$subnet_to_scan"
-            fi
-        else
-            subnet_to_scan="--localnet"
-        fi
-
-        # 5) Run arp-scan on the determined subnet to find the matching MAC address.
-        local scannedIp
-        if [[ "$subnet_to_scan" == "--localnet" ]]; then
-            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
-        else
-            local base_ip
-            base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
-            base_ip="${base_ip%.*}.1"
-            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
-        fi
-
-        if [[ -z "$scannedIp" ]]; then
-            echo "Error: Could not find an IP for VMID '$vmid' with MAC '$mac' on bridge '$bridge'." >&2
-            return 1
-        fi
-
-        echo "$scannedIp"
-        return 0
-
-    else
-        echo "Error: VMID '$vmid' not found in LXC or QEMU configurations." >&2
-        return 1
-    fi
-}
-
-# --- __get_ip_from_guest_agent__ -------------------------------------------
-# @function __get_ip_from_guest_agent__
-# @description Attempts to retrieve the first non-loopback IP address reported by the QEMU guest agent for a VM.
-# @usage __get_ip_from_guest_agent__ --vmid <vmid> [--retries <count>] [--delay <seconds>] [--ip-family <ipv4|ipv6>] [--include-loopback] [--allow-link-local]
-# @flags
-#   --vmid <vmid>             Target VMID (required).
-#   --retries <count>         Number of attempts to query the guest agent (default: 30).
-#   --delay <seconds>         Delay between attempts (default: 2 seconds).
-#   --ip-family <family>      IP family to return: ipv4 (default) or ipv6.
-#   --include-loopback        Include loopback interfaces (default excludes them).
-#   --allow-link-local        Allow link-local IPv6 addresses (default skips fe80::/10).
-# @return Prints the discovered IP on success; exits with status 1 otherwise.
-# @example __get_ip_from_guest_agent__ --vmid 105 --retries 60 --delay 5
-__get_ip_from_guest_agent__() {
-    local vmid=""
-    local retries=30
-    local delaySeconds=2
-    local ipFamily="ipv4"
-    local includeLoopback=0
-    local allowLinkLocal=0
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            --vmid)
-                vmid="$2"
-                shift 2
-                ;;
-            --retries)
-                retries="$2"
-                shift 2
-                ;;
-            --delay)
-                delaySeconds="$2"
-                shift 2
-                ;;
-            --ip-family)
-                ipFamily="$2"
-                shift 2
-                ;;
-            --ipv6)
-                ipFamily="ipv6"
-                shift
-                ;;
-            --include-loopback)
-                includeLoopback=1
-                shift
-                ;;
-            --allow-link-local)
-                allowLinkLocal=1
-                shift
-                ;;
-            --)
-                shift
-                ;;
-            *)
-                echo "Error: Unknown option '$1' passed to __get_ip_from_guest_agent__." >&2
-                return 1
-                ;;
-        esac
-    done
-
-    if [[ -z "$vmid" ]]; then
-        echo "Error: __get_ip_from_guest_agent__ requires --vmid." >&2
-        return 1
-    fi
-
-    if [[ "$ipFamily" != "ipv4" && "$ipFamily" != "ipv6" ]]; then
-        echo "Error: __get_ip_from_guest_agent__ --ip-family must be 'ipv4' or 'ipv6'." >&2
-        return 1
-    fi
-
-    local attempt
-    for ((attempt = 1; attempt <= retries; attempt++)); do
-        if ! qm agent "$vmid" ping >/dev/null 2>&1; then
-            sleep "$delaySeconds"
-            continue
-        fi
-
-        local json
-        json=$(qm agent "$vmid" network-get-interfaces 2>/dev/null)
-        if [[ -z "$json" || "$json" == "null" ]]; then
-            sleep "$delaySeconds"
-            continue
-        fi
-
-        local ip
-        ip=$(echo "$json" | jq -r \
-            --arg family "$ipFamily" \
-            --argjson includeLoopback "$includeLoopback" \
-            --argjson allowLinkLocal "$allowLinkLocal" \
-            '
-            .[]
-            | select($includeLoopback == 1 or .name != "lo")
-            | .["ip-addresses"][]?
-            | select(. ["ip-address-type"] == $family)
-            | select(
-                $family != "ipv6"
-                or $allowLinkLocal == 1
-                or (. ["ip-address"] | startswith("fe80") | not)
-            )
-            | .["ip-address"]
-            ' | head -n1)
-
-        if [[ -n "$ip" && "$ip" != "null" ]]; then
-            echo "$ip"
-            return 0
-        fi
-
-        sleep "$delaySeconds"
-    done
-
-    return 1
 }
 
 # --- __validate_vmid__ -------------------------------------------------------
@@ -720,30 +439,37 @@ __get_ip_from_guest_agent__() {
 __validate_vmid__() {
     local vmid="$1"
 
+    __query_log__ "TRACE" "Validating VMID: ${vmid:-<empty>}"
+
     if [[ -z "$vmid" ]]; then
+        __query_log__ "ERROR" "VMID validation failed: VMID is required"
         echo "Error: VMID is required" >&2
         return 1
     fi
 
     # Validate VMID is numeric
     if ! [[ "$vmid" =~ ^[0-9]+$ ]]; then
+        __query_log__ "ERROR" "VMID validation failed: '$vmid' is not numeric"
         echo "Error: Invalid VMID '${vmid}' - must be numeric" >&2
         return 1
     fi
 
     # Check if it's a VM
     if qm status "$vmid" &>/dev/null; then
+        __query_log__ "DEBUG" "VMID $vmid validated successfully (is a VM)"
         return 0
     fi
 
     # Check if it's a container (not valid for this function)
     if pct status "$vmid" &>/dev/null; then
+        __query_log__ "WARN" "VMID $vmid is a container, not a VM"
         echo "Error: VMID ${vmid} is a container, not a VM" >&2
         echo "Use __validate_ctid__ for containers" >&2
         return 1
     fi
 
     # VMID doesn't exist
+    __query_log__ "ERROR" "VMID $vmid not found in system"
     echo "Error: VMID ${vmid} not found" >&2
     return 1
 }
@@ -761,6 +487,8 @@ __validate_vmid__() {
 __check_vm_status__() {
     local vmid="$1"
     shift
+    
+    __query_log__ "TRACE" "Checking VM status: $vmid"
 
     local should_stop=false
     local force_stop=false
@@ -784,30 +512,37 @@ __check_vm_status__() {
 
     local status
     status=$(qm status "$vmid" 2>/dev/null | awk '{print $2}')
+    __query_log__ "DEBUG" "VM $vmid status: $status"
 
     if [[ "$status" != "running" ]]; then
+        __query_log__ "DEBUG" "VM $vmid is not running"
         return 0
     fi
 
     # VM is running
     if ! $should_stop; then
+        __query_log__ "WARN" "VM $vmid is running (no --stop flag)"
         echo "Warning: VM ${vmid} is running" >&2
         return 1
     fi
 
     # Should stop - check if we need confirmation
     if ! $force_stop; then
+        __query_log__ "INFO" "Prompting user to stop VM $vmid"
         echo "VM ${vmid} is currently running and must be stopped" >&2
         read -p "Stop VM ${vmid} now? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            __query_log__ "INFO" "User declined to stop VM $vmid"
             echo "Operation cancelled" >&2
             return 1
         fi
     fi
 
     # Stop the VM
+    __query_log__ "INFO" "Stopping VM $vmid"
     if ! qm stop "$vmid" 2>&1; then
+        __query_log__ "ERROR" "Failed to stop VM $vmid"
         echo "Error: Failed to stop VM ${vmid}" >&2
         return 1
     fi
@@ -818,11 +553,13 @@ __check_vm_status__() {
         sleep 2
         wait_count=$((wait_count + 1))
         if [[ $wait_count -gt 30 ]]; then
+            __query_log__ "ERROR" "Timeout waiting for VM $vmid to stop"
             echo "Error: Timeout waiting for VM ${vmid} to stop" >&2
             return 1
         fi
     done
-
+    
+    __query_log__ "INFO" "VM $vmid stopped successfully"
     return 0
 }
 
@@ -838,30 +575,37 @@ __check_vm_status__() {
 __validate_ctid__() {
     local ctid="$1"
 
+    __query_log__ "TRACE" "Validating CTID: ${ctid:-<empty>}"
+
     if [[ -z "$ctid" ]]; then
+        __query_log__ "ERROR" "CTID validation failed: CTID is required"
         echo "Error: CTID is required" >&2
         return 1
     fi
 
     # Validate CTID is numeric
     if ! [[ "$ctid" =~ ^[0-9]+$ ]]; then
+        __query_log__ "ERROR" "CTID validation failed: '$ctid' is not numeric"
         echo "Error: Invalid CTID '${ctid}' - must be numeric" >&2
         return 1
     fi
 
     # Check if it's a container
     if pct status "$ctid" &>/dev/null; then
+        __query_log__ "DEBUG" "CTID $ctid validated successfully (is a container)"
         return 0
     fi
 
     # Check if it's a VM (not valid for this function)
     if qm status "$ctid" &>/dev/null; then
+        __query_log__ "WARN" "CTID $ctid is a VM, not a container"
         echo "Error: CTID ${ctid} is a VM, not a container" >&2
         echo "Use __validate_vmid__ for VMs" >&2
         return 1
     fi
 
     # CTID doesn't exist
+    __query_log__ "ERROR" "CTID $ctid not found in system"
     echo "Error: CTID ${ctid} not found" >&2
     return 1
 }
@@ -879,6 +623,8 @@ __validate_ctid__() {
 __check_ct_status__() {
     local ctid="$1"
     shift
+    
+    __query_log__ "TRACE" "Checking container status: $ctid"
 
     local should_stop=false
     local force_stop=false
@@ -902,30 +648,37 @@ __check_ct_status__() {
 
     local status
     status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}')
+    __query_log__ "DEBUG" "Container $ctid status: $status"
 
     if [[ "$status" != "running" ]]; then
+        __query_log__ "DEBUG" "Container $ctid is not running"
         return 0
     fi
 
     # Container is running
     if ! $should_stop; then
+        __query_log__ "WARN" "Container $ctid is running (no --stop flag)"
         echo "Warning: Container ${ctid} is running" >&2
         return 1
     fi
 
     # Should stop - check if we need confirmation
     if ! $force_stop; then
+        __query_log__ "INFO" "Prompting user to stop container $ctid"
         echo "Container ${ctid} is currently running and must be stopped" >&2
         read -p "Stop container ${ctid} now? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            __query_log__ "INFO" "User declined to stop container $ctid"
             echo "Operation cancelled" >&2
             return 1
         fi
     fi
 
     # Stop the container
+    __query_log__ "INFO" "Stopping container $ctid"
     if ! pct stop "$ctid" 2>&1; then
+        __query_log__ "ERROR" "Failed to stop container $ctid"
         echo "Error: Failed to stop container ${ctid}" >&2
         return 1
     fi
@@ -936,11 +689,13 @@ __check_ct_status__() {
         sleep 2
         wait_count=$((wait_count + 1))
         if [[ $wait_count -gt 30 ]]; then
+            __query_log__ "ERROR" "Timeout waiting for container $ctid to stop"
             echo "Error: Timeout waiting for container ${ctid} to stop" >&2
             return 1
         fi
     done
-
+    
+    __query_log__ "INFO" "Container $ctid stopped successfully"
     return 0
 }
 
@@ -961,14 +716,18 @@ __check_ct_status__() {
 __is_local_ip__() {
     local ip_to_check="$1"
     local local_ips ip
+    
+    __query_log__ "TRACE" "Checking if IP is local: $ip_to_check"
 
     local_ips=$(hostname -I)
 
     for ip in $local_ips; do
         if [[ "$ip" == "$ip_to_check" ]]; then
+            __query_log__ "DEBUG" "IP $ip_to_check is local"
             return 0
         fi
     done
-
+    
+    __query_log__ "DEBUG" "IP $ip_to_check is not local"
     return 1
 }

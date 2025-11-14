@@ -19,7 +19,7 @@
 #
 # Notes:
 #   - Must be run as root on the outer Proxmox host.
-#   - Requires guest IP resolvable via __get_ip_from_vmid__ from Queries.sh.
+#   - Requires guest IP resolvable via __get_ip_from_vmid__ from Cluster.sh.
 #   - SSH password authentication used for simplicity (adapt to keys if desired).
 #   - Only modifies nested QEMU VM configs by clearing ISO from IDE/SCSI cdrom.
 #
@@ -36,8 +36,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
 

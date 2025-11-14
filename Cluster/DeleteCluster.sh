@@ -6,10 +6,11 @@
 # returning the node to standalone mode.
 #
 # Usage:
-#   DeleteCluster.sh
+#   DeleteCluster.sh [--force]
 #
 # Examples:
 #   DeleteCluster.sh
+#   DeleteCluster.sh --force    # Skip confirmation
 #
 # Function Index:
 #   - main
@@ -24,15 +25,42 @@ source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# Parse --force flag
+FORCE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)
+            FORCE=1
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: DeleteCluster.sh [--force]"
+            exit 64
+            ;;
+    esac
+done
+
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
 
-    __warn__ "This will remove cluster configuration from this node"
-    __warn__ "This is DESTRUCTIVE and cannot be undone"
+    __warn__ "DESTRUCTIVE: This will remove cluster configuration from this node"
+    __warn__ "This operation cannot be undone"
+    
+    # Safety check: Require --force in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: DeleteCluster.sh --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
+    fi
 
-    if ! __prompt_yes_no__ "Proceed with cluster removal?"; then
+    # Prompt for confirmation (unless force is set)
+    if [[ $FORCE -eq 1 ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Proceed with cluster removal?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

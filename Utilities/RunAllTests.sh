@@ -28,12 +28,12 @@ TEST_FILES=(
     "_TestCommunication.sh"
     "_TestConversion.sh"
     "_TestPrompts.sh"
-    "_TestQueries.sh"
+    "_TestCluster.sh"
     "_TestSSH.sh"
-    "_TestProxmoxAPI.sh"
+    "_TestOperations.sh"
     "_TestBulkOperations.sh"
     "_TestStateManager.sh"
-    "_TestNetworkHelper.sh"
+    "_TestNetwork.sh"
 )
 
 ################################################################################
@@ -63,7 +63,7 @@ EXAMPLES:
     ./RunAllTests.sh -v
 
     # Run specific test file
-    ./RunAllTests.sh _TestProxmoxAPI.sh
+    ./RunAllTests.sh _TestOperations.sh
 
     # Generate JUnit report
     ./RunAllTests.sh -r junit -o ./reports

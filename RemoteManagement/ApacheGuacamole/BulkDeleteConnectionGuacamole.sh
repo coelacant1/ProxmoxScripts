@@ -98,7 +98,7 @@ main() {
     echo
     __warn__ "DESTRUCTIVE OPERATION: This will permanently delete all listed connections"
 
-    if ! __prompt_yes_no__ "Delete all ${#matching_connections[@]} connection(s)?"; then
+    if ! __prompt_user_yn__ "Delete all ${#matching_connections[@]} connection(s)?"; then
         __info__ "Operation cancelled"
         __prompt_keep_installed_packages__
         exit 0

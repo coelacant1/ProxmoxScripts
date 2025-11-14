@@ -9,7 +9,7 @@
 #   QuickDiagnostic.sh
 #
 # Examples:
-#   QuickDiagnostic.sh
+#   QuickDiagnostic.sh                    # Runs diagnostics (interactive or non-interactive)
 #
 # Function Index:
 #   - check_storage_errors

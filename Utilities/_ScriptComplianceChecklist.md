@@ -46,7 +46,9 @@ This checklist helps ensure your scripts follow the contributing guidelines and 
 - [ ] Error trap installed: `trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR`
 - [ ] Cleanup trap installed: `trap 'cleanup' EXIT`
 - [ ] Functions are properly organized with separators
-- [ ] **Script supports CLI mode** - can run non-interactively with all required arguments
+- [ ] **Uses NON_INTERACTIVE environment variable (not --non-interactive flag)**
+- [ ] **Uses `__prompt_user_yn__` for user confirmations**
+- [ ] **For destructive ops: checks NON_INTERACTIVE and requires --force flag**
 
 **Required Source Pattern:**
 ```bash
@@ -56,24 +58,50 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
 ```
 
-**Interactive vs. CLI Mode:**
-- Scripts CAN be interactive but MUST support CLI mode
-- All required parameters MUST be available as command-line arguments
-- When all arguments provided, script MUST run without prompts
-- Consider adding `--yes` or `--non-interactive` flag for automation
-
-**Example:**
+**Non-Interactive Mode Support:**
+**DO THIS:**
 ```bash
-# Good: Supports both modes
-VMID="${1:-}"
-if [[ -z "$VMID" ]]; then
-    read -p "Enter VMID: " VMID
+# Use __prompt_user_yn__ - it auto-detects NON_INTERACTIVE
+if __prompt_user_yn__ "Proceed with operation?"; then
+    perform_operation
 fi
-__validate_numeric__ "$VMID" "VMID"
-
-# Can be called interactively: ./script.sh
-# Can be called non-interactively: ./script.sh 100
 ```
+
+**DON'T DO THIS:**
+```bash
+# Don't parse --non-interactive flag
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --non-interactive) export NON_INTERACTIVE=1; shift ;;
+    esac
+done
+```
+
+**Destructive Operations Pattern:**
+```bash
+FORCE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force) FORCE=1; shift ;;
+        *) echo "Unknown: $1"; exit 1 ;;
+    esac
+done
+
+# Safety check
+if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+    __err__ "Destructive operation requires --force in non-interactive mode"
+    exit 1
+fi
+
+# Prompt (unless force)
+if [[ $FORCE -eq 1 ]]; then
+    __info__ "Force mode - proceeding"
+elif ! __prompt_user_yn__ "Really delete?"; then
+    exit 0
+fi
+```
+
+**See:** `NON_INTERACTIVE_STANDARD.md` for complete specification
 
 ---
 
@@ -200,7 +228,7 @@ __ok__ "Operation completed successfully"
 - [ ] `__node_exec__ <node> <command>` - Execute command on specific node
 - [ ] `__pve_exec__ <id> <command>` - Auto-detect VM/CT and execute on correct node
 
-**Source:** `ProxmoxAPI.sh`
+**Source:** `Operations.sh`
 
 **Replace this:**
 ```bash
@@ -254,7 +282,7 @@ __vm_node_exec__ "$VMID" "qm destroy {vmid} --purge"
 
 - [ ] `__ct_node_exec__ <ctid> <command>` - Execute command on CT's node (use `{ctid}` placeholder)
 
-**Source:** `ProxmoxAPI.sh`
+**Source:** `Operations.sh`
 
 **For commands without utility functions (e.g., pct destroy, pct unlock):**
 
@@ -328,7 +356,7 @@ __bulk_vm_operation__ --name "Start VMs" --report $START_VMID $END_VMID __vm_sta
 - [ ] `__net_bulk_set_bridge__ <start> <end> <net_id> <bridge>` - Bulk bridge change
 - [ ] `__net_bulk_set_vlan__ <start> <end> <net_id> <vlan>` - Bulk VLAN change
 
-**Source:** `NetworkHelper.sh`
+**Source:** `Network.sh`
 
 ---
 
@@ -353,7 +381,7 @@ __bulk_vm_operation__ --name "Start VMs" --report $START_VMID $END_VMID __vm_sta
 - [ ] `get_ip_from_vmid <vmid>` - Get VM IP via ARP scan
 - [ ] `__get_ip_from_guest_agent__ --vmid <vmid> [opts]` - Get IP from guest agent
 
-**Source:** `Queries.sh`
+**Source:** `Cluster.sh`
 
 ---
 
@@ -485,17 +513,17 @@ __bulk_vm_operation__ --name "Start VMs" --report $START_VMID $END_VMID __vm_sta
 | Show info message | `__info__` | `Communication.sh` |
 | Show success message | `__ok__` | `Communication.sh` |
 | Show error message | `__err__` | `Communication.sh` |
-| Start a VM | `__vm_start__` | `ProxmoxAPI.sh` |
-| Stop a VM | `__vm_stop__` | `ProxmoxAPI.sh` |
-| Check if VM exists | `__vm_exists__` | `ProxmoxAPI.sh` |
-| Check if VM running | `__vm_is_running__` | `ProxmoxAPI.sh` |
-| Execute command on VM's node | `__vm_node_exec__` | `ProxmoxAPI.sh` |
-| Execute command on CT's node | `__ct_node_exec__` | `ProxmoxAPI.sh` |
-| Execute command on any node | `__node_exec__` | `ProxmoxAPI.sh` |
-| Start a CT | `__ct_start__` | `ProxmoxAPI.sh` |
-| Stop a CT | `__ct_stop__` | `ProxmoxAPI.sh` |
+| Start a VM | `__vm_start__` | `Operations.sh` |
+| Stop a VM | `__vm_stop__` | `Operations.sh` |
+| Check if VM exists | `__vm_exists__` | `Operations.sh` |
+| Check if VM running | `__vm_is_running__` | `Operations.sh` |
+| Execute command on VM's node | `__vm_node_exec__` | `Operations.sh` |
+| Execute command on CT's node | `__ct_node_exec__` | `Operations.sh` |
+| Execute command on any node | `__node_exec__` | `Operations.sh` |
+| Start a CT | `__ct_start__` | `Operations.sh` |
+| Stop a CT | `__ct_stop__` | `Operations.sh` |
 | Bulk VM operations | `__bulk_vm_operation__` | `BulkOperations.sh` |
-| Get VM IP | `get_ip_from_vmid` | `Queries.sh` |
+| Get VM IP | `get_ip_from_vmid` | `Cluster.sh` |
 | Parse arguments | `__parse_positional_args__` | `ArgumentParser.sh` |
 
 ### Complete Function Reference
@@ -568,8 +596,8 @@ set -u
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/ProxmoxAPI.sh
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
 

@@ -20,7 +20,7 @@ set -euo pipefail
 
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+source "${UTILITYPATH}/Cluster.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment

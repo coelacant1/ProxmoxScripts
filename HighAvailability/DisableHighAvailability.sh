@@ -24,8 +24,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
 

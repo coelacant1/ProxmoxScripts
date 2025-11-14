@@ -100,7 +100,7 @@ main() {
     echo
     __warn__ "This will set containers to privileged mode"
 
-    if ! __prompt_yes_no__ "Configure PCI passthrough for ${#CTID_ARRAY[@]} container(s)?"; then
+    if ! __prompt_user_yn__ "Configure PCI passthrough for ${#CTID_ARRAY[@]} container(s)?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

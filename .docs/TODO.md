@@ -88,6 +88,21 @@
 - [ ] CCPVE.sh - Complex interactive CLI menu system
 - [ ] GUI.sh - Complex interactive GUI menu system
 
+
+- **LXC/InteractiveRestoreCT.sh**
+   - Intentionally interactive (indicated by name)
+   - Currently uses manual `read -p`
+   - Would hang if run remotely through Remote GUI
+   - **Recommendation:** Implement Pattern 3
+   - **Priority:** Medium (create RestoreCT.sh core script)
+
+- **VirtualMachines/InteractiveRestoreVM.sh**
+   - Intentionally interactive (indicated by name)
+   - Currently uses manual `read -p`
+   - Would hang if run remotely through Remote GUI
+   - **Recommendation:** Implement Pattern 3
+   - **Priority:** Medium (create RestoreVM.sh core script)
+
 ---
 
 # Scripts Needing ArgumentParser Update

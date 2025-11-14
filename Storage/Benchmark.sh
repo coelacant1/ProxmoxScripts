@@ -132,8 +132,7 @@ parseFioOutput "$WRITE_JSON" "Random Write"
 ###############################################################################
 # Optional Extended Results
 ###############################################################################
-read -r -p "Would you like to view extended info? (y/N): " SHOW_EXTENDED
-if [[ "$SHOW_EXTENDED" =~ ^[Yy]$ ]]; then
+if __prompt_user_yn__ "Would you like to view extended info?"; then
   echo "Extended results for Random Read (JSON):"
   cat "$READ_JSON"
   echo
@@ -144,8 +143,7 @@ fi
 ###############################################################################
 # Optional CSV Export
 ###############################################################################
-read -r -p "Would you like to save results to CSV? (y/N): " SAVE_CSV
-if [[ "$SAVE_CSV" =~ ^[Yy]$ ]]; then
+if __prompt_user_yn__ "Would you like to save results to CSV?"; then
   CSV_PATH="${TEST_DIR}/fio_results.csv"
   echo "job_name,iops,bw_mb_s,lat50_us,lat99_us" > "$CSV_PATH"
 

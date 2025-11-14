@@ -55,8 +55,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -276,4 +276,4 @@ main "$@"
 #   - Removed manual usage() and parse_args() functions
 #   - Now uses __parse_args__ with automatic validation
 #   - Fixed __prompt_yes_no__ -> __prompt_user_yn__
-#   - Added missing Queries.sh source for __get_vm_node__
+#   - Added missing Cluster.sh source for __get_vm_node__

@@ -1,0 +1,217 @@
+================================================================================
+EXECUTION MODES
+================================================================================
+
+GUI.sh supports three execution modes for running scripts
+
+================================================================================
+MODE OVERVIEW
+================================================================================
+
+1. LOCAL EXECUTION
+   Scripts run on the system where you launched GUI.sh
+   
+2. SINGLE REMOTE NODE
+   Scripts run on one selected Proxmox node via SSH
+   
+3. MULTIPLE REMOTE NODES
+   Scripts run on multiple Proxmox nodes simultaneously
+
+================================================================================
+LOCAL EXECUTION
+================================================================================
+
+When to Use
+-----------
+  - Running on your Proxmox node directly
+  - No remote access needed
+  - Direct access to local resources
+
+How to Select
+-------------
+1. From execution mode menu, choose '1'
+2. Browse and run scripts normally
+
+Characteristics
+---------------
+  - Fastest execution (no network overhead)
+  - Direct file system access
+  - No authentication needed
+  - Logs to /tmp/gui_execution.log
+
+Example Use Cases
+-----------------
+  - Managing local VMs/LXCs
+  - Storage configuration
+  - Network setup
+  - System maintenance
+
+================================================================================
+SINGLE REMOTE NODE
+================================================================================
+
+When to Use
+-----------
+  - Managing one Proxmox node remotely
+  - Testing scripts before multi-node deployment
+  - Node-specific operations
+
+How to Select
+-------------
+1. From execution mode menu, choose '2'
+2. Select node from list OR enter manually
+3. Provide password
+4. Browse and run scripts
+
+Characteristics
+---------------
+  - SSH-based execution
+  - Scripts copied to remote /tmp/
+  - Output streamed back to GUI
+  - Remote logs in /tmp/ProxmoxScripts_gui/
+
+Requirements
+------------
+  - Node in nodes.json (or manual entry)
+  - SSH access (port 22)
+  - Username/password (typically root)
+  - sshpass installed: apt install sshpass
+
+Example Use Cases
+-----------------
+  - Managing remote cluster node
+  - Testing new scripts safely
+  - Node-specific diagnostics
+
+================================================================================
+MULTIPLE REMOTE NODES
+================================================================================
+
+When to Use
+-----------
+  - Applying changes across cluster
+  - Bulk operations on many nodes
+  - Consistent configuration deployment
+
+How to Select
+-------------
+1. From execution mode menu, choose '3'
+2. Select nodes:
+     - Enter numbers: 1,2,3
+     - Or type: all
+3. Choose password mode:
+     - Same for all nodes
+     - Individual per node
+4. Browse and run scripts
+
+Characteristics
+---------------
+  - Parallel execution on all nodes
+  - Independent per-node logging
+  - Continues if one node fails
+  - Summary shows success/failure per node
+
+Requirements
+------------
+  - Nodes configured in nodes.json
+  - SSH access to all nodes
+  - jq installed: apt install jq
+  - sshpass installed: apt install sshpass
+
+Example Use Cases
+-----------------
+  - Cluster-wide updates
+  - Bulk storage configuration
+  - Consistent security settings
+  - Multi-node backups
+
+Workflow
+--------
+1. Scripts copied to each node
+2. Execute in parallel
+3. Output captured per node
+4. Logs saved separately per node
+5. Summary displayed
+
+================================================================================
+SWITCHING MODES
+================================================================================
+
+Change Mode Anytime
+-------------------
+From main menu, select execution mode option
+
+Current Mode Display
+--------------------
+Top of screen shows:
+  EXECUTION: [Local/Single Remote/Multiple Remote]
+  TARGET: [This System/Node Name/X nodes]
+
+Mode Persists
+-------------
+Mode stays active until you change it or exit GUI
+
+================================================================================
+REMOTE EXECUTION DETAILS
+================================================================================
+
+Authentication
+--------------
+  - Passwords prompted each time
+  - Not stored in files
+  - Kept in memory during session only
+
+Script Transfer
+---------------
+1. Script packaged with utilities
+2. Copied to /tmp/ProxmoxScripts_gui/ on remote
+3. Made executable
+4. Run with parameters
+5. Cleaned up after execution
+
+Output Handling
+---------------
+  - Real-time streaming to GUI
+  - Captured to local and remote logs
+  - Color output preserved
+  - Exit codes tracked
+
+Log Levels
+----------
+Control output verbosity:
+  ./GUI.sh -d    # Debug (very verbose)
+  ./GUI.sh -v    # Info (default)
+  ./GUI.sh -q    # Errors only
+
+Note: All output always saved to logs, regardless of display level
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Can't Connect to Remote Node
+-----------------------------
+  - Verify node is online: ping <ip>
+  - Check SSH: ssh root@<ip>
+  - Verify credentials
+  - See: troubleshooting.txt
+
+Scripts Fail Remotely But Work Locally
+---------------------------------------
+  - Check remote has required packages
+  - Verify remote Proxmox version compatible
+  - Check remote disk space: df -h
+  - Review remote logs
+
+Multi-Node Execution Hangs
+---------------------------
+  - One node may be slow/unresponsive
+  - Check individual node logs
+  - Try running on problem node alone
+  - Consider removing slow node from selection
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================

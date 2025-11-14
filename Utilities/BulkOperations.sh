@@ -35,8 +35,23 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__bulk_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "BULK"
+    fi
+}
+
 # Source dependencies
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 source "${UTILITYPATH}/Communication.sh"
 
 # Global state for bulk operations
@@ -72,8 +87,11 @@ __bulk_operation__() {
     local callback="$3"
     shift 3
 
+    __bulk_log__ "INFO" "Starting bulk operation: range $start_id-$end_id, callback=$callback"
+
     # Validate range
     if ! __validate_vmid_range__ "$start_id" "$end_id" 2>/dev/null; then
+        __bulk_log__ "ERROR" "Invalid ID range: $start_id-$end_id"
         echo "Error: Invalid ID range" >&2
         return 1
     fi
@@ -88,23 +106,28 @@ __bulk_operation__() {
     BULK_SUCCESS_IDS=()
     BULK_SKIPPED_IDS=()
 
+    __bulk_log__ "DEBUG" "Initialized counters: total=$BULK_TOTAL"
     __info__ "Starting bulk operation: ${BULK_OPERATION_NAME:-operation}"
     __update__ "Processing IDs ${start_id} to ${end_id} (${BULK_TOTAL} total)"
 
     # Process each ID
     for ((id=start_id; id<=end_id; id++)); do
         local current=$((id - start_id + 1))
+        __bulk_log__ "TRACE" "Processing ID $id ($current/$BULK_TOTAL)"
         __update__ "Processing ID ${id} (${current}/${BULK_TOTAL})..."
 
         if "$callback" "$id" "$@" 2>/dev/null; then
             ((BULK_SUCCESS++))
             BULK_SUCCESS_IDS[$id]=1
+            __bulk_log__ "DEBUG" "Success: ID $id"
         else
             ((BULK_FAILED++))
             BULK_FAILED_IDS[$id]=1
+            __bulk_log__ "WARN" "Failed: ID $id"
         fi
     done
 
+    __bulk_log__ "INFO" "Bulk operation complete: success=$BULK_SUCCESS, failed=$BULK_FAILED, skipped=$BULK_SKIPPED"
     # Show summary
     __bulk_summary__
 
@@ -166,6 +189,8 @@ __bulk_vm_operation__() {
     local callback="$3"
     shift 3
 
+    __bulk_log__ "INFO" "Starting VM bulk operation: $operation_name (range: $start_id-$end_id, skip_stopped: $skip_stopped, skip_running: $skip_running)"
+
     # Wrapper function that checks VM existence and state
     vm_wrapper() {
         local vmid="$1"
@@ -175,6 +200,7 @@ __bulk_vm_operation__() {
         if ! __vm_exists__ "$vmid"; then
             ((BULK_SKIPPED++))
             BULK_SKIPPED_IDS[$vmid]="not found"
+            __bulk_log__ "DEBUG" "Skipped VM $vmid: not found"
             return 1
         fi
 
@@ -182,16 +208,19 @@ __bulk_vm_operation__() {
         if [[ "$skip_stopped" == "true" ]] && ! __vm_is_running__ "$vmid"; then
             ((BULK_SKIPPED++))
             BULK_SKIPPED_IDS[$vmid]="stopped"
+            __bulk_log__ "DEBUG" "Skipped VM $vmid: stopped"
             return 1
         fi
 
         if [[ "$skip_running" == "true" ]] && __vm_is_running__ "$vmid"; then
             ((BULK_SKIPPED++))
             BULK_SKIPPED_IDS[$vmid]="running"
+            __bulk_log__ "DEBUG" "Skipped VM $vmid: running"
             return 1
         fi
 
         # Execute callback
+        __bulk_log__ "TRACE" "Executing callback for VM $vmid"
         "$callback" "$vmid" "$@"
     }
 
@@ -201,6 +230,7 @@ __bulk_vm_operation__() {
 
     # Show detailed report if requested
     if [[ "$show_report" == "true" ]]; then
+        __bulk_log__ "DEBUG" "Generating detailed report"
         __bulk_report__
     fi
 
@@ -226,20 +256,25 @@ __bulk_ct_operation__() {
     local skip_running=false
     local show_report=false
 
+    __bulk_log__ "DEBUG" "Starting bulk CT operation"
+
     # Parse options
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --name)
                 operation_name="$2"
                 BULK_OPERATION_NAME="$2"
+                __bulk_log__ "DEBUG" "Operation name: $operation_name"
                 shift 2
                 ;;
             --skip-stopped)
                 skip_stopped=true
+                __bulk_log__ "DEBUG" "Will skip stopped CTs"
                 shift
                 ;;
             --skip-running)
                 skip_running=true
+                __bulk_log__ "DEBUG" "Will skip running CTs"
                 shift
                 ;;
             --report)
@@ -256,6 +291,8 @@ __bulk_ct_operation__() {
     local end_id="$2"
     local callback="$3"
     shift 3
+
+    __bulk_log__ "INFO" "Bulk CT operation: $operation_name (range: $start_id-$end_id, callback: $callback)"
 
     # Wrapper function that checks CT existence and state
     ct_wrapper() {
@@ -311,6 +348,8 @@ __bulk_summary__() {
     local end_time=$(date +%s)
     local duration=$((end_time - BULK_START_TIME))
 
+    __bulk_log__ "INFO" "Bulk summary: total=$BULK_TOTAL, success=$BULK_SUCCESS, failed=$BULK_FAILED, skipped=$BULK_SKIPPED, duration=${duration}s"
+
     echo ""
     __ok__ "Bulk operation complete"
     echo ""
@@ -333,10 +372,12 @@ __bulk_summary__() {
 # @usage __bulk_report__
 # @return 0 always
 __bulk_report__() {
+    __bulk_log__ "DEBUG" "Generating detailed bulk report"
     __bulk_summary__
 
     # Show failed IDs
     if (( BULK_FAILED > 0 )); then
+        __bulk_log__ "DEBUG" "Reporting $BULK_FAILED failed IDs"
         echo ""
         echo "Failed IDs:"
         for id in "${!BULK_FAILED_IDS[@]}"; do
@@ -346,6 +387,7 @@ __bulk_report__() {
 
     # Show skipped IDs with reasons
     if (( BULK_SKIPPED > 0 )); then
+        __bulk_log__ "DEBUG" "Reporting $BULK_SKIPPED skipped IDs"
         echo ""
         echo "Skipped IDs:"
         for id in "${!BULK_SKIPPED_IDS[@]}"; do
@@ -367,6 +409,8 @@ __bulk_print_results__() {
     if [[ "$1" == "--format" ]]; then
         format="$2"
     fi
+
+    __bulk_log__ "DEBUG" "Printing results in format: $format"
 
     case "$format" in
         json)
@@ -418,12 +462,15 @@ __bulk_with_retry__() {
     local callback="$4"
     shift 4
 
+    __bulk_log__ "INFO" "Bulk operation with retry: max_retries=$max_retries, range=$start_id-$end_id, callback=$callback"
+
     # First attempt
     __bulk_operation__ "$start_id" "$end_id" "$callback" "$@"
 
     # Retry failed operations
     local retry_count=1
     while (( BULK_FAILED > 0 && retry_count <= max_retries )); do
+        __bulk_log__ "DEBUG" "Retry attempt $retry_count/$max_retries for $BULK_FAILED failed operations"
         __info__ "Retry attempt ${retry_count}/${max_retries} for ${BULK_FAILED} failed operations"
 
         # Get failed IDs
@@ -472,11 +519,17 @@ __bulk_filter__() {
     local end_id="$2"
     local filter_fn="$3"
 
+    __bulk_log__ "DEBUG" "Filtering IDs: range=$start_id-$end_id, filter=$filter_fn"
+
+    local count=0
     for ((id=start_id; id<=end_id; id++)); do
         if "$filter_fn" "$id" 2>/dev/null; then
             echo "$id"
+            ((count++))
         fi
     done
+    
+    __bulk_log__ "DEBUG" "Filter returned $count IDs"
 }
 
 # --- __bulk_parallel__ -------------------------------------------------------
@@ -498,6 +551,7 @@ __bulk_parallel__() {
     local callback="$4"
     shift 4
 
+    __bulk_log__ "WARN" "Starting parallel execution (experimental): max_jobs=$max_jobs, range=$start_id-$end_id"
     __warn__ "Parallel execution is experimental"
 
     # Initialize counters
@@ -572,6 +626,8 @@ __bulk_parallel__() {
 __bulk_save_state__() {
     local filename="$1"
 
+    __bulk_log__ "DEBUG" "Saving bulk state to: $filename"
+
     {
         echo "BULK_TOTAL=$BULK_TOTAL"
         echo "BULK_SUCCESS=$BULK_SUCCESS"
@@ -580,6 +636,8 @@ __bulk_save_state__() {
         echo "BULK_FAILED_IDS=(${!BULK_FAILED_IDS[@]})"
         echo "BULK_SUCCESS_IDS=(${!BULK_SUCCESS_IDS[@]})"
     } > "$filename"
+    
+    __bulk_log__ "INFO" "Bulk state saved successfully"
 }
 
 # --- __bulk_load_state__ -----------------------------------------------------
@@ -591,12 +649,16 @@ __bulk_save_state__() {
 __bulk_load_state__() {
     local filename="$1"
 
+    __bulk_log__ "DEBUG" "Loading bulk state from: $filename"
+
     if [[ ! -f "$filename" ]]; then
+        __bulk_log__ "ERROR" "State file not found: $filename"
         echo "Error: State file not found: $filename" >&2
         return 1
     fi
 
     source "$filename"
+    __bulk_log__ "INFO" "Bulk state loaded successfully"
 }
 
 # --- __bulk_validate_range__ -------------------------------------------------
@@ -612,24 +674,30 @@ __bulk_validate_range__() {
     local end_id="$2"
     shift 2
 
+    __bulk_log__ "DEBUG" "Validating bulk range: $start_id-$end_id"
+
     local max_range=1000
 
     if [[ "$1" == "--max-range" ]]; then
         max_range="$2"
+        __bulk_log__ "DEBUG" "Using custom max_range: $max_range"
     fi
 
     if ! __validate_vmid_range__ "$start_id" "$end_id" 2>/dev/null; then
+        __bulk_log__ "ERROR" "Invalid VMID range"
         return 1
     fi
 
     local range=$((end_id - start_id + 1))
 
     if (( range > max_range )); then
+        __bulk_log__ "ERROR" "Range too large: $range > $max_range"
         echo "Error: Range too large ($range > $max_range)" >&2
         echo "Use --max-range to override" >&2
         return 1
     fi
 
+    __bulk_log__ "DEBUG" "Range validation passed: $range IDs"
     return 0
 }
 

@@ -10,19 +10,20 @@
 #   2. Search by VMID range - removes connections for VMs in a specific VMID range
 #
 # Usage:
-#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
-#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]
+#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE] [--force]
+#   BulkRemoveRDPConnection.sh GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE] [--force]
 #
 # Examples:
 #   BulkRemoveRDPConnection.sh "http://172.20.192.10:8080/guacamole" "TestVM"
-#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" "Clone" mysql
-#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" --vmid-range 100 110 mysql
+#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" "Clone" mysql --force
+#   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" --vmid-range 100 110 mysql --force
 #
 # Notes:
 #   - This script expects a valid Guacamole auth token in /tmp/cc_pve/guac_token.
 #   - Run GetGuacToken.sh beforehand to store the auth token for the Guacamole server.
 #   - Use with caution as deleted connections cannot be recovered.
-#   - The script will prompt for confirmation before deleting connections.
+#   - The script will prompt for confirmation before deleting connections (unless --force is used).
+#   - For non-interactive use (GUI, automation), --force flag is required.
 #
 # Function Index:
 #   - delete_connection
@@ -39,11 +40,23 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 __install_or_prompt__ "jq"
 
+# Parse --force flag if present
+FORCE=0
+args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--force" ]]; then
+        FORCE=1
+    else
+        args+=("$arg")
+    fi
+done
+set -- "${args[@]}"
+
 # Complex argument parsing - hybrid approach
 if [[ $# -lt 2 ]]; then
     echo "Usage:"
-    echo "  $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]"
-    echo "  $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE]"
+    echo "  $0 GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE] [--force]"
+    echo "  $0 GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE] [--force]"
     exit 64
 fi
 
@@ -172,10 +185,20 @@ echo ""
 ###############################################################################
 # Confirm deletion
 ###############################################################################
-read -p "Are you sure you want to delete these $connectionCount connection(s)? [y/N] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Deletion cancelled."
+__warn__ "DESTRUCTIVE: This will delete $connectionCount connection(s) from Guacamole"
+
+# Safety check: Require --force in non-interactive mode
+if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+    __err__ "Destructive operation requires --force flag in non-interactive mode"
+    __err__ "Add '--force' to parameters in GUI"
+    exit 1
+fi
+
+# Prompt for confirmation (unless force is set)
+if [[ $FORCE -eq 1 ]]; then
+    __info__ "Force mode enabled - proceeding without confirmation"
+elif ! __prompt_user_yn__ "Are you sure you want to delete these $connectionCount connection(s)?"; then
+    __info__ "Deletion cancelled."
     exit 0
 fi
 

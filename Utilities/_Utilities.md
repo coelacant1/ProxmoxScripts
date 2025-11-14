@@ -66,7 +66,7 @@ Use this when you need to:
 
 **Common functions:** `__ip_to_int__`, `__int_to_ip__`, `__cidr_to_netmask__`, `__vmid_to_mac_prefix__`
 
-### NetworkHelper.sh
+### Network.sh
 **Network configuration and management**
 
 Use this when you need to:
@@ -88,7 +88,7 @@ Use this when you need to:
 
 **Common functions:** `__check_root__`, `__check_proxmox__`, `__ensure_dependencies__`, `__prompt_user_yn__`
 
-### ProxmoxAPI.sh
+### Operations.sh
 **VM and Container operations (MOST COMMONLY USED)**
 
 Use this when you need to:
@@ -105,7 +105,7 @@ Use this when you need to:
 
 **Note:** Use remote execution functions for commands that don't have utility wrappers (e.g., `qm destroy`, `qm unlock`, `pct destroy`).
 
-### Queries.sh
+### Cluster.sh
 **Cluster information and VM/CT queries**
 
 Use this when you need to:
@@ -146,7 +146,7 @@ Use this when you need to:
 ```bash
 # Source utilities in your script
 UTILITYPATH="path/to/Utilities"
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 
 # Use functions directly
@@ -172,10 +172,10 @@ __validate_ip__ "192.168.1.1" "IP Address"
   - [Colors.sh](#colors)
   - [Communication.sh](#communication)
   - [Conversion.sh](#conversion)
-  - [NetworkHelper.sh](#networkhelper)
+  - [Network.sh](#Network)
   - [Prompts.sh](#prompts)
-  - [ProxmoxAPI.sh](#proxmoxapi)
-  - [Queries.sh](#queries)
+  - [Operations.sh](#proxmoxapi)
+  - [Cluster.sh](#queries)
   - [RunAllTests.sh](#runalltests)
   - [SSH.sh](#ssh)
   - [StateManager.sh](#statemanager)
@@ -244,30 +244,30 @@ __validate_ip__ "192.168.1.1" "IP Address"
 | `__iterate_vms__` | ProxmoxAPI | Iterate through VM range and call callback for each |
 | `__line_gradient__` | Colors | Applies a left-to-right color gradient to a single line of text |
 | `__line_rgb__` | Colors | Prints a line of text in a single, solid RGB color |
-| `__net_bulk_set_bridge__` | NetworkHelper | Change bridge for multiple VMs |
-| `__net_bulk_set_vlan__` | NetworkHelper | Set VLAN tag for multiple VMs |
-| `__net_ct_add_interface__` | NetworkHelper | Add network interface to CT |
-| `__net_ct_get_interfaces__` | NetworkHelper | Get list of network interfaces for CT |
-| `__net_ct_remove_interface__` | NetworkHelper | Remove network interface from CT |
-| `__net_ct_set_gateway__` | NetworkHelper | Set gateway for CT interface |
-| `__net_ct_set_ip__` | NetworkHelper | Set IP address for CT interface |
-| `__net_ct_set_nameserver__` | NetworkHelper | Set nameserver for CT |
-| `__net_get_next_ip__` | NetworkHelper | Get next available IP in subnet |
-| `__net_is_ip_in_use__` | NetworkHelper | Check if IP address is in use by any VM/CT |
-| `__net_migrate_network__` | NetworkHelper | Migrate VMs from one bridge/VLAN to another |
-| `__net_ping__` | NetworkHelper | Ping host from node |
-| `__net_test_connectivity__` | NetworkHelper | Test network connectivity from VM/CT |
-| `__net_test_dns__` | NetworkHelper | Test DNS resolution from CT |
-| `__net_test_gateway__` | NetworkHelper | Test gateway reachability from CT |
-| `__net_validate_cidr__` | NetworkHelper | Validate IP address in CIDR notation |
-| `__net_validate_ip__` | NetworkHelper | Validate IPv4 address format |
-| `__net_validate_mac__` | NetworkHelper | Validate MAC address format |
-| `__net_vm_add_interface__` | NetworkHelper | Add network interface to VM |
-| `__net_vm_get_interfaces__` | NetworkHelper | Get list of network interfaces for VM |
-| `__net_vm_remove_interface__` | NetworkHelper | Remove network interface from VM |
-| `__net_vm_set_bridge__` | NetworkHelper | Change bridge for VM network interface |
-| `__net_vm_set_mac__` | NetworkHelper | Set MAC address for VM network interface |
-| `__net_vm_set_vlan__` | NetworkHelper | Set or change VLAN tag for VM network interface |
+| `__net_bulk_set_bridge__` | Network | Change bridge for multiple VMs |
+| `__net_bulk_set_vlan__` | Network | Set VLAN tag for multiple VMs |
+| `__net_ct_add_interface__` | Network | Add network interface to CT |
+| `__net_ct_get_interfaces__` | Network | Get list of network interfaces for CT |
+| `__net_ct_remove_interface__` | Network | Remove network interface from CT |
+| `__net_ct_set_gateway__` | Network | Set gateway for CT interface |
+| `__net_ct_set_ip__` | Network | Set IP address for CT interface |
+| `__net_ct_set_nameserver__` | Network | Set nameserver for CT |
+| `__net_get_next_ip__` | Network | Get next available IP in subnet |
+| `__net_is_ip_in_use__` | Network | Check if IP address is in use by any VM/CT |
+| `__net_migrate_network__` | Network | Migrate VMs from one bridge/VLAN to another |
+| `__net_ping__` | Network | Ping host from node |
+| `__net_test_connectivity__` | Network | Test network connectivity from VM/CT |
+| `__net_test_dns__` | Network | Test DNS resolution from CT |
+| `__net_test_gateway__` | Network | Test gateway reachability from CT |
+| `__net_validate_cidr__` | Network | Validate IP address in CIDR notation |
+| `__net_validate_ip__` | Network | Validate IPv4 address format |
+| `__net_validate_mac__` | Network | Validate MAC address format |
+| `__net_vm_add_interface__` | Network | Add network interface to VM |
+| `__net_vm_get_interfaces__` | Network | Get list of network interfaces for VM |
+| `__net_vm_remove_interface__` | Network | Remove network interface from VM |
+| `__net_vm_set_bridge__` | Network | Change bridge for VM network interface |
+| `__net_vm_set_mac__` | Network | Set MAC address for VM network interface |
+| `__net_vm_set_vlan__` | Network | Set or change VLAN tag for VM network interface |
 | `__node_exec__` | ProxmoxAPI | Execute a command on a specific node (local or remote via SSH) |
 | `__ok__` | Communication | Stops the spinner and prints a success message in green |
 | `__parse_args__` | ArgumentParser | One-line declarative argument parser with automatic validation |
@@ -903,7 +903,7 @@ __vmid_to_mac_prefix__ --vmid 1234 [--prefix BC] [--pad-length 4]
 __vmid_to_mac_prefix__ --vmid 512 --prefix aa --pad-length 6
 ```
 ---
-# NetworkHelper.sh
+# Network.sh
 
 **Purpose**: !/bin/bash Network management framework for VM/CT network configuration, IP management, and network validation.
 
@@ -917,7 +917,7 @@ __vmid_to_mac_prefix__ --vmid 512 --prefix aa --pad-length 6
 
 **Usage**:
 ```bash
-source "${UTILITYPATH}/NetworkHelper.sh"
+source "${UTILITYPATH}/Network.sh"
 ```
 
 **Functions**:
@@ -929,7 +929,7 @@ source "${UTILITYPATH}/NetworkHelper.sh"
 
 ---
 
-#### Functions in NetworkHelper.sh
+#### Functions in Network.sh
 
 ### `__net_vm_add_interface__`
 **Description**: Add network interface to VM.
@@ -1314,7 +1314,7 @@ __ensure_dependencies__ --auto-install curl rsync
 __require_root_and_proxmox__
 ```
 ---
-# ProxmoxAPI.sh
+# Operations.sh
 
 **Purpose**: !/bin/bash Wrapper functions for common Proxmox operations with built-in error handling, validation, and cluster-awareness. Reduces code duplication and provides consistent patterns for VM/CT operations.
 
@@ -1327,7 +1327,7 @@ __require_root_and_proxmox__
 
 **Usage**:
 ```bash
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 ```
 
 **Functions**:
@@ -1341,7 +1341,7 @@ source "${UTILITYPATH}/ProxmoxAPI.sh"
 
 ---
 
-#### Functions in ProxmoxAPI.sh
+#### Functions in Operations.sh
 
 ### `__vm_exists__`
 **Description**: Check if a VM exists (cluster-wide).
@@ -1717,13 +1717,13 @@ __pve_exec__ <vmid_or_ctid> <command>
 __pve_exec__ 200 "pct clone 200 201"
 ```
 ---
-# Queries.sh
+# Cluster.sh
 
-**Purpose**: !/bin/bash This script provides functions for prompting users, querying node/cluster information, and other utility tasks on Proxmox or Debian systems. Generally, this script is meant to be sourced by other scripts rather than run directly. For example: source ./Queries.sh readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
+**Purpose**: !/bin/bash This script provides functions for prompting users, querying node/cluster information, and other utility tasks on Proxmox or Debian systems. Generally, this script is meant to be sourced by other scripts rather than run directly. For example: source ./Cluster.sh readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
 
 **Usage**:
 ```bash
-source "./Queries.sh"
+source "./Cluster.sh"
 ```
 
 **Functions**:
@@ -1749,7 +1749,7 @@ source "./Queries.sh"
 
 ---
 
-#### Functions in Queries.sh
+#### Functions in Cluster.sh
 
 ### `__get_remote_node_ips__`
 **Description**: Gathers IPs for all cluster nodes (excluding local) from 'pvecm status'. Outputs each IP on a new line, which can be captured into an array with readarray.
@@ -2385,7 +2385,7 @@ All utilities include test coverage using the TestFramework.sh testing infrastru
 bash Utilities/RunAllTests.sh
 
 # Run specific test file
-bash Utilities/_TestProxmoxAPI.sh
+bash Utilities/_TestOperations.sh
 
 # Run with verbose output
 bash Utilities/RunAllTests.sh -v

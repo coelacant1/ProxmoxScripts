@@ -30,8 +30,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
-# shellcheck source=Utilities/ProxmoxAPI.sh
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
 
@@ -45,13 +45,22 @@ main() {
     __check_root__
     __check_proxmox__
 
-    __warn__ "WARNING: This will permanently delete containers ${START_CTID} to ${END_CTID}"
+    __warn__ "DESTRUCTIVE: This will permanently delete containers ${START_CTID} to ${END_CTID}"
+    
+    # Safety check: Require --yes flag in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "$YES" != "true" ]]; then
+        __err__ "Destructive operation requires --yes flag in non-interactive mode"
+        __err__ "Usage: BulkDeleteRange.sh $START_CTID $END_CTID --yes"
+        __err__ "Or add '--yes' to parameters in GUI"
+        exit 1
+    fi
 
-    if [[ "$YES" != "true" ]]; then
-        if ! __prompt_user_yn__ "Are you absolutely sure you want to delete these containers?"; then
-            __info__ "Deletion cancelled by user"
-            exit 0
-        fi
+    # Prompt for confirmation (unless --yes flag provided)
+    if [[ "$YES" == "true" ]]; then
+        __info__ "Auto-confirm enabled (--yes flag) - proceeding without prompt"
+    elif ! __prompt_user_yn__ "Are you absolutely sure you want to delete these containers?"; then
+        __info__ "Deletion cancelled by user"
+        exit 0
     fi
 
     delete_ct_callback() {

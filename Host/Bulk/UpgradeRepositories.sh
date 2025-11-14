@@ -27,8 +27,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -118,7 +118,7 @@ main() {
 
     __warn__ "This will update Proxmox repositories and perform system upgrade"
     if [[ "$DRY_RUN" != true ]]; then
-        if ! __prompt_yes_no__ "Proceed with repository upgrade?"; then
+        if ! __prompt_user_yn__ "Proceed with repository upgrade?"; then
             __info__ "Operation cancelled"
             exit 0
         fi

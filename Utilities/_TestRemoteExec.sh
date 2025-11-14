@@ -2,7 +2,7 @@
 #
 # _TestRemoteExec.sh
 #
-# Test suite for remote execution utility functions in ProxmoxAPI.sh
+# Test suite for remote execution utility functions in Operations.sh
 #
 # Usage:
 #   bash _TestRemoteExec.sh
@@ -53,7 +53,7 @@ UTILITYPATH="$SCRIPT_DIR"
 
 # Source the test framework
 source "${UTILITYPATH}/TestFramework.sh"
-source "${UTILITYPATH}/ProxmoxAPI.sh"
+source "${UTILITYPATH}/Operations.sh"
 
 # --- Test: __node_exec__ basic functionality ---------------------------------
 test_node_exec_local() {

@@ -1,0 +1,273 @@
+================================================================================
+NODE MANAGEMENT GUIDE
+================================================================================
+
+How to manage Proxmox nodes in GUI.sh using nodes.json
+
+================================================================================
+NODES.JSON OVERVIEW
+================================================================================
+
+Purpose: Store node information (names and IPs) for quick access in GUI.sh
+Location: ProxmoxScripts/nodes.json
+
+What It Contains:
+  - Node names
+  - Node IP addresses
+  
+What It Does NOT Contain:
+  - Passwords (prompted when needed)
+  - SSH keys
+  - Credentials
+
+================================================================================
+FILE FORMAT
+================================================================================
+
+Basic Structure
+---------------
+{
+  "nodes": [
+    {
+      "name": "pve01",
+      "ip": "192.168.1.101"
+    },
+    {
+      "name": "pve02",
+      "ip": "192.168.1.102"
+    }
+  ]
+}
+
+With Optional Fields
+--------------------
+{
+  "nodes": [
+    {
+      "name": "pve-prod-01",
+      "ip": "192.168.1.101",
+      "description": "Production node 1",
+      "location": "Datacenter A"
+    }
+  ]
+}
+
+Note: Optional fields (description, location) are for your reference only.
+      GUI.sh uses only 'name' and 'ip' fields.
+
+================================================================================
+QUICK START
+================================================================================
+
+First Time Setup
+----------------
+1. File auto-creates from nodes.json.template
+2. Edit nodes.json with your node details
+3. Launch GUI.sh and test connection
+
+Adding Nodes (GUI)
+------------------
+1. From execution mode menu, press 'm'
+2. Select "Add node"
+3. Enter node name, IP, and password (for testing)
+4. Node saved to nodes.json
+
+Adding Nodes (Manual)
+---------------------
+1. Edit nodes.json directly
+2. Add new node entry following format
+3. Verify JSON: jq . nodes.json
+4. Restart GUI.sh
+
+================================================================================
+MANAGING NODES IN GUI
+================================================================================
+
+Access Node Manager
+-------------------
+From execution mode selection menu, press 'm'
+
+List Nodes
+----------
+Option 1: View all configured nodes with IPs
+
+Add Node
+--------
+Option 2:
+  - Enter node name (e.g., "pve01")
+  - Enter IP address
+  - Enter password to test connection
+  - Node auto-saved to nodes.json
+
+Remove Node
+-----------
+Option 3:
+  - Select node by number
+  - Confirms before removal
+  - Updates nodes.json automatically
+
+================================================================================
+MANUAL EDITING
+================================================================================
+
+Edit File
+---------
+nano nodes.json    # or vim, code, etc.
+
+Validate Format
+---------------
+jq . nodes.json    # Should display formatted JSON
+                   # Returns error if invalid
+
+Common Mistakes
+---------------
+  - Missing commas between entries
+  - Trailing comma after last entry
+  - Missing quotes around strings
+  - Unbalanced braces
+
+Fix: Use jq to validate and auto-format:
+  jq . nodes.json > temp.json && mv temp.json nodes.json
+
+================================================================================
+TESTING CONNECTIONS
+================================================================================
+
+Test Single Node
+----------------
+ssh root@192.168.1.101    # Manual SSH test
+
+Test from GUI
+-------------
+1. Select "Single Remote Node"
+2. Choose node from list
+3. Enter password
+4. Try running simple script to verify
+
+Troubleshooting
+---------------
+Can't connect:
+  - Verify node is online: ping 192.168.1.101
+  - Check SSH service: systemctl status ssh
+  - Test SSH manually first
+
+Wrong credentials:
+  - Verify username (typically 'root' for Proxmox)
+  - Check password hasn't changed
+
+================================================================================
+BEST PRACTICES
+================================================================================
+
+Naming Convention
+-----------------
+Use consistent, descriptive names:
+  - pve-prod-01, pve-prod-02
+  - proxmox-dc1-01, proxmox-dc1-02
+
+IP Addresses
+------------
+  - Use static IPs (not DHCP)
+  - Document IP scheme somewhere
+  - Keep nodes.json updated
+
+Security
+--------
+  - Consider SSH key auth (manual setup)
+  - Limit root SSH access in production
+
+Maintenance
+-----------
+  - Backup nodes.json
+  - Update when nodes change
+  - Remove decommissioned nodes
+  - Test connections after changes
+
+================================================================================
+MULTI-NODE OPERATIONS
+================================================================================
+
+Running on Multiple Nodes
+--------------------------
+1. Select "Multiple Remote Nodes"
+2. Choose nodes:
+     - Enter numbers separated by commas (e.g., 1,2,3)
+     - Or type 'all' for all nodes
+3. Choose password mode:
+     - Same password for all
+     - Individual passwords per node
+4. Script executes on all selected nodes in parallel
+
+Tips
+----
+  - Start with 2-3 nodes to test
+  - Use same password for all nodes when possible
+  - Check logs if one node fails: /tmp/ProxmoxScripts_gui/
+
+================================================================================
+EXAMPLES
+================================================================================
+
+Example 1: Small Homelab
+------------------------
+{
+  "nodes": [
+    {"name": "pve", "ip": "192.168.1.100"}
+  ]
+}
+
+Example 2: Three-Node Cluster
+------------------------------
+{
+  "nodes": [
+    {"name": "pve01", "ip": "10.0.1.11"},
+    {"name": "pve02", "ip": "10.0.1.12"},
+    {"name": "pve03", "ip": "10.0.1.13"}
+  ]
+}
+
+Example 3: Multi-Site
+---------------------
+{
+  "nodes": [
+    {"name": "dc1-pve01", "ip": "10.1.0.11", "location": "DC1"},
+    {"name": "dc1-pve02", "ip": "10.1.0.12", "location": "DC1"},
+    {"name": "dc2-pve01", "ip": "10.2.0.11", "location": "DC2"},
+    {"name": "dc2-pve02", "ip": "10.2.0.12", "location": "DC2"}
+  ]
+}
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+File Not Found
+--------------
+Issue: "No nodes found in nodes.json"
+Fix:   File auto-creates from template. If missing, copy:
+       cp nodes.json.template nodes.json
+
+Invalid JSON
+------------
+Issue: Errors when loading
+Fix:   Validate: jq . nodes.json
+       Check for syntax errors (commas, braces, quotes)
+
+Node Not Appearing
+------------------
+Issue: Added node doesn't show in list
+Fix:   - Verify saved to nodes.json
+       - Restart GUI.sh
+       - Check JSON format is valid
+
+Can't Remove Node
+-----------------
+Issue: Node removal fails
+Fix:   - Remove manually from nodes.json
+       - Verify JSON still valid after edit
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================

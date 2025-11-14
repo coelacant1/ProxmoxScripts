@@ -28,12 +28,12 @@
 set -euo pipefail
 
 ################################################################################
-# Test Suite for NetworkHelper.sh
+# Test Suite for Network.sh
 ################################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/TestFramework.sh"
-source "${SCRIPT_DIR}/NetworkHelper.sh"
+source "${SCRIPT_DIR}/Network.sh"
 
 ################################################################################
 # TEST: IP ADDRESS VALIDATION
@@ -308,7 +308,7 @@ test_ping_host() {
 # RUN ALL TESTS
 ################################################################################
 
-run_test_suite "NetworkHelper Tests" \
+run_test_suite "Network Tests" \
     test_validate_ipv4_valid \
     test_validate_ipv4_invalid \
     test_validate_ipv6_valid \

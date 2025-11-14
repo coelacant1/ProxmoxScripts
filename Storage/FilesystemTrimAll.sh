@@ -37,7 +37,7 @@
 set -euo pipefail
 
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 

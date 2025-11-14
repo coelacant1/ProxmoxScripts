@@ -37,8 +37,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
 
@@ -51,7 +51,7 @@ __ensure_dependencies__ jq sshpass
 ###############################################################################
 # Helpers
 ###############################################################################
-# IP retrieval uses utility: __get_ip_from_vmid__ (from Queries.sh)
+# IP retrieval uses utility: __get_ip_from_vmid__ (from Cluster.sh)
 # SSH reachability waits via: __wait_for_ssh__ (from SSH.sh)
 
 # disable_autostart_inner <host>

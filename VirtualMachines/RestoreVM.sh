@@ -87,12 +87,12 @@ main() {
         __info__ "Detected container backup"
 
         local unprivileged=0
-        if __prompt_yes_no__ "Restore as unprivileged container?"; then
+        if __prompt_user_yn__ "Restore as unprivileged container?"; then
             unprivileged=1
         fi
 
         local ignore_errors=""
-        if __prompt_yes_no__ "Ignore unpack errors?"; then
+        if __prompt_user_yn__ "Ignore unpack errors?"; then
             ignore_errors="--ignore-unpack-errors"
         fi
 

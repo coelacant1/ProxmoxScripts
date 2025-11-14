@@ -7,15 +7,15 @@
 # freed space.
 #
 # Usage:
-#   CephSingleDrive.sh <create_osd|clear_local_lvm>
+#   CephSingleDrive.sh <create_osd|clear_local_lvm> [--force]
 #
 # Steps:
 #   create_osd      - Bootstrap Ceph auth, create LVs, and prepare an OSD
-#   clear_local_lvm - Delete the local-lvm (pve/data) volume (Destructive!)
+#   clear_local_lvm - Delete the local-lvm (pve/data) volume (Destructive! Requires --force)
 #
 # Examples:
 #   CephSingleDrive.sh create_osd
-#   CephSingleDrive.sh clear_local_lvm
+#   CephSingleDrive.sh clear_local_lvm --force
 #
 # Function Index:
 #   - clear_local_lvm
@@ -30,6 +30,30 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Prompts.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+FORCE=0
+positional_args=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)
+            FORCE=1
+            shift
+            ;;
+        -*)
+            __err__ "Unknown argument: $1"
+            exit 64
+            ;;
+        *)
+            positional_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Restore positional arguments for ArgumentParser
+set -- "${positional_args[@]}"
 
 __parse_args__ "step:string" "$@"
 
@@ -46,18 +70,26 @@ __check_proxmox__
 # Functions
 ###############################################################################
 function clear_local_lvm() {
-    echo "WARNING: This will remove the local-lvm 'pve/data' and all data within it!"
-    read -p "Are you sure you want to proceed? [yes/NO]: " confirmation
-    case "$confirmation" in
-        yes|YES)
-            echo "Removing LVM volume 'pve/data'..."
-            lvremove -y pve/data
-            echo "Local-lvm 'pve/data' removed successfully."
-            ;;
-        *)
-            echo "Aborting operation."
-            ;;
-    esac
+    __warn__ "DESTRUCTIVE: This will remove the local-lvm 'pve/data' and all data within it!"
+    
+    # Safety check: Require --force in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: CephSingleDrive.sh clear_local_lvm --force"
+        exit 1
+    fi
+    
+    # Prompt for confirmation (unless force is set)
+    if [[ $FORCE -eq 1 ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Are you sure you want to proceed? This will delete all data"; then
+        __info__ "Aborting operation."
+        return 0
+    fi
+    
+    __info__ "Removing LVM volume 'pve/data'..."
+    lvremove -y pve/data
+    __ok__ "Local-lvm 'pve/data' removed successfully."
 }
 
 function create_osd() {

@@ -1,2 +1,6 @@
+#Custom 
 .vscode/
 *.code-workspace
+nodes.json
+TestConnectionInfo.json
+.d/

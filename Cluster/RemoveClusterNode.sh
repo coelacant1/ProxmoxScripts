@@ -28,8 +28,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -61,7 +61,7 @@ main() {
     fi
 
     __warn__ "This will remove node ${NODE_NAME} from the cluster"
-    if ! __prompt_yes_no__ "Proceed?"; then
+    if ! __prompt_user_yn__ "Proceed?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

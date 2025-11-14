@@ -21,8 +21,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Queries.sh
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -34,7 +34,7 @@ main() {
     __install_or_prompt__ "jq"
 
     __warn__ "This will disable HA cluster-wide and remove all HA resources"
-    if ! __prompt_yes_no__ "Proceed with HA cluster-wide disable?"; then
+    if ! __prompt_user_yn__ "Proceed with HA cluster-wide disable?"; then
         __info__ "Operation cancelled"
         exit 0
     fi

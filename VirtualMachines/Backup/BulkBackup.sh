@@ -67,7 +67,7 @@ main() {
 
     [[ "$MODE" == "stop" ]] && __warn__ "Stop mode: VMs will experience downtime"
 
-    if ! __prompt_yes_no__ "Proceed with backup?"; then
+    if ! __prompt_user_yn__ "Proceed with backup?"; then
         __info__ "Backup cancelled"
         exit 0
     fi

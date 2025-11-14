@@ -25,6 +25,21 @@
 
 set -euo pipefail
 
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__convert_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "CONVERT"
+    fi
+}
+
 ###############################################################################
 # IP Conversion Utilities
 ###############################################################################
@@ -37,9 +52,12 @@ set -euo pipefail
 # @return Prints the 32-bit integer representation of the IP to stdout.
 # @example_output For __ip_to_int__ "127.0.0.1", the output is: 2130706433
 __ip_to_int__() {
+    __convert_log__ "TRACE" "Converting IP to int: $1"
     local a b c d
     IFS=. read -r a b c d <<<"$1"
-    echo "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
+    local result=$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))
+    __convert_log__ "DEBUG" "IP $1 → int $result"
+    echo "$result"
 }
 
 # --- __int_to_ip__ ------------------------------------------------------------
@@ -50,12 +68,14 @@ __ip_to_int__() {
 # @return Prints the dotted IPv4 address string to stdout.
 # @example_output For __int_to_ip__ 2130706433, the output is: 127.0.0.1
 __int_to_ip__() {
+    __convert_log__ "TRACE" "Converting int to IP: $1"
     local ip
     ip=$(printf "%d.%d.%d.%d" \
         "$((($1 >> 24) & 255))" \
         "$((($1 >> 16) & 255))" \
         "$((($1 >> 8) & 255))" \
         "$(($1 & 255))")
+    __convert_log__ "DEBUG" "Int $1 → IP $ip"
     echo "$ip"
 }
 
@@ -67,13 +87,16 @@ __int_to_ip__() {
 # @return Prints the full subnet netmask.
 # @example_output For __cidr_to_netmask__ 18, the output is: 255.255.192.0
 __cidr_to_netmask__() {
+  __convert_log__ "TRACE" "Converting CIDR to netmask: $1"
   local cidr="$1"
   local mask=$(( 0xffffffff << (32 - cidr) & 0xffffffff ))
   local octet1=$(( (mask >> 24) & 255 ))
   local octet2=$(( (mask >> 16) & 255 ))
   local octet3=$(( (mask >>  8) & 255 ))
   local octet4=$((  mask        & 255 ))
-  echo "${octet1}.${octet2}.${octet3}.${octet4}"
+  local result="${octet1}.${octet2}.${octet3}.${octet4}"
+  __convert_log__ "DEBUG" "CIDR /$cidr → netmask $result"
+  echo "$result"
 }
 
 # --- __vmid_to_mac_prefix__ -------------------------------------------------
@@ -91,6 +114,8 @@ __vmid_to_mac_prefix__() {
     local vmid=""
     local prefix="BC"
     local padLength=4
+
+    __convert_log__ "TRACE" "Processing VMID to MAC prefix with args: $*"
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -110,6 +135,7 @@ __vmid_to_mac_prefix__() {
                 shift
                 ;;
             *)
+                __convert_log__ "ERROR" "Unknown option in __vmid_to_mac_prefix__: $1"
                 echo "Error: Unknown option '$1' passed to __vmid_to_mac_prefix__." >&2
                 return 1
                 ;;
@@ -117,24 +143,30 @@ __vmid_to_mac_prefix__() {
     done
 
     if [[ -z "$vmid" ]]; then
+        __convert_log__ "ERROR" "VMID not provided"
         echo "Error: __vmid_to_mac_prefix__ requires --vmid." >&2
         return 1
     fi
 
     if [[ ! "$vmid" =~ ^[0-9]+$ ]]; then
+        __convert_log__ "ERROR" "Invalid VMID format: $vmid"
         echo "Error: VMID must be a non-negative integer." >&2
         return 1
     fi
 
     if [[ -z "$padLength" || ! "$padLength" =~ ^[0-9]+$ ]]; then
+        __convert_log__ "ERROR" "Invalid pad length: $padLength"
         echo "Error: --pad-length must be a positive integer." >&2
         return 1
     fi
 
     if (( padLength <= 0 || padLength % 2 != 0 )); then
+        __convert_log__ "ERROR" "Pad length must be even: $padLength"
         echo "Error: --pad-length must be a positive, even integer." >&2
         return 1
     fi
+
+    __convert_log__ "DEBUG" "Converting VMID $vmid to MAC prefix (prefix=$prefix, padLength=$padLength)"
 
         local padded
         printf -v padded "%0${padLength}d" "$vmid"
@@ -160,5 +192,6 @@ __vmid_to_mac_prefix__() {
         result+=":${segment^^}"
     done
 
+    __convert_log__ "INFO" "VMID $vmid → MAC prefix $result"
     echo "$result"
 }

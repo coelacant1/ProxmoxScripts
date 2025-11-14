@@ -67,7 +67,7 @@ main() {
     __info__ "VM range: $START_VM to $END_VM ($disk_count VMs)"
     __info__ "Disk number: $DISK_NUM"
 
-    if ! __prompt_yes_no__ "Delete $disk_count disk(s) from pool $POOL?"; then
+    if ! __prompt_user_yn__ "Delete $disk_count disk(s) from pool $POOL?"; then
         __info__ "Operation cancelled"
         exit 0
     fi
