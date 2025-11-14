@@ -25,7 +25,50 @@
 
 set -euo pipefail
 
-apt update || true
+# --- Detect Package Manager and Distribution --------------------------------
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+    SUDO_CMD=""
+    RUNNING_AS_ROOT=true
+else
+    RUNNING_AS_ROOT=false
+    if command -v sudo &>/dev/null; then
+        SUDO_CMD="sudo"
+    else
+        SUDO_CMD=""
+        echo "Warning: Not running as root and 'sudo' not found. Package installation may fail." >&2
+    fi
+fi
+
+if command -v apt-get &>/dev/null; then
+    PKG_MANAGER="apt-get"
+    PKG_UPDATE="$SUDO_CMD apt-get update"
+    PKG_INSTALL="$SUDO_CMD apt-get install -y"
+elif command -v dnf &>/dev/null; then
+    PKG_MANAGER="dnf"
+    PKG_UPDATE="$SUDO_CMD dnf check-update"
+    PKG_INSTALL="$SUDO_CMD dnf install -y"
+elif command -v yum &>/dev/null; then
+    PKG_MANAGER="yum"
+    PKG_UPDATE="$SUDO_CMD yum check-update"
+    PKG_INSTALL="$SUDO_CMD yum install -y"
+elif command -v zypper &>/dev/null; then
+    PKG_MANAGER="zypper"
+    PKG_UPDATE="$SUDO_CMD zypper refresh"
+    PKG_INSTALL="$SUDO_CMD zypper install -y"
+elif command -v pacman &>/dev/null; then
+    PKG_MANAGER="pacman"
+    PKG_UPDATE="$SUDO_CMD pacman -Sy"
+    PKG_INSTALL="$SUDO_CMD pacman -S --noconfirm"
+else
+    echo "Error: No supported package manager found (apt, dnf, yum, zypper, or pacman)" >&2
+    exit 1
+fi
+
+# Only update package cache if running as root or sudo is available
+if [[ $RUNNING_AS_ROOT == true ]] || command -v sudo &>/dev/null; then
+    $PKG_UPDATE || true
+fi
 
 # By default do not show the GUI header; use -h to display it
 SHOW_HEADER="false"
@@ -81,9 +124,19 @@ fi
 # --- Check Dependencies -----------------------------------------------------
 if ! command -v unzip &>/dev/null; then
     echo "The 'unzip' utility is required to extract the downloaded files but is not installed."
+    if [[ $RUNNING_AS_ROOT == false ]] && [[ -z "$SUDO_CMD" ]]; then
+        echo "Error: Cannot install 'unzip' without root privileges or sudo." >&2
+        echo "Please install 'unzip' manually or run this script with sudo/root." >&2
+        exit 1
+    fi
     read -r -p "Would you like to install 'unzip' now? [y/N]: " response
     if [[ "$response" =~ ^[Yy]$ ]]; then
-        apt-get install -y unzip
+        if $PKG_INSTALL unzip; then
+            echo "'unzip' installed successfully."
+        else
+            echo "Error: Failed to install 'unzip'. Please install it manually." >&2
+            exit 1
+        fi
     else
         echo "Aborting script because 'unzip' is not installed."
         exit 1
@@ -92,9 +145,19 @@ fi
 
 if ! command -v wget &>/dev/null; then
     echo "The 'wget' utility is required to download the repository ZIP but is not installed."
+    if [[ $RUNNING_AS_ROOT == false ]] && [[ -z "$SUDO_CMD" ]]; then
+        echo "Error: Cannot install 'wget' without root privileges or sudo." >&2
+        echo "Please install 'wget' manually or run this script with sudo/root." >&2
+        exit 1
+    fi
     read -r -p "Would you like to install 'wget' now? [y/N]: " response
     if [[ "$response" =~ ^[Yy]$ ]]; then
-        apt-get install -y wget
+        if $PKG_INSTALL wget; then
+            echo "'wget' installed successfully."
+        else
+            echo "Error: Failed to install 'wget'. Please install it manually." >&2
+            exit 1
+        fi
     else
         echo "Aborting script because 'wget' is not installed."
         exit 1
@@ -133,11 +196,7 @@ echo "Repository extracted into: $BASE_EXTRACTED_DIR"
 # --- Make Scripts Executable -----------------------------------------------
 echo "Making all scripts executable..."
 cd "$BASE_EXTRACTED_DIR" || exit 1
-if [ -f "./MakeScriptsExecutable.sh" ]; then
-    bash "./MakeScriptsExecutable.sh"
-else
-    echo "Warning: MakeScriptsExecutable.sh not found. Skipping."
-fi
+find . -type f -name "*.sh" -exec chmod +x {} \;
 
 # --- Call GUI.sh --------------------------------------------------
 if [ -f "./GUI.sh" ]; then

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2025-11-14
+
+GUI enhancements and distribution compatibility improvements
+
+### Added
+- **Polymorphic Menu System** - Centralized common menu operations (settings, help, back, exit) across all menus
+- **Branch Management** - Switch branches, update scripts from GitHub, and view available branches via settings menu ('s') accessible from all menus
+
+### Changed
+- **CCPVE.sh Distribution Compatibility** - Auto-detects package manager (apt, dnf, yum, zypper, pacman) and supports non-root execution with automatic sudo usage
+- **Standardized Input Prompts** - All menus now use consistent `read -rp "Choice: "` format
+- **Simplified Navigation** - Pressing 'b' at root automatically returns to execution mode selection without intermediate menus
+
+### Fixed
+- **Navigation Flow** - Root directory 'b' press now returns to execution mode selection instead of exiting application
+
 ## [2.1.0] - 2025-11-13
 
 Utility library consolidation and dependency cleanup

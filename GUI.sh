@@ -40,6 +40,8 @@
 #   - show_top_comments
 #   - show_script_usage
 #   - display_path
+#   - show_common_footer (polymorphic menu system)
+#   - process_common_input (polymorphic menu system)
 #   - run_script
 #   - run_script_local
 #   - run_script_remote
@@ -47,6 +49,10 @@
 #   - configure_single_remote
 #   - configure_multi_remote
 #   - manage_nodes_menu
+#   - settings_menu
+#   - update_scripts
+#   - change_branch
+#   - view_branches
 #   - navigate
 #
 #
@@ -160,6 +166,8 @@ HELP_FLAG="--help"      # If your scripts support a help flag, we pass this
 LAST_SCRIPT=""          # The last script run
 LAST_OUTPUT=""          # Truncated output of the last script
 SHOW_HEADER="false"
+CURRENT_BRANCH="main"   # Default branch
+BRANCH_FILE="$BASE_DIR/.current_branch"
 
 # Configuration managed by ConfigManager.sh utility
 
@@ -178,6 +186,11 @@ source "${UTILITYPATH}/RemoteExecutor.sh"
 
 # Initialize configuration
 __init_config__
+
+# Load current branch if file exists
+if [[ -f "$BRANCH_FILE" ]]; then
+    CURRENT_BRANCH=$(cat "$BRANCH_FILE")
+fi
 
 # Configure logging for GUI
 export LOG_FILE="/tmp/gui_execution.log"
@@ -226,6 +239,11 @@ show_ascii_art() {
         esac
         __line_rgb__ "LOG LEVEL: $REMOTE_LOG_LEVEL" $log_level_color
     fi
+    
+    # Show branch if not main
+    if [[ "$CURRENT_BRANCH" != "main" ]]; then
+        __line_rgb__ "BRANCH: $CURRENT_BRANCH" 255 200 100
+    fi
     echo
 }
 
@@ -260,6 +278,67 @@ display_path() {
 }
 
 ###############################################################################
+# POLYMORPHIC MENU SYSTEM
+###############################################################################
+
+# Show common footer options
+# Usage: show_common_footer [back_option] [exit_option]
+#   back_option: "b" (default) or custom text for back option
+#   exit_option: "e" (default) or "none" to hide exit option
+show_common_footer() {
+    local back_option="${1:-b}"
+    local exit_option="${2:-e}"
+    
+    echo "Type 's' for settings (branch, updates)."
+    echo "Type 'h' or '?' for manuals and help."
+    
+    if [[ "$back_option" != "none" ]]; then
+        echo "Type '$back_option' to go back."
+    fi
+    
+    if [[ "$exit_option" != "none" ]]; then
+        echo "Type '$exit_option' to exit."
+    fi
+}
+
+# Process common menu input
+# Returns: 0 if handled, 1 if not handled (caller should process)
+# Usage: process_common_input "$choice" [back_option] [exit_option]
+#   If returns 0, use "continue" to re-show menu
+#   If returns 1, process choice in caller
+process_common_input() {
+    local choice="$1"
+    local back_option="${2:-b}"
+    local exit_option="${3:-e}"
+    
+    # Settings
+    if [[ "$choice" == "s" ]]; then
+        settings_menu
+        return 0
+    fi
+    
+    # Help/Manual
+    if [[ "$choice" == "h" ]] || [[ "$choice" == "?" ]]; then
+        __manual_menu__
+        return 0
+    fi
+    
+    # Back
+    if [[ "$choice" == "$back_option" ]] && [[ "$back_option" != "none" ]]; then
+        return 0  # Caller should handle return/break
+    fi
+    
+    # Exit
+    if [[ "$choice" == "$exit_option" ]] && [[ "$exit_option" != "none" ]]; then
+        echo "Exiting..."
+        exit 0
+    fi
+    
+    # Not handled by common input
+    return 1
+}
+
+###############################################################################
 # EXECUTION MODE SELECTION
 ###############################################################################
 select_execution_mode() {
@@ -276,12 +355,17 @@ select_execution_mode() {
         echo "----------------------------------------"
         echo
         echo "Type 'm' to manage nodes"
-        echo "Type 'h' or '?' for help"
-        echo "Type 'e' to exit"
+        show_common_footer "none" "e"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " mode_choice
         
+        # Handle common inputs first
+        if process_common_input "$mode_choice" "none" "e"; then
+            continue
+        fi
+        
+        # Handle menu-specific inputs
         case "$mode_choice" in
             1)
                 __set_execution_mode__ "local"
@@ -300,13 +384,6 @@ select_execution_mode() {
                 ;;
             m)
                 manage_nodes_menu
-                ;;
-            h|\?)
-                __manual_menu__
-                ;;
-            e|E)
-                echo "Exiting..."
-                exit 0
                 ;;
             *)
                 echo "Invalid choice!"
@@ -354,18 +431,21 @@ configure_single_remote() {
         echo "----------------------------------------"
         echo
         echo "Type 'm' to enter manually"
-        echo "Type 'h' or '?' for help"
-        echo "Type 'b' to go back"
+        show_common_footer "b" "none"
         echo
         echo "----------------------------------------"
-        read -rp "Enter choice: " node_choice
+        read -rp "Choice: " node_choice
         
-        if [[ "$node_choice" == "b" ]]; then
-            return 1
-        elif [[ "$node_choice" == "h" ]] || [[ "$node_choice" == "?" ]]; then
-            __manual_menu__
-            continue  # Redisplay menu after manual
-        elif [[ "$node_choice" == "m" ]]; then
+        # Handle common inputs first
+        if process_common_input "$node_choice" "b" "none"; then
+            if [[ "$node_choice" == "b" ]]; then
+                return 1
+            fi
+            continue
+        fi
+        
+        # Handle menu-specific inputs
+        if [[ "$node_choice" == "m" ]]; then
             read -rp "Enter node IP: " manual_ip
             read -rp "Enter node name: " manual_name
             read -rsp "Enter password: " manual_pass
@@ -396,6 +476,7 @@ configure_multi_remote() {
         clear
         show_ascii_art
         echo "Available nodes from nodes.json:"
+        echo "----------------------------------------"
         echo
         
         local node_count
@@ -412,26 +493,31 @@ configure_multi_remote() {
         while IFS= read -r node_name; do
             local node_ip
             node_ip=$(__get_node_ip__ "$node_name")
-            echo "  $i) $node_name ($node_ip)"
+            __line_rgb__ "  $i) $node_name ($node_ip)" 0 200 200
             node_menu[$i]="$node_name:$node_ip"
             ((i++))
         done < <(__get_available_nodes__)
         
         echo
+        echo "----------------------------------------"
+        echo
         echo "Enter node numbers (comma-separated, e.g., 1,3,5) or:"
         echo "  'all' - select all nodes"
-        echo "  'h' or '?' - show help"
-        echo "  'b' - go back"
         echo
+        show_common_footer "b" "none"
+        echo
+        echo "----------------------------------------"
         read -rp "Nodes: " node_selection
         
-        if [[ "$node_selection" == "b" ]]; then
-            return 1
-        elif [[ "$node_selection" == "h" ]] || [[ "$node_selection" == "?" ]]; then
-            __manual_menu__
-            continue  # Redisplay menu after manual
+        # Handle common inputs first
+        if process_common_input "$node_selection" "b" "none"; then
+            if [[ "$node_selection" == "b" ]]; then
+                return 1
+            fi
+            continue
         fi
         
+        # Handle menu-specific inputs
         __clear_remote_targets__
         if [[ "$node_selection" == "all" ]]; then
             while IFS= read -r node_name; do
@@ -493,12 +579,20 @@ manage_nodes_menu() {
         echo 
         echo "----------------------------------------"
         echo
-        echo "Type 'h' or '?' for help"
-        echo "Type 'b' to go back"
+        show_common_footer "b" "none"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " mgmt_choice
         
+        # Handle common inputs first
+        if process_common_input "$mgmt_choice" "b" "none"; then
+            if [[ "$mgmt_choice" == "b" ]]; then
+                return 0
+            fi
+            continue
+        fi
+        
+        # Handle menu-specific inputs
         case "$mgmt_choice" in
             1)
                 echo
@@ -558,11 +652,9 @@ manage_nodes_menu() {
                 fi
                 sleep 2
                 ;;
-            h|\?)
-                __manual_menu__
-                ;;
-            b)
-                return 0
+            *)
+                echo "Invalid choice!"
+                sleep 1
                 ;;
         esac
     done
@@ -690,6 +782,220 @@ run_script_remote() {
 }
 
 ###############################################################################
+# SETTINGS MENU
+###############################################################################
+
+settings_menu() {
+    while true; do
+        clear
+        show_ascii_art
+        echo "Settings & Updates:"
+        echo "----------------------------------------"
+        __line_rgb__ "1) Update scripts from GitHub" 0 200 200
+        __line_rgb__ "2) Change branch (current: $CURRENT_BRANCH)" 0 200 200
+        __line_rgb__ "3) View available branches" 0 200 200
+        echo
+        echo "----------------------------------------"
+        echo
+        show_common_footer "b" "none"
+        echo
+        echo "----------------------------------------"
+        read -rp "Choice: " settings_choice
+        
+        # Handle common inputs first
+        if process_common_input "$settings_choice" "b" "none"; then
+            if [[ "$settings_choice" == "b" ]]; then
+                return 0
+            fi
+            continue
+        fi
+        
+        # Handle menu-specific inputs
+        case "$settings_choice" in
+            1)
+                update_scripts
+                ;;
+            2)
+                change_branch
+                ;;
+            3)
+                view_branches
+                ;;
+            *)
+                echo "Invalid choice!"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+update_scripts() {
+    clear
+    show_ascii_art
+    echo "Update ProxmoxScripts"
+    echo "----------------------------------------"
+    echo "Current branch: $CURRENT_BRANCH"
+    echo
+    echo "This will download and update all scripts from GitHub."
+    echo "Any local modifications will be overwritten."
+    echo
+    read -rp "Continue with update? [y/N]: " confirm
+    
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Update cancelled."
+        sleep 1
+        return
+    fi
+    
+    echo
+    echo "Checking dependencies..."
+    
+    # Check for required tools
+    local missing_tools=()
+    command -v wget &>/dev/null || missing_tools+=("wget")
+    command -v unzip &>/dev/null || missing_tools+=("unzip")
+    
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        echo "Missing required tools: ${missing_tools[*]}"
+        echo "Please install them first."
+        sleep 3
+        return
+    fi
+    
+    echo "Downloading ProxmoxScripts (branch: $CURRENT_BRANCH)..."
+    
+    local REPO_ZIP_URL="https://github.com/coelacant1/ProxmoxScripts/archive/refs/heads/${CURRENT_BRANCH}.zip"
+    local TEMP_DIR=$(mktemp -d)
+    
+    if ! wget -q -O "$TEMP_DIR/repo.zip" "$REPO_ZIP_URL"; then
+        echo "Error: Failed to download from $REPO_ZIP_URL"
+        rm -rf "$TEMP_DIR"
+        sleep 3
+        return
+    fi
+    
+    echo "Extracting..."
+    if ! unzip -q "$TEMP_DIR/repo.zip" -d "$TEMP_DIR"; then
+        echo "Error: Failed to extract repository"
+        rm -rf "$TEMP_DIR"
+        sleep 3
+        return
+    fi
+    
+    local EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d ! -name ".*" | head -n1)
+    
+    if [ -z "$EXTRACTED_DIR" ]; then
+        echo "Error: No extracted content found"
+        rm -rf "$TEMP_DIR"
+        sleep 3
+        return
+    fi
+    
+    echo "Updating files..."
+    
+    # Remove old files but preserve .current_branch
+    find "$BASE_DIR" -mindepth 1 ! -name ".current_branch" ! -name ".git" -delete 2>/dev/null || true
+    
+    # Move new files
+    if ! mv "$EXTRACTED_DIR"/* "$BASE_DIR/" 2>/dev/null; then
+        echo "Error: Failed to move files"
+        rm -rf "$TEMP_DIR"
+        sleep 3
+        return
+    fi
+    
+    # Move hidden files (ignore errors)
+    mv "$EXTRACTED_DIR"/.[!.]* "$BASE_DIR/" 2>/dev/null || true
+    
+    # Make scripts executable
+    echo "Making scripts executable..."
+    find "$BASE_DIR" -type f -name "*.sh" -exec chmod +x {} \;
+    
+    # Cleanup
+    rm -rf "$TEMP_DIR"
+    
+    echo
+    __line_rgb__ "Update completed successfully!" 0 255 0
+    echo "Press Enter to continue..."
+    read -r
+}
+
+change_branch() {
+    clear
+    show_ascii_art
+    echo "Change Branch"
+    echo "----------------------------------------"
+    echo "Current branch: $CURRENT_BRANCH"
+    echo
+    echo "Common branches:"
+    __line_rgb__ "  main    - Stable release branch (recommended)" 0 255 0
+    __line_rgb__ "  testing - Beta/testing branch (may be unstable)" 255 200 0
+    echo
+    echo "Enter branch name (or 'b' to cancel):"
+    read -r new_branch
+    
+    if [[ "$new_branch" == "b" ]] || [[ -z "$new_branch" ]]; then
+        return
+    fi
+    
+    # Save the branch preference
+    echo "$new_branch" > "$BRANCH_FILE"
+    CURRENT_BRANCH="$new_branch"
+    
+    echo
+    __line_rgb__ "Branch changed to: $CURRENT_BRANCH" 0 255 0
+    echo
+    echo "Would you like to update scripts to this branch now? [y/N]:"
+    read -r update_now
+    
+    if [[ "$update_now" =~ ^[Yy]$ ]]; then
+        update_scripts
+    else
+        echo "Branch set. Use 'Update scripts' option to download from this branch."
+        sleep 2
+    fi
+}
+
+view_branches() {
+    clear
+    show_ascii_art
+    echo "Available Branches"
+    echo "----------------------------------------"
+    echo "Fetching branch information from GitHub..."
+    echo
+    
+    # Try to fetch branches using GitHub API
+    if command -v curl &>/dev/null && command -v grep &>/dev/null; then
+        local branches
+        branches=$(curl -s "https://api.github.com/repos/coelacant1/ProxmoxScripts/branches" | grep '"name":' | cut -d'"' -f4)
+        
+        if [[ -n "$branches" ]]; then
+            echo "Available branches:"
+            echo "$branches" | while read -r branch; do
+                if [[ "$branch" == "$CURRENT_BRANCH" ]]; then
+                    __line_rgb__ "  * $branch (current)" 0 255 0
+                else
+                    echo "    $branch"
+                fi
+            done
+        else
+            echo "Could not fetch branch list. Common branches:"
+            echo "  - main"
+            echo "  - testing"
+        fi
+    else
+        echo "curl not available. Common branches:"
+        echo "  - main (stable)"
+        echo "  - testing (beta)"
+    fi
+    
+    echo
+    echo "----------------------------------------"
+    echo "Press Enter to continue..."
+    read -r
+}
+
+###############################################################################
 # DIRECTORY NAVIGATOR
 ###############################################################################
 navigate() {
@@ -731,10 +1037,8 @@ navigate() {
         echo "----------------------------------------"
         echo
         echo "Type 'h<number>' to show script comments."
-        echo "Type 'b' to go up one directory."
         echo "Type 'l' to change log level (remote execution only)."
-        echo "Type 'h' or '?' for manuals and help."
-        echo "Type 'e' to exit."
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
 
@@ -746,32 +1050,23 @@ navigate() {
             echo "----------------------------------------"
         fi
 
+        read -rp "Choice: " choice
 
-        echo -n "Enter choice: "
+        # Handle common inputs first (except 'b' which has special behavior in navigate)
+        if [[ "$choice" == "s" ]] || [[ "$choice" == "h" ]] || [[ "$choice" == "?" ]] || [[ "$choice" == "e" ]]; then
+            process_common_input "$choice" "b" "e"
+            continue
+        fi
 
-        IFS= read -r choice
-
-        # 'b' => go up
+        # 'b' => go up (special handling for root directory)
         if [[ "$choice" == "b" ]]; then
             if [ "$current_dir" = "$BASE_DIR" ]; then
-                __line_rgb__ "Exiting..." 255 0 0
-                exit 0
+                echo "Returning to main menu..."
+                return
             else
                 echo "Going up..."
                 return
             fi
-        fi
-
-        # 'e' => exit
-        if [[ "$choice" == "e" ]]; then
-            __line_rgb__ "Exiting..." 255 0 0
-            exit 0
-        fi
-
-        # 'h' or '?' => show manual system
-        if [[ "$choice" == "h" ]] || [[ "$choice" == "?" ]]; then
-            __manual_menu__
-            continue
         fi
 
         # 'l' => change log level (remote execution only)
@@ -795,8 +1090,7 @@ navigate() {
                 echo
                 echo "Note: All output is always saved to log files regardless of level"
                 echo
-                echo -n "Enter choice (1-4): "
-                read -r log_choice
+                read -rp "Choice (1-4): " log_choice
                 
                 case "$log_choice" in
                     1) REMOTE_LOG_LEVEL="DEBUG" ;;
@@ -861,9 +1155,14 @@ navigate() {
 # MAIN
 ###############################################################################
 
-./MakeScriptsExecutable.sh
+# Make all scripts executable
+find . -type f -name "*.sh" -exec chmod +x {} \;
 
-# Select execution mode before starting navigation
-select_execution_mode
-
-navigate "$BASE_DIR"
+# Main loop - allows returning to execution mode selection
+while true; do
+    # Select execution mode
+    select_execution_mode
+    
+    # Navigate scripts - loops back automatically when user presses 'b' at root
+    navigate "$BASE_DIR"
+done
