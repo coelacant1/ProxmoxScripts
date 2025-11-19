@@ -19,7 +19,6 @@
 #
 # Function Index:
 #   - main
-#   - delete_ct_callback
 #
 
 set -euo pipefail
@@ -46,7 +45,7 @@ main() {
     __check_proxmox__
 
     __warn__ "DESTRUCTIVE: This will permanently delete containers ${START_CTID} to ${END_CTID}"
-    
+
     # Safety check: Require --yes flag in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "$YES" != "true" ]]; then
         __err__ "Destructive operation requires --yes flag in non-interactive mode"

@@ -65,7 +65,7 @@ main() {
 
                 [[ -z "$macs" ]] && macs="None"
                 echo "$node_name,$vm_id,VM,$macs"
-                ((total_entries++))
+                ((total_entries += 1))
             done
         fi
 
@@ -88,7 +88,7 @@ main() {
 
                 [[ -z "$macs" ]] && macs="None"
                 echo "$node_name,$ct_id,CT,$macs"
-                ((total_entries++))
+                ((total_entries += 1))
             done
         fi
     done

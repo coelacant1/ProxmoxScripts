@@ -24,12 +24,16 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -128,64 +132,64 @@ EOF
 ###############################################################################
 # Main loop
 ###############################################################################
-for (( VMID=START_VMID; VMID<=END_VMID; VMID++ )); do
-  echo "=== Processing outer VMID $VMID ==="
+for ((VMID = START_VMID; VMID <= END_VMID; VMID++)); do
+    echo "=== Processing outer VMID $VMID ==="
 
-  echo "Starting VM $VMID..."
-  qm start "$VMID" >/dev/null || true
+    echo "Starting VM $VMID..."
+    qm start "$VMID" >/dev/null || true
 
-  echo "Waiting for QEMU Guest Agent & IP..."
-  if ! IP="$(__get_ip_from_guest_agent__ --vmid "$VMID" --retries 60 --delay 2)"; then
-    echo "Failed to get IP for VMID $VMID"
-    continue
-  fi
-  echo "Inner Proxmox IP: $IP"
+    echo "Waiting for QEMU Guest Agent & IP..."
+    if ! IP="$(__get_ip_from_guest_agent__ --vmid "$VMID" --retries 60 --delay 2)"; then
+        echo "Failed to get IP for VMID $VMID"
+        continue
+    fi
+    echo "Inner Proxmox IP: $IP"
 
-  NEW_PREFIX="$(__vmid_to_mac_prefix__ --vmid "$VMID")"
-  echo "Computed prefix for VMID $VMID -> $NEW_PREFIX"
+    NEW_PREFIX="$(__vmid_to_mac_prefix__ --vmid "$VMID")"
+    echo "Computed prefix for VMID $VMID -> $NEW_PREFIX"
 
-  if [[ "$SSH_PASS" != "-" ]]; then
-    __wait_for_ssh__ "$IP" "$SSH_USER" "$SSH_PASS" 2>/dev/null || true
-  fi
+    if [[ "$SSH_PASS" != "-" ]]; then
+        __wait_for_ssh__ "$IP" "$SSH_USER" "$SSH_PASS" 2>/dev/null || true
+    fi
 
-  connection_flags=(--host "$IP" --user "$SSH_USER")
-  if [[ "$SSH_PASS" == "-" ]]; then
-    connection_flags+=(--identity "$SSH_KEY")
-  else
-    connection_flags+=(--password "$SSH_PASS")
-  fi
+    connection_flags=(--host "$IP" --user "$SSH_USER")
+    if [[ "$SSH_PASS" == "-" ]]; then
+        connection_flags+=(--identity "$SSH_KEY")
+    else
+        connection_flags+=(--password "$SSH_PASS")
+    fi
 
-  echo "Listing inner VMs on $IP:"
-  __ssh_exec__ \
-    "${connection_flags[@]}" \
-    --sudo \
-    --shell bash \
-    --command "qm list || true; pct list || true"
+    echo "Listing inner VMs on $IP:"
+    __ssh_exec__ \
+        "${connection_flags[@]}" \
+        --sudo \
+        --shell bash \
+        --command "qm list || true; pct list || true"
 
-  echo "Applying MAC prefix & rewriting inner VM configs on $IP ..."
-  __ssh_exec_script__ \
-    "${connection_flags[@]}" \
-    --sudo \
-    --script-content "$macUpdateScript" \
-    --arg "$NEW_PREFIX"
+    echo "Applying MAC prefix & rewriting inner VM configs on $IP ..."
+    __ssh_exec_script__ \
+        "${connection_flags[@]}" \
+        --sudo \
+        --script-content "$macUpdateScript" \
+        --arg "$NEW_PREFIX"
 
-  echo "Verification (post-change) on $IP:"
-  __ssh_exec__ \
-    "${connection_flags[@]}" \
-    --sudo \
-    --command "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
-  __ssh_exec__ \
-    "${connection_flags[@]}" \
-    --sudo \
-    --shell bash \
-    --command "qm list | awk 'NR==1 || NR>1{print}'"
-  __ssh_exec__ \
-    "${connection_flags[@]}" \
-    --sudo \
-    --command "pct list || true"
+    echo "Verification (post-change) on $IP:"
+    __ssh_exec__ \
+        "${connection_flags[@]}" \
+        --sudo \
+        --command "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
+    __ssh_exec__ \
+        "${connection_flags[@]}" \
+        --sudo \
+        --shell bash \
+        --command "qm list | awk 'NR==1 || NR>1{print}'"
+    __ssh_exec__ \
+        "${connection_flags[@]}" \
+        --sudo \
+        --command "pct list || true"
 
-  echo "=== Completed outer VMID $VMID ==="
-  echo
+    echo "=== Completed outer VMID $VMID ==="
+    echo
 done
 
 echo "All done."

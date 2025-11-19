@@ -30,10 +30,10 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 # Variable args: pci_device + CTIDs - hybrid parsing
 if [[ $# -lt 2 ]]; then
@@ -69,7 +69,7 @@ enable_pci_passthrough() {
     # Add device access (NVIDIA GPU typically uses major 195)
     local device_allow="lxc.cgroup.devices.allow: c 195:* rwm"
     if ! grep -Fq "$device_allow" "${config_file}"; then
-        echo "$device_allow" >> "${config_file}"
+        echo "$device_allow" >>"${config_file}"
         __ok__ "Added device access permission"
     else
         __update__ "Device access already configured"
@@ -78,7 +78,7 @@ enable_pci_passthrough() {
     # Add mount entry
     local mount_entry="lxc.mount.entry: /sys/bus/pci/devices/0000:${pci_device} /sys/bus/pci/devices/0000:${pci_device} none bind,optional,create=dir"
     if ! grep -Fq "$mount_entry" "${config_file}"; then
-        echo "$mount_entry" >> "${config_file}"
+        echo "$mount_entry" >>"${config_file}"
         __ok__ "Added PCI device mount entry"
     else
         __update__ "Mount entry already exists"
@@ -112,14 +112,14 @@ main() {
         echo
         if ! pct config "${ctid}" &>/dev/null; then
             __err__ "Container $ctid does not exist - skipping"
-            ((failed++))
+            ((failed += 1))
             continue
         fi
 
         if enable_pci_passthrough "$ctid" "$PCI_DEVICE_ID"; then
-            ((success++))
+            ((success += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

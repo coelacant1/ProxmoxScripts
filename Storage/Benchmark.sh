@@ -28,6 +28,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -65,22 +67,22 @@ WRITE_JSON="${TEST_DIR}/fio_write_results.json"
 # FIO Benchmark Function
 ###############################################################################
 runFioTest() {
-  local jobName="$1"
-  local rwMode="$2"
-  local resultFile="$3"
+    local jobName="$1"
+    local rwMode="$2"
+    local resultFile="$3"
 
-  fio --directory="$TEST_DIR" \
-      --name="$jobName" \
-      --rw="$rwMode" \
-      --direct=1 \
-      --bs=4k \
-      --iodepth=32 \
-      --numjobs=1 \
-      --time_based \
-      --runtime=10 \
-      --group_reporting=1 \
-      --output-format=json \
-      --output="$resultFile" &>/dev/null
+    fio --directory="$TEST_DIR" \
+        --name="$jobName" \
+        --rw="$rwMode" \
+        --direct=1 \
+        --bs=4k \
+        --iodepth=32 \
+        --numjobs=1 \
+        --time_based \
+        --runtime=10 \
+        --group_reporting=1 \
+        --output-format=json \
+        --output="$resultFile" &>/dev/null
 }
 
 ###############################################################################
@@ -100,28 +102,28 @@ echo "   [Done]"
 # Parse and Display Key Results
 ###############################################################################
 parseFioOutput() {
-  local resultFile="$1"
-  local mode="$2"
+    local resultFile="$1"
+    local mode="$2"
 
-  if $JQ_AVAILABLE; then
-    local iops
-    local bw
-    local lat50
-    local lat99
-    iops=$(jq -r '.jobs[0].read.iops + .jobs[0].write.iops' "$resultFile")
-    bw=$(jq -r '((.jobs[0].read.bw_bytes + .jobs[0].write.bw_bytes)/1048576) | floor' "$resultFile")
-    lat50=$(jq -r '.jobs[0].clat.percentile."50.000000"' "$resultFile")
-    lat99=$(jq -r '.jobs[0].clat.percentile."99.000000"' "$resultFile")
+    if $JQ_AVAILABLE; then
+        local iops
+        local bw
+        local lat50
+        local lat99
+        iops=$(jq -r '.jobs[0].read.iops + .jobs[0].write.iops' "$resultFile")
+        bw=$(jq -r '((.jobs[0].read.bw_bytes + .jobs[0].write.bw_bytes)/1048576) | floor' "$resultFile")
+        lat50=$(jq -r '.jobs[0].clat.percentile."50.000000"' "$resultFile")
+        lat99=$(jq -r '.jobs[0].clat.percentile."99.000000"' "$resultFile")
 
-    echo " - $mode:"
-    echo "     IOPS: \"$iops\""
-    echo "     BW:   \"${bw}\" MB/s"
-    echo "     Latency (p50): \"${lat50}\"us"
-    echo "     Latency (p99): \"${lat99}\"us"
-  else
-    echo " - $mode: (Install 'jq' for detailed parsing)"
-    grep -Eo '"iops":[0-9]+|"bw_bytes":[0-9]+' "$resultFile" | head -n 4
-  fi
+        echo " - $mode:"
+        echo "     IOPS: \"$iops\""
+        echo "     BW:   \"${bw}\" MB/s"
+        echo "     Latency (p50): \"${lat50}\"us"
+        echo "     Latency (p99): \"${lat99}\"us"
+    else
+        echo " - $mode: (Install 'jq' for detailed parsing)"
+        grep -Eo '"iops":[0-9]+|"bw_bytes":[0-9]+' "$resultFile" | head -n 4
+    fi
 }
 
 echo
@@ -133,39 +135,39 @@ parseFioOutput "$WRITE_JSON" "Random Write"
 # Optional Extended Results
 ###############################################################################
 if __prompt_user_yn__ "Would you like to view extended info?"; then
-  echo "Extended results for Random Read (JSON):"
-  cat "$READ_JSON"
-  echo
-  echo "Extended results for Random Write (JSON):"
-  cat "$WRITE_JSON"
+    echo "Extended results for Random Read (JSON):"
+    cat "$READ_JSON"
+    echo
+    echo "Extended results for Random Write (JSON):"
+    cat "$WRITE_JSON"
 fi
 
 ###############################################################################
 # Optional CSV Export
 ###############################################################################
 if __prompt_user_yn__ "Would you like to save results to CSV?"; then
-  CSV_PATH="${TEST_DIR}/fio_results.csv"
-  echo "job_name,iops,bw_mb_s,lat50_us,lat99_us" > "$CSV_PATH"
+    CSV_PATH="${TEST_DIR}/fio_results.csv"
+    echo "job_name,iops,bw_mb_s,lat50_us,lat99_us" >"$CSV_PATH"
 
-  for jsonFile in "$READ_JSON" "$WRITE_JSON"; do
-    if $JQ_AVAILABLE; then
-      declare jobName
-      declare iops
-      declare bw
-      declare lat50
-      declare lat99
-      jobName=$(jq -r '.jobs[0].jobname' "$jsonFile")
-      iops=$(jq -r '.jobs[0].read.iops + .jobs[0].write.iops' "$jsonFile")
-      bw=$(jq -r '((.jobs[0].read.bw_bytes + .jobs[0].write.bw_bytes)/1048576) | floor' "$jsonFile")
-      lat50=$(jq -r '.jobs[0].clat.percentile."50.000000"' "$jsonFile")
-      lat99=$(jq -r '.jobs[0].clat.percentile."99.000000"' "$jsonFile")
-      echo "${jobName},${iops},${bw},${lat50},${lat99}" >> "$CSV_PATH"
-    else
-      echo "Warning: 'jq' not installed, cannot export extended metrics to CSV."
-    fi
-  done
+    for jsonFile in "$READ_JSON" "$WRITE_JSON"; do
+        if $JQ_AVAILABLE; then
+            declare jobName
+            declare iops
+            declare bw
+            declare lat50
+            declare lat99
+            jobName=$(jq -r '.jobs[0].jobname' "$jsonFile")
+            iops=$(jq -r '.jobs[0].read.iops + .jobs[0].write.iops' "$jsonFile")
+            bw=$(jq -r '((.jobs[0].read.bw_bytes + .jobs[0].write.bw_bytes)/1048576) | floor' "$jsonFile")
+            lat50=$(jq -r '.jobs[0].clat.percentile."50.000000"' "$jsonFile")
+            lat99=$(jq -r '.jobs[0].clat.percentile."99.000000"' "$jsonFile")
+            echo "${jobName},${iops},${bw},${lat50},${lat99}" >>"$CSV_PATH"
+        else
+            echo "Warning: 'jq' not installed, cannot export extended metrics to CSV."
+        fi
+    done
 
-  echo "CSV results saved to: \"$CSV_PATH\""
+    echo "CSV results saved to: \"$CSV_PATH\""
 fi
 
 ###############################################################################

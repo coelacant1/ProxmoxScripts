@@ -26,6 +26,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
 
@@ -68,12 +70,12 @@ main() {
             __update__ "Removing HA resource: ${res}"
             if pvesh delete "/cluster/ha/resources/${res}" 2>&1; then
                 __ok__ "Removed ${res}"
-                ((removed++))
+                ((removed += 1))
             else
                 __warn__ "Failed to remove ${res}"
-                ((failed++))
+                ((failed += 1))
             fi
-        done <<< "$ha_resources"
+        done <<<"$ha_resources"
 
         echo
         __info__ "Removed ${removed} HA resource(s)"

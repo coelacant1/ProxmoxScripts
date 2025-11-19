@@ -48,7 +48,7 @@ rewrite_file_mac_prefix() {
     sed -E \
         -e "s/(net[0-9]+:[[:space:]]*[^=]+=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
         -e "s/(hwaddr=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
-        "$tmp" > "$tmp".new
+        "$tmp" >"$tmp".new
 
     if ! cmp -s "$file" "$tmp".new; then
         __info__ "Changes detected: $(basename "$file")"
@@ -144,10 +144,10 @@ main() {
 
     for file in "${qemu_files[@]}" "${lxc_files[@]}"; do
         [[ -f "$file" ]] || continue
-        ((processed++))
+        ((processed += 1))
 
         if rewrite_file_mac_prefix "$file" "$prefix_upper" "$backup_dir" "$DRY_RUN"; then
-            ((changed++))
+            ((changed += 1))
         fi
     done
 

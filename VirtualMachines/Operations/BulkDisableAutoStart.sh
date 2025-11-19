@@ -37,10 +37,10 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
-# shellcheck source=Utilities/Cluster.sh
-source "${UTILITYPATH}/Cluster.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -93,71 +93,71 @@ EOF
 # Process a single VMID
 ###############################################################################
 process_vmid() {
-  local vmId="$1"
-  local user="$2"
-  local pass="$3"
+    local vmId="$1"
+    local user="$2"
+    local pass="$3"
 
-  echo "========================================="
-  echo "Processing VMID: $vmId"
-  echo "========================================="
+    echo "========================================="
+    echo "Processing VMID: $vmId"
+    echo "========================================="
 
-  local ip
-  ip="$(__get_ip_from_vmid__ "$vmId" || echo "")"
-  if [[ -z "$ip" ]]; then
-    __warn__ "Could not get IP for VMID $vmId. Skipping."
-    return
-  fi
-  echo "Detected IP: $ip"
+    local ip
+    ip="$(__get_ip_from_vmid__ "$vmId" || echo "")"
+    if [[ -z "$ip" ]]; then
+        __warn__ "Could not get IP for VMID $vmId. Skipping."
+        return
+    fi
+    echo "Detected IP: $ip"
 
-  if ! __wait_for_ssh__ "$ip" 300; then
-    __warn__ "SSH not reachable at $ip for VMID $vmId. Skipping."
-    return
-  fi
+    if ! __wait_for_ssh__ "$ip" 300; then
+        __warn__ "SSH not reachable at $ip for VMID $vmId. Skipping."
+        return
+    fi
 
-  __info__ "Disabling autostart on nested Proxmox at $ip..."
-  if __ssh_exec_script__ "$ip" "$user" "$pass" "$disableAutostartScript"; then
-    __ok__ "Successfully disabled autostart on VMID $vmId ($ip)."
-  else
-    __err__ "Failed to disable autostart on VMID $vmId ($ip)."
-  fi
+    __info__ "Disabling autostart on nested Proxmox at $ip..."
+    if __ssh_exec_script__ "$ip" "$user" "$pass" "$disableAutostartScript"; then
+        __ok__ "Successfully disabled autostart on VMID $vmId ($ip)."
+    else
+        __err__ "Failed to disable autostart on VMID $vmId ($ip)."
+    fi
 }
 
 ###############################################################################
 # Main
 ###############################################################################
 main() {
-  # Parse arguments using ArgumentParser
-  __parse_args__ "start_vmid:vmid end_vmid:vmid ssh_username:string ssh_password:string" "$@"
+    # Parse arguments using ArgumentParser
+    __parse_args__ "start_vmid:vmid end_vmid:vmid ssh_username:string ssh_password:string" "$@"
 
-  __info__ "Bulk disable autostart for nested Proxmox VMs: ${START_VMID}-${END_VMID}"
-  __info__ "SSH User: ${SSH_USERNAME}"
+    __info__ "Bulk disable autostart for nested Proxmox VMs: ${START_VMID}-${END_VMID}"
+    __info__ "SSH User: ${SSH_USERNAME}"
 
-  if ! __prompt_user_yn__ "Disable autostart for VMs ${START_VMID}-${END_VMID}?"; then
-    __info__ "Operation cancelled"
-    exit 0
-  fi
-
-  local failed=0
-  for ((vmid=START_VMID; vmid<=END_VMID; vmid++)); do
-    if ! process_vmid "$vmid" "$SSH_USERNAME" "$SSH_PASSWORD"; then
-      ((failed++))
+    if ! __prompt_user_yn__ "Disable autostart for VMs ${START_VMID}-${END_VMID}?"; then
+        __info__ "Operation cancelled"
+        exit 0
     fi
-  done
 
-  echo ""
-  echo "========================================="
-  echo "Summary"
-  echo "========================================="
-  local total=$((END_VMID - START_VMID + 1))
-  local success=$((total - failed))
-  echo "Total VMs processed: $total"
-  echo "Success: $success"
-  echo "Failed: $failed"
+    local failed=0
+    for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
+        if ! process_vmid "$vmid" "$SSH_USERNAME" "$SSH_PASSWORD"; then
+            ((failed++))
+        fi
+    done
 
-  if [[ $failed -gt 0 ]]; then
-    exit 1
-  fi
-  __ok__ "All operations completed successfully"
+    echo ""
+    echo "========================================="
+    echo "Summary"
+    echo "========================================="
+    local total=$((END_VMID - START_VMID + 1))
+    local success=$((total - failed))
+    echo "Total VMs processed: $total"
+    echo "Success: $success"
+    echo "Failed: $failed"
+
+    if [[ $failed -gt 0 ]]; then
+        exit 1
+    fi
+    __ok__ "All operations completed successfully"
 }
 
 main "$@"

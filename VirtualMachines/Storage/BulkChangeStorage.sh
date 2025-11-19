@@ -20,7 +20,6 @@
 #
 # Function Index:
 #   - main
-#   - change_storage_callback
 #
 
 set -euo pipefail
@@ -33,6 +32,8 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 

@@ -22,7 +22,6 @@
 #
 # Function Index:
 #   - main
-#   - change_ip_callback
 #
 
 set -euo pipefail
@@ -35,11 +34,15 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid start_ip_cidr:string bridge:string gateway:string:?" "$@"
+__parse_args__ "start_vmid:int end_vmid:int start_ip_cidr:string bridge:string gateway:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -47,7 +50,7 @@ main() {
     __check_proxmox__
 
     # Parse IP and CIDR
-    IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
+    IFS='/' read -r START_IP SUBNET_MASK <<<"$START_IP_CIDR"
 
     __info__ "Bulk change IP: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
     __info__ "Starting IP: ${START_IP}/${SUBNET_MASK}, Bridge: ${BRIDGE}"

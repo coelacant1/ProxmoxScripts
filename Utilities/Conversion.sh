@@ -17,13 +17,12 @@
 # actions.
 #
 # Function Index:
+#   - __convert_log__
 #   - __ip_to_int__
 #   - __int_to_ip__
 #   - __cidr_to_netmask__
 #   - __vmid_to_mac_prefix__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -56,7 +55,7 @@ __ip_to_int__() {
     local a b c d
     IFS=. read -r a b c d <<<"$1"
     local result=$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))
-    __convert_log__ "DEBUG" "IP $1 → int $result"
+    __convert_log__ "DEBUG" "IP $1 -> int $result"
     echo "$result"
 }
 
@@ -75,7 +74,7 @@ __int_to_ip__() {
         "$((($1 >> 16) & 255))" \
         "$((($1 >> 8) & 255))" \
         "$(($1 & 255))")
-    __convert_log__ "DEBUG" "Int $1 → IP $ip"
+    __convert_log__ "DEBUG" "Int $1 -> IP $ip"
     echo "$ip"
 }
 
@@ -87,16 +86,16 @@ __int_to_ip__() {
 # @return Prints the full subnet netmask.
 # @example_output For __cidr_to_netmask__ 18, the output is: 255.255.192.0
 __cidr_to_netmask__() {
-  __convert_log__ "TRACE" "Converting CIDR to netmask: $1"
-  local cidr="$1"
-  local mask=$(( 0xffffffff << (32 - cidr) & 0xffffffff ))
-  local octet1=$(( (mask >> 24) & 255 ))
-  local octet2=$(( (mask >> 16) & 255 ))
-  local octet3=$(( (mask >>  8) & 255 ))
-  local octet4=$((  mask        & 255 ))
-  local result="${octet1}.${octet2}.${octet3}.${octet4}"
-  __convert_log__ "DEBUG" "CIDR /$cidr → netmask $result"
-  echo "$result"
+    __convert_log__ "TRACE" "Converting CIDR to netmask: $1"
+    local cidr="$1"
+    local mask=$((0xffffffff << (32 - cidr) & 0xffffffff))
+    local octet1=$(((mask >> 24) & 255))
+    local octet2=$(((mask >> 16) & 255))
+    local octet3=$(((mask >> 8) & 255))
+    local octet4=$((mask & 255))
+    local result="${octet1}.${octet2}.${octet3}.${octet4}"
+    __convert_log__ "DEBUG" "CIDR /$cidr -> netmask $result"
+    echo "$result"
 }
 
 # --- __vmid_to_mac_prefix__ -------------------------------------------------
@@ -160,7 +159,7 @@ __vmid_to_mac_prefix__() {
         return 1
     fi
 
-    if (( padLength <= 0 || padLength % 2 != 0 )); then
+    if ((padLength <= 0 || padLength % 2 != 0)); then
         __convert_log__ "ERROR" "Pad length must be even: $padLength"
         echo "Error: --pad-length must be a positive, even integer." >&2
         return 1
@@ -168,20 +167,20 @@ __vmid_to_mac_prefix__() {
 
     __convert_log__ "DEBUG" "Converting VMID $vmid to MAC prefix (prefix=$prefix, padLength=$padLength)"
 
-        local padded
-        printf -v padded "%0${padLength}d" "$vmid"
+    local padded
+    printf -v padded "%0${padLength}d" "$vmid"
 
-        local effectiveLength=${#padded}
-        if (( effectiveLength % 2 != 0 )); then
-            padded="0${padded}"
-            ((effectiveLength++))
-        fi
+    local effectiveLength=${#padded}
+    if ((effectiveLength % 2 != 0)); then
+        padded="0${padded}"
+        ((effectiveLength += 1))
+    fi
 
-        local -a segments=()
-        local i
-        for (( i = 0; i < effectiveLength; i += 2 )); do
-            segments+=("${padded:i:2}")
-        done
+    local -a segments=()
+    local i
+    for ((i = 0; i < effectiveLength; i += 2)); do
+        segments+=("${padded:i:2}")
+    done
 
     local upperPrefix
     upperPrefix=$(echo "$prefix" | tr '[:lower:]' '[:upper:]')
@@ -192,6 +191,6 @@ __vmid_to_mac_prefix__() {
         result+=":${segment^^}"
     done
 
-    __convert_log__ "INFO" "VMID $vmid → MAC prefix $result"
+    __convert_log__ "INFO" "VMID $vmid -> MAC prefix $result"
     echo "$result"
 }

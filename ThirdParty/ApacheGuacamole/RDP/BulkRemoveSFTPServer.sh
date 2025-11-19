@@ -1,24 +1,25 @@
 #!/bin/bash
 #
-# BulkRemoveDriveRedirection.sh
+# BulkRemoveSFTPServer.sh
 #
 # This script searches for Guacamole connections whose name contains a given substring,
-# retrieves the full connection JSON for each match, and then updates its connection
-# parameters by removing drive redirection settings. Specifically, it removes the following keys:
+# retrieves the complete connection configuration, and then updates each connection
+# by removing SFTP-related parameters.
 #
-#   - "enable-drive"
-#   - "drive-name"
-#   - "drive-path"
-#   - "create-drive-path"
-#
-# All other existing parameters (including connection details such as hostname, port, username, etc.)
-# are preserved.
+# The following SFTP keys are removed:
+#   - "sftp-directory"
+#   - "sftp-root-directory"
+#   - "sftp-hostname"
+#   - "sftp-password"
+#   - "sftp-username"
+#   - "enable-sftp"
+#   - "sftp-port"
 #
 # Usage:
-#   BulkRemoveDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
+#   BulkRemoveSFTPServer.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
 #
 # Example:
-#   BulkRemoveDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+#   BulkRemoveSFTPServer.sh "http://192.168.1.10:8080/guacamole" "Clone" mysql
 #
 
 # Function Index:
@@ -31,6 +32,8 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -53,19 +56,19 @@ echo "Using data source: '$GUAC_DATA_SOURCE'"
 ###############################################################################
 echo "Retrieving connection tree from Guacamole..."
 connectionsJson="$(curl -s -X GET \
-  "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
+    "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
 
 if [[ -z "$connectionsJson" ]]; then
-  echo "Error: Could not retrieve connection tree from Guacamole."
-  exit 1
+    echo "Error: Could not retrieve connection tree from Guacamole."
+    exit 1
 fi
 
 ###############################################################################
-# Filter matching connections (by partial name match) and force an array output
+# Filter matching connections (by partial name match)
 ###############################################################################
 echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
-  --arg SUBSTR "$SEARCH_SUBSTRING" '
+    --arg SUBSTR "$SEARCH_SUBSTRING" '
     [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | { id: .identifier, name: .name } ]
@@ -73,18 +76,18 @@ matchingConnections=$(echo "$connectionsJson" | jq -r \
 
 # Check if any matches were found.
 if [[ "$(echo "$matchingConnections" | jq 'length')" -eq 0 ]]; then
-  echo "No connections found matching '$SEARCH_SUBSTRING'."
-  exit 0
+    echo "No connections found matching '$SEARCH_SUBSTRING'."
+    exit 0
 fi
 
 echo "Found matching connections:"
 echo "$matchingConnections" | jq .
 
 ###############################################################################
-# For each matching connection, remove drive redirection parameters
+# For each matching connection, remove SFTP parameters
 ###############################################################################
 echo "---------------------------------------------"
-echo "Removing drive redirection parameters from matching connections..."
+echo "Removing SFTP parameters for matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
@@ -93,27 +96,26 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
 
-    # Retrieve the full connection JSON using the identifier.
+    # Retrieve the full connection JSON.
     connectionInfo=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ -z "$connectionInfo" ]]; then
-      echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
-      continue
+        echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
+        continue
     fi
 
-    # Retrieve existing parameters from the dedicated endpoint.
+    # Retrieve existing parameters.
     existingParams=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
 
-    # If no parameters are returned, default to an empty object.
+    # Default to an empty object if no parameters are returned.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
 
-    # Remove drive redirection keys.
-    newParams=$(echo "$existingParams" | jq 'del(.["enable-drive"], .["drive-name"], .["drive-path"], .["create-drive-path"])')
+    # Remove SFTP-related keys.
+    newParams=$(echo "$existingParams" | jq 'del(.["sftp-directory"], .["sftp-root-directory"], .["sftp-hostname"], .["sftp-password"], .["sftp-username"], .["enable-sftp"], .["sftp-port"])')
 
     # Build the updated connection JSON payload.
-    # Preserve parentIdentifier, name, protocol, and attributes from connectionInfo.
     updatedJson=$(echo "$connectionInfo" | jq --argjson params "$newParams" '
         {
           parentIdentifier: .parentIdentifier,
@@ -126,21 +128,15 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      -H "Content-Type: application/json" \
-      -d "$updatedJson" \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        -H "Content-Type: application/json" \
+        -d "$updatedJson" \
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
-        echo "  Successfully updated connection '$connId'."
+        echo "  Successfully removed SFTP parameters for connection '$connId'."
     else
         echo "  Failed to update connection '$connId' (HTTP status $updateResponse)."
     fi
 done
 
-echo "Completed removal of drive redirection parameters for all matching connections."
-
-
-# Testing status:
-#   - ArgumentParser.sh sourced
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+echo "Completed removal of SFTP parameters for all matching connections."

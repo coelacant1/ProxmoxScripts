@@ -25,10 +25,10 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -41,7 +41,7 @@ SERVICE_FILE="/etc/systemd/system/spindown.service"
 ###############################################################################
 # Main
 ###############################################################################
-__check_root__  # Ensure the script is run as root
+__check_root__ # Ensure the script is run as root
 
 # Check arguments
 if [[ $# -lt 1 ]]; then
@@ -56,35 +56,35 @@ fi
 # Uninstall Mode
 ###############################################################################
 if [[ "$1" == "uninstall" ]]; then
-  echo "Uninstall mode selected. Reverting changes..."
+    echo "Uninstall mode selected. Reverting changes..."
 
-  # Stop and disable the service if it exists
-  if systemctl is-enabled spindown.service &>/dev/null; then
-    systemctl stop spindown.service || true
-    systemctl disable spindown.service || true
-  fi
+    # Stop and disable the service if it exists
+    if systemctl is-enabled spindown.service &>/dev/null; then
+        systemctl stop spindown.service || true
+        systemctl disable spindown.service || true
+    fi
 
-  # Remove the systemd service file
-  if [[ -f "$SERVICE_FILE" ]]; then
-    rm -f "$SERVICE_FILE"
-    echo "Removed \"$SERVICE_FILE\""
-  fi
+    # Remove the systemd service file
+    if [[ -f "$SERVICE_FILE" ]]; then
+        rm -f "$SERVICE_FILE"
+        echo "Removed \"$SERVICE_FILE\""
+    fi
 
-  # Remove the helper script
-  if [[ -f "$HELPER_SCRIPT" ]]; then
-    rm -f "$HELPER_SCRIPT"
-    echo "Removed \"$HELPER_SCRIPT\""
-  fi
+    # Remove the helper script
+    if [[ -f "$HELPER_SCRIPT" ]]; then
+        rm -f "$HELPER_SCRIPT"
+        echo "Removed \"$HELPER_SCRIPT\""
+    fi
 
-  # Remove hdparm if installed
-  if command -v hdparm &>/dev/null; then
-    echo "Removing hdparm..."
-    apt-get remove -y hdparm || echo "Warning: Could not remove hdparm automatically."
-  fi
+    # Remove hdparm if installed
+    if command -v hdparm &>/dev/null; then
+        echo "Removing hdparm..."
+        apt-get remove -y hdparm || echo "Warning: Could not remove hdparm automatically."
+    fi
 
-  systemctl daemon-reload
-  echo "Uninstall complete. System reverted to default for drive spindown configuration."
-  exit 0
+    systemctl daemon-reload
+    echo "Uninstall complete. System reverted to default for drive spindown configuration."
+    exit 0
 fi
 
 ###############################################################################
@@ -109,8 +109,8 @@ fi
 
 # Install hdparm if missing
 __install_or_prompt__ "hdparm" || {
-  echo "Error: 'hdparm' is required but cannot be installed."
-  exit 4
+    echo "Error: 'hdparm' is required but cannot be installed."
+    exit 4
 }
 
 # Prompt whether to keep newly installed packages at the end
@@ -120,15 +120,15 @@ __prompt_keep_installed_packages__
 # Convert Minutes to hdparm -S Value
 ###############################################################################
 if [[ "$SPINDOWN_MINUTES" -le 20 ]]; then
-  HDPARM_VALUE=$(( SPINDOWN_MINUTES * 12 ))
+    HDPARM_VALUE=$((SPINDOWN_MINUTES * 12))
 else
-  HDPARM_VALUE=241
+    HDPARM_VALUE=241
 fi
 
 ###############################################################################
 # Create Helper Script
 ###############################################################################
-cat <<EOF > "$HELPER_SCRIPT"
+cat <<EOF >"$HELPER_SCRIPT"
 #!/bin/bash
 #
 # spindown-logic.sh
@@ -142,7 +142,7 @@ echo "Applying hdparm spindown settings..."
 EOF
 
 for devPath in "${DEVICES[@]}"; do
-  echo "hdparm -S $HDPARM_VALUE \"$devPath\" || echo \"Warning: Failed to set spindown on $devPath\"" >> "$HELPER_SCRIPT"
+    echo "hdparm -S $HDPARM_VALUE \"$devPath\" || echo \"Warning: Failed to set spindown on $devPath\"" >>"$HELPER_SCRIPT"
 done
 
 chmod +x "$HELPER_SCRIPT"
@@ -150,7 +150,7 @@ chmod +x "$HELPER_SCRIPT"
 ###############################################################################
 # Create Systemd Service
 ###############################################################################
-cat <<EOF > "$SERVICE_FILE"
+cat <<EOF >"$SERVICE_FILE"
 [Unit]
 Description=Spin down drives after idle time
 After=multi-user.target

@@ -31,6 +31,8 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -71,7 +73,7 @@ __check_proxmox__
 
 # Check and/or install required commands
 __install_or_prompt__ "parted"
-__install_or_prompt__ "util-linux"  # Provides wipefs
+__install_or_prompt__ "util-linux" # Provides wipefs
 __install_or_prompt__ "coreutils"
 
 ###############################################################################
@@ -109,16 +111,16 @@ parted -s "$DISK" mklabel gpt
 # Optional Zero Fill
 ###############################################################################
 if __prompt_user_yn__ "Would you like to overwrite the disk with zeroes?"; then
-  __install_or_prompt__ "coreutils"
-  echo "Overwriting \"$DISK\" with zeroes. This may take a while..."
-  dd if=/dev/zero of="$DISK" bs=1M status=progress || {
-    echo "Error: Failed to overwrite disk with zeroes."
-    exit 5
-  }
-  sync
-  echo "Zero-fill complete."
+    __install_or_prompt__ "coreutils"
+    echo "Overwriting \"$DISK\" with zeroes. This may take a while..."
+    dd if=/dev/zero of="$DISK" bs=1M status=progress || {
+        echo "Error: Failed to overwrite disk with zeroes."
+        exit 5
+    }
+    sync
+    echo "Zero-fill complete."
 else
-  echo "Skipping zero-fill as per user choice."
+    echo "Skipping zero-fill as per user choice."
 fi
 
 ###############################################################################

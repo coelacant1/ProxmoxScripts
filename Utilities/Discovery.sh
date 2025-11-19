@@ -14,10 +14,12 @@
 #   source "${UTILITYPATH}/Discovery.sh"
 #
 # Function Index:
-#   - get_ip_from_vmid          # Get IP from VMID (ARP/guest agent/MAC)
-#   - __get_ip_from_guest_agent__  # Get IP from QEMU guest agent
-#   - __get_ip_from_name__         # Node name → IP
-#   - __get_name_from_ip__         # Node IP → name
+#   - __discovery_log__
+#   - __get_ip_from_vmid__
+#   - __get_ip_from_guest_agent__
+#   - __get_ip_from_name__
+#   - __get_name_from_ip__
+#
 
 ###############################################################################
 # Configuration & Dependencies
@@ -51,7 +53,6 @@ declare -gA BRIDGE_SUBNET_CACHE
 # IP Discovery Functions
 ###############################################################################
 
-
 # --- get_ip_from_vmid ------------------------------------------------------------
 # @function get_ip_from_vmid
 # @description Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).
@@ -63,9 +64,9 @@ declare -gA BRIDGE_SUBNET_CACHE
 #   192.168.1.100
 __get_ip_from_vmid__() {
     local vmid="$1"
-    
+
     __discovery_log__ "INFO" "Getting IP address for VMID $vmid"
-    
+
     if [[ -z "$vmid" ]]; then
         __discovery_log__ "ERROR" "VMID argument is required"
         echo "Error: get_ip_from_vmid requires a VMID argument." >&2
@@ -84,8 +85,8 @@ __get_ip_from_vmid__() {
 
         # 1) Try to get the IP by executing 'hostname -I' inside the container.
         local guest_ip
-        guest_ip=$(pct exec "$vmid" -- hostname -I 2>/dev/null |
-            awk '{ for(i=1;i<=NF;i++) { if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i != "127.0.0.1") { print $i; exit } } }')
+        guest_ip=$(pct exec "$vmid" -- hostname -I 2>/dev/null \
+            | awk '{ for(i=1;i<=NF;i++) { if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i != "127.0.0.1") { print $i; exit } } }')
         if [[ -n "$guest_ip" ]]; then
             __discovery_log__ "INFO" "Retrieved IP $guest_ip from LXC container $vmid via hostname"
             echo "$guest_ip"
@@ -97,28 +98,28 @@ __get_ip_from_vmid__() {
 
         # 2) Retrieve MAC address from container configuration (net0)
         local mac
-        mac=$(pct config "$vmid" |
-            grep -E '^net[0-9]+:' |
-            grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}')
+        mac=$(pct config "$vmid" \
+            | grep -E '^net[0-9]+:' \
+            | grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}')
         if [[ -z "$mac" ]]; then
             __discovery_log__ "ERROR" "Could not retrieve MAC address for container $vmid"
             echo "Error: Could not retrieve net0 MAC address for container VMID '$vmid'." >&2
             return 1
         fi
-        
+
         __discovery_log__ "DEBUG" "Container $vmid MAC address: $mac"
 
         # 3) Determine the bridge from container config
         local bridge
-        bridge=$(pct config "$vmid" |
-            grep -E '^net[0-9]+:' |
-            grep -oP 'bridge=\K[^,]+')
+        bridge=$(pct config "$vmid" \
+            | grep -E '^net[0-9]+:' \
+            | grep -oP 'bridge=\K[^,]+')
         if [[ -z "$bridge" ]]; then
             __discovery_log__ "ERROR" "Could not determine bridge for container $vmid"
             echo "Error: Could not determine which bridge interface is used by container VMID '$vmid'." >&2
             return 1
         fi
-        
+
         __discovery_log__ "DEBUG" "Container $vmid bridge: $bridge"
 
         # 4) Check whether the host’s bridge has an IP address.
@@ -141,16 +142,16 @@ __get_ip_from_vmid__() {
         # 5) Run arp-scan on the determined subnet to find the matching MAC address.
         local scannedIp
         if [[ "$subnet_to_scan" == "--localnet" ]]; then
-            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
+            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null \
+                | grep -i "$mac" \
+                | awk '{print $1}' | head -n1)
         else
             local base_ip
             base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
             base_ip="${base_ip%.*}.1"
-            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
+            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null \
+                | grep -i "$mac" \
+                | awk '{print $1}' | head -n1)
         fi
 
         if [[ -z "$scannedIp" ]]; then
@@ -170,31 +171,31 @@ __get_ip_from_vmid__() {
         # 1) Retrieve MAC address from net0
         local mac
         mac=$(
-            qm config "$vmid" |
-                grep -E '^net[0-9]+:' |
-                grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
+            qm config "$vmid" \
+                | grep -E '^net[0-9]+:' \
+                | grep -oE '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'
         )
         if [[ -z "$mac" ]]; then
             __discovery_log__ "ERROR" "Could not retrieve MAC address for VM $vmid"
             echo "Error: Could not retrieve net0 MAC address for VMID '$vmid'." >&2
             return 1
         fi
-        
+
         __discovery_log__ "DEBUG" "VM $vmid MAC address: $mac"
 
         # 2) Try to retrieve IP via QEMU Guest Agent: network-get-interfaces
         local guest_ip
         guest_ip=$(
-            qm guest cmd "$vmid" network-get-interfaces 2>/dev/null |
-                jq -r --arg mac "$mac" '
+            qm guest cmd "$vmid" network-get-interfaces 2>/dev/null \
+                | jq -r --arg mac "$mac" '
                 .[]
                 | select((.["hardware-address"] // "")
                          | ascii_downcase == ($mac | ascii_downcase))
                 | .["ip-addresses"][]?
                 | select(.["ip-address-type"] == "ipv4" and .["ip-address"] != "127.0.0.1")
                 | .["ip-address"]
-            ' |
-                head -n1
+            ' \
+                | head -n1
         )
         if [[ -n "$guest_ip" && "$guest_ip" != "null" ]]; then
             __discovery_log__ "INFO" "Retrieved IP $guest_ip from VM $vmid via guest agent"
@@ -208,16 +209,16 @@ __get_ip_from_vmid__() {
         # 3) Identify the bridge from net0 config
         local bridge
         bridge=$(
-            qm config "$vmid" |
-                grep -E '^net[0-9]+:' |
-                grep -oP 'bridge=\K[^,]+'
+            qm config "$vmid" \
+                | grep -E '^net[0-9]+:' \
+                | grep -oP 'bridge=\K[^,]+'
         )
         if [[ -z "$bridge" ]]; then
             __discovery_log__ "ERROR" "Could not determine bridge for VM $vmid"
             echo "Error: Could not determine which bridge interface is used by VMID '$vmid'." >&2
             return 1
         fi
-        
+
         __discovery_log__ "DEBUG" "VM $vmid bridge: $bridge"
 
         # 4) Check if the bridge has an IP address on the host
@@ -240,16 +241,16 @@ __get_ip_from_vmid__() {
         # 5) Run arp-scan on the determined subnet to find the matching MAC address.
         local scannedIp
         if [[ "$subnet_to_scan" == "--localnet" ]]; then
-            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
+            scannedIp=$(arp-scan --interface="$bridge" --localnet 2>/dev/null \
+                | grep -i "$mac" \
+                | awk '{print $1}' | head -n1)
         else
             local base_ip
             base_ip=$(echo "$subnet_to_scan" | cut -d '/' -f1)
             base_ip="${base_ip%.*}.1"
-            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null |
-                grep -i "$mac" |
-                awk '{print $1}' | head -n1)
+            scannedIp=$(arp-scan --interface="$bridge" --arpspa="$base_ip" "$subnet_to_scan" 2>/dev/null \
+                | grep -i "$mac" \
+                | awk '{print $1}' | head -n1)
         fi
 
         if [[ -z "$scannedIp" ]]; then
@@ -268,7 +269,6 @@ __get_ip_from_vmid__() {
         return 1
     fi
 }
-
 
 # --- __get_ip_from_guest_agent__ -------------------------------------------
 # @function __get_ip_from_guest_agent__
@@ -351,7 +351,7 @@ __get_ip_from_guest_agent__() {
     local attempt
     for ((attempt = 1; attempt <= retries; attempt++)); do
         __discovery_log__ "DEBUG" "Guest agent query attempt $attempt/$retries for VM $vmid"
-        
+
         if ! qm agent "$vmid" ping >/dev/null 2>&1; then
             sleep "$delaySeconds"
             continue
@@ -395,7 +395,6 @@ __get_ip_from_guest_agent__() {
     return 1
 }
 
-
 # --- __get_ip_from_name__ ------------------------------------------------------------
 # @function __get_ip_from_name__
 # @description Given a node’s name (e.g., "pve01"), prints its link0 IP address.
@@ -409,7 +408,7 @@ __get_ip_from_name__() {
     local node_name
     node_name=$(echo "$1" | xargs)
     __discovery_log__ "TRACE" "Resolving node name to IP: $node_name"
-    
+
     if [[ -z "$node_name" ]]; then
         __discovery_log__ "ERROR" "No node name provided"
         echo "Error: __get_ip_from_name__ requires a node name argument." >&2
@@ -432,21 +431,20 @@ __get_ip_from_name__() {
     echo "$ip"
 }
 
-
 # --- __get_name_from_ip__ ------------------------------------------------------------
 # @function __get_name_from_ip__
-# @description Given a node’s link0 IP (e.g., "172.20.83.23"), prints its name.
+# @description Given a node’s link0 IP (e.g., "192.168.1.23"), prints its name.
 #   Exits if not found.
-# @usage __get_name_from_ip__ "172.20.83.23"
+# @usage __get_name_from_ip__ "192.168.1.23"
 # @param 1 The node IP.
 # @return Prints the node name to stdout or exits 1 if not found.
-# @example_output For __get_name_from_ip__ "172.20.83.23", the output is:
+# @example_output For __get_name_from_ip__ "192.168.1.23", the output is:
 #   pve03
 __get_name_from_ip__() {
     local node_ip
     node_ip=$(echo "$1" | xargs)
     __discovery_log__ "TRACE" "Resolving IP to node name: $node_ip"
-    
+
     if [[ -z "$node_ip" ]]; then
         __discovery_log__ "ERROR" "No IP provided"
         echo "Error: __get_name_from_ip__ requires an IP argument." >&2
@@ -468,5 +466,3 @@ __get_name_from_ip__() {
     __discovery_log__ "DEBUG" "Resolved $node_ip -> $name"
     echo "$name"
 }
-
-

@@ -1,28 +1,28 @@
 #!/bin/bash
 #
-# BulkUpdateDriveRedirection.sh
+# BulkRemoveDriveRedirection.sh
 #
 # This script searches for Guacamole connections whose name contains a given substring,
 # retrieves the full connection JSON for each match, and then updates its connection
-# parameters as follows:
+# parameters by removing drive redirection settings. Specifically, it removes the following keys:
 #
-#   - Retrieves existing parameters from GET /connections/{id}/parameters.
-#   - Creates a new drive path by appending a sanitized subfolder (based on the connection name)
-#     to the provided DRIVE_PATH.
-#   - Directly sets the following drive redirection keys:
-#         "enable-drive": true,
-#         "drive-name":   <provided DRIVE_NAME>,
-#         "drive-path":   <DRIVE_PATH>/<sanitized connection name>,
-#         "create-drive-path": true
+#   - "enable-drive"
+#   - "drive-name"
+#   - "drive-path"
+#   - "create-drive-path"
 #
-# All other existing parameters (including RDP parameters such as hostname, port, username, etc.)
+# All other existing parameters (including connection details such as hostname, port, username, etc.)
 # are preserved.
 #
 # Usage:
-#   BulkUpdateDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING DRIVE_NAME DRIVE_PATH [DATA_SOURCE]
+#   BulkRemoveDriveRedirection.sh GUAC_SERVER_URL SEARCH_SUBSTRING [DATA_SOURCE]
 #
 # Example:
-#   BulkUpdateDriveRedirection.sh "http://172.20.192.10:8080/guacamole" "Clone" "Storage" "/mnt/storage" mysql
+#   BulkRemoveDriveRedirection.sh "http://192.168.1.10:8080/guacamole" "Clone" mysql
+#
+
+# Function Index:
+#   - main
 #
 
 set -euo pipefail
@@ -31,8 +31,12 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-__parse_args__ "guac_url:url search_substring:string drive_name:string drive_path:path guac_data_source:string:mysql" "$@"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "guac_url:url search_substring:string guac_data_source:string:mysql" "$@"
 
 __install_or_prompt__ "jq"
 
@@ -51,11 +55,11 @@ echo "Using data source: '$GUAC_DATA_SOURCE'"
 ###############################################################################
 echo "Retrieving connection tree from Guacamole..."
 connectionsJson="$(curl -s -X GET \
-  "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
+    "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
 
 if [[ -z "$connectionsJson" ]]; then
-  echo "Error: Could not retrieve connection tree from Guacamole."
-  exit 1
+    echo "Error: Could not retrieve connection tree from Guacamole."
+    exit 1
 fi
 
 ###############################################################################
@@ -63,7 +67,7 @@ fi
 ###############################################################################
 echo "Searching for connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
-  --arg SUBSTR "$SEARCH_SUBSTRING" '
+    --arg SUBSTR "$SEARCH_SUBSTRING" '
     [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | { id: .identifier, name: .name } ]
@@ -71,18 +75,18 @@ matchingConnections=$(echo "$connectionsJson" | jq -r \
 
 # Check if any matches were found.
 if [[ "$(echo "$matchingConnections" | jq 'length')" -eq 0 ]]; then
-  echo "No connections found matching '$SEARCH_SUBSTRING'."
-  exit 0
+    echo "No connections found matching '$SEARCH_SUBSTRING'."
+    exit 0
 fi
 
 echo "Found matching connections:"
 echo "$matchingConnections" | jq .
 
 ###############################################################################
-# For each matching connection, update drive redirection parameters
+# For each matching connection, remove drive redirection parameters
 ###############################################################################
 echo "---------------------------------------------"
-echo "Updating drive redirection parameters for matching connections..."
+echo "Removing drive redirection parameters from matching connections..."
 echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     connId=$(echo "$conn" | jq -r '.id')
     connName=$(echo "$conn" | jq -r '.name')
@@ -91,35 +95,24 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     echo "Processing Connection ID: $connId"
     echo "Connection Name: $connName"
 
-    # Sanitize connection name for subfolder usage (replace spaces with underscores)
-    sanitizedName=$(echo "$connName" | tr ' ' '_')
-
-    # Build the new drive path by appending the sanitized connection name as a subfolder
-    newDrivePath="${DRIVE_PATH}/${sanitizedName}"
-
     # Retrieve the full connection JSON using the identifier.
     connectionInfo=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ -z "$connectionInfo" ]]; then
-      echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
-      continue
+        echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
+        continue
     fi
 
     # Retrieve existing parameters from the dedicated endpoint.
     existingParams=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
 
     # If no parameters are returned, default to an empty object.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
 
-    # Manually set new drive redirection keys.
-    newParams=$(echo "$existingParams" | jq --arg dname "$DRIVE_NAME" --arg ndp "$newDrivePath" '
-        .["enable-drive"] = true |
-        .["drive-name"]   = $dname |
-        .["drive-path"]   = $ndp |
-        .["create-drive-path"] = true
-    ')
+    # Remove drive redirection keys.
+    newParams=$(echo "$existingParams" | jq 'del(.["enable-drive"], .["drive-name"], .["drive-path"], .["create-drive-path"])')
 
     # Build the updated connection JSON payload.
     # Preserve parentIdentifier, name, protocol, and attributes from connectionInfo.
@@ -133,17 +126,11 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
         }
     ')
 
-    #echo "New merged parameters:"
-    #echo "$newParams" | jq .
-
-    #echo "Updated connection payload:"
-    #echo "$updatedJson" | jq .
-
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      -H "Content-Type: application/json" \
-      -d "$updatedJson" \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        -H "Content-Type: application/json" \
+        -d "$updatedJson" \
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully updated connection '$connId'."
@@ -152,10 +139,9 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
     fi
 done
 
-echo "Completed updating drive redirection parameters for all matching connections."
-
+echo "Completed removal of drive redirection parameters for all matching connections."
 
 # Testing status:
-#   - ArgumentParser.sh sourced  
+#   - ArgumentParser.sh sourced
 #   - Updated to use ArgumentParser.sh
 #   - Pending validation

@@ -80,6 +80,8 @@ test_ensure_dependencies() {
 # RUN TEST SUITE
 ################################################################################
 
+test_framework_init
+
 run_test_suite "Prompts Functions" \
     test_check_root_executes \
     test_check_proxmox_executes \

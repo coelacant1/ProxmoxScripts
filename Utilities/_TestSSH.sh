@@ -1,8 +1,6 @@
 #!/bin/bash
 #
 # Function Index:
-#   - ssh
-#   - scp
 #   - test_ssh_execute
 #   - test_ssh_copy_to_remote
 #   - test_ssh_copy_from_remote
@@ -23,23 +21,45 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export UTILITYPATH="${SCRIPT_DIR}"
 
+# Skip install checks during testing
+export SKIP_INSTALL_CHECKS=true
+
 source "${SCRIPT_DIR}/TestFramework.sh"
 
+# Initialize test framework to set up mocking infrastructure
+test_framework_init
+
 ###############################################################################
-# MOCK FUNCTIONS
+# MOCK FUNCTIONS USING PATH
 ###############################################################################
 
-ssh() {
-    echo "test output"
-    return 0
-}
+# Create mock scripts in PATH
+mkdir -p "$TEST_TEMP_DIR/bin"
+export PATH="$TEST_TEMP_DIR/bin:$PATH"
 
-scp() {
-    return 0
-}
+# Mock ssh command
+cat >"$TEST_TEMP_DIR/bin/ssh" <<'MOCK_SSH'
+#!/bin/bash
+echo "test output"
+exit 0
+MOCK_SSH
+chmod +x "$TEST_TEMP_DIR/bin/ssh"
 
-export -f ssh
-export -f scp
+# Mock scp command
+cat >"$TEST_TEMP_DIR/bin/scp" <<'MOCK_SCP'
+#!/bin/bash
+exit 0
+MOCK_SCP
+chmod +x "$TEST_TEMP_DIR/bin/scp"
+
+# Mock sshpass command
+cat >"$TEST_TEMP_DIR/bin/sshpass" <<'MOCK_SSHPASS'
+#!/bin/bash
+# Skip the -p password argument and execute the rest
+shift 2
+exec "$@"
+MOCK_SSHPASS
+chmod +x "$TEST_TEMP_DIR/bin/sshpass"
 
 source "${SCRIPT_DIR}/SSH.sh"
 
@@ -55,7 +75,7 @@ test_ssh_execute() {
 
 test_ssh_copy_to_remote() {
     local tmpfile=$(create_temp_file)
-    echo "test" > "$tmpfile"
+    echo "test" >"$tmpfile"
 
     __ssh_copy_to_remote__ "$tmpfile" "testhost" "/tmp/test" 2>/dev/null
     assert_exit_code 0 $? "Should copy to remote"
@@ -76,6 +96,8 @@ test_ssh_test_connection() {
 ################################################################################
 # RUN TEST SUITE
 ################################################################################
+
+test_framework_init
 
 run_test_suite "SSH Functions" \
     test_ssh_execute \

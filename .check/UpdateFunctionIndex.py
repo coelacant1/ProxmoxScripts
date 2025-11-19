@@ -45,18 +45,22 @@ def parse_functions(lines):
       ^function <name>() { or
       ^<name>() {
     Ignores lines that begin with '#'.
+    Only detects top-level functions (not nested functions with indentation).
     """
     func_pattern = re.compile(r"""
-        ^\s*                      # Start of line, optional whitespace
-        (?:function\s+)?          # Optional 'function ' keyword
-        ([a-zA-Z_][a-zA-Z0-9_]*)  # Capture group for function name
-        \s*\(\s*\)\s*\{          # Required parentheses, then '{'
+        ^                             # Start of line (no leading whitespace)
+        (?:function\s+)?              # Optional 'function ' keyword
+        ([a-zA-Z_][a-zA-Z0-9_]*)      # Capture group for function name
+        \s*\(\s*\)\s*\{              # Required parentheses, then '{'
     """, re.VERBOSE)
 
     functions_found = []
     for line in lines:
         # Skip commented lines
         if line.strip().startswith("#"):
+            continue
+        # Only match if there's no leading whitespace (top-level functions only)
+        if line and line[0] in (' ', '\t'):
             continue
         match = func_pattern.match(line)
         if match:

@@ -109,6 +109,8 @@ test_rapid_updates() {
 # RUN TEST SUITE
 ################################################################################
 
+test_framework_init
+
 run_test_suite "Communication Functions" \
     test_info_executes \
     test_ok_executes \

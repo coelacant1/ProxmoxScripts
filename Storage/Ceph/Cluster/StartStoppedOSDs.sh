@@ -42,12 +42,12 @@ main() {
         __update__ "Starting OSD ID: $osd_id"
         if ceph osd start "osd.${osd_id}" &>/dev/null; then
             __ok__ "OSD $osd_id started successfully"
-            ((started++))
+            ((started += 1))
         else
             __warn__ "Failed to start OSD $osd_id"
-            ((failed++))
+            ((failed += 1))
         fi
-    done <<< "$stopped_osds"
+    done <<<"$stopped_osds"
 
     __info__ "Started: $started, Failed: $failed"
     [[ $failed -gt 0 ]] && exit 1

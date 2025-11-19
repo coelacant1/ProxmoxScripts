@@ -17,6 +17,7 @@
 #   - Network migration support
 #
 # Function Index:
+#   - __net_log__
 #   - __net_vm_add_interface__
 #   - __net_vm_remove_interface__
 #   - __net_vm_set_bridge__
@@ -42,8 +43,6 @@
 #   - __net_bulk_set_vlan__
 #   - __net_migrate_network__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -363,7 +362,7 @@ __net_vm_get_interfaces__() {
     local count=0
     qm config "$vmid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
         echo "$netid: $config"
-        ((count++))
+        ((count += 1))
     done
 
     __net_log__ "DEBUG" "Found $count network interface(s) for VM $vmid"
@@ -657,7 +656,7 @@ __net_ct_get_interfaces__() {
     local count=0
     pct config "$ctid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
         echo "$netid: $config"
-        ((count++))
+        ((count += 1))
     done
 
     __net_log__ "DEBUG" "Found $count network interface(s) for CT $ctid"
@@ -691,7 +690,7 @@ __net_validate_ip__() {
     local octets=($ip)
 
     for octet in "${octets[@]}"; do
-        if (( octet > 255 )); then
+        if ((octet > 255)); then
             __net_log__ "DEBUG" "IP validation failed (octet > 255): $ip"
             return 1
         fi
@@ -728,7 +727,7 @@ __net_validate_cidr__() {
     fi
 
     # Validate mask (0-32)
-    if (( mask < 0 || mask > 32 )); then
+    if ((mask < 0 || mask > 32)); then
         __net_log__ "DEBUG" "CIDR validation failed (mask out of range): $cidr"
         return 1
     fi
@@ -1005,18 +1004,18 @@ __net_bulk_set_bridge__() {
     local success=0
     local failed=0
 
-    for ((vmid=start_vmid; vmid<=end_vmid; vmid++)); do
+    for ((vmid = start_vmid; vmid <= end_vmid; vmid++)); do
         if __net_vm_set_bridge__ "$vmid" "$net_id" "$bridge" 2>/dev/null; then
-            ((success++))
+            ((success += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 
     __net_log__ "INFO" "Bulk bridge change complete: $success succeeded, $failed failed"
     echo "Bulk bridge change complete: $success succeeded, $failed failed"
 
-    if (( failed > 0 )); then
+    if ((failed > 0)); then
         return 1
     else
         return 0
@@ -1043,18 +1042,18 @@ __net_bulk_set_vlan__() {
     local success=0
     local failed=0
 
-    for ((vmid=start_vmid; vmid<=end_vmid; vmid++)); do
+    for ((vmid = start_vmid; vmid <= end_vmid; vmid++)); do
         if __net_vm_set_vlan__ "$vmid" "$net_id" "$vlan" 2>/dev/null; then
-            ((success++))
+            ((success += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 
     __net_log__ "INFO" "Bulk VLAN change complete: $success succeeded, $failed failed"
     echo "Bulk VLAN change complete: $success succeeded, $failed failed"
 
-    if (( failed > 0 )); then
+    if ((failed > 0)); then
         return 1
     else
         return 0
@@ -1116,9 +1115,9 @@ __net_migrate_network__() {
     local failed=0
     local skipped=0
 
-    for ((vmid=start_vmid; vmid<=end_vmid; vmid++)); do
+    for ((vmid = start_vmid; vmid <= end_vmid; vmid++)); do
         if ! __vm_exists__ "$vmid" &>/dev/null; then
-            ((skipped++))
+            ((skipped += 1))
             continue
         fi
 
@@ -1139,9 +1138,9 @@ __net_migrate_network__() {
         fi
 
         if [[ "$changed" == "true" ]]; then
-            ((success++))
+            ((success += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 
@@ -1152,7 +1151,7 @@ __net_migrate_network__() {
     echo "  Failed:  $failed"
     echo "  Skipped: $skipped"
 
-    if (( failed > 0 )); then
+    if ((failed > 0)); then
         return 1
     else
         return 0

@@ -1,17 +1,53 @@
 #!/bin/bash
 #
+# RunAllTests.sh
+#
+# Master test runner for all Proxmox Scripts utilities. Runs test suites
+# with options for filtering, reporting, and categorization (unit/integration/special).
+#
+# Usage:
+#   RunAllTests.sh
+#   RunAllTests.sh --unit-only
+#   RunAllTests.sh --verbose
+#   RunAllTests.sh _TestOperations.sh
+#   RunAllTests.sh --report junit --output ./reports
+#   RunAllTests.sh --filter "network"
+#   RunAllTests.sh --all
+#   RunAllTests.sh --list
+#
+# Options:
+#   -v, --verbose           Enable verbose test output
+#   -s, --stop-on-failure   Stop execution on first test failure
+#   -r, --report FORMAT     Generate test report (console, junit, json, markdown)
+#   -o, --output DIR        Output directory for reports (default: ../test-reports)
+#   -f, --filter PATTERN    Only run tests matching pattern
+#   -l, --list              List all available test suites
+#   -u, --unit-only         Run only unit tests (safest)
+#   -i, --integration-only  Run only integration tests
+#   -a, --all               Run all tests including special environment tests
+#
+# Notes:
+#   - Unit tests can run anywhere (no external dependencies)
+#   - Integration tests need Proxmox environment or use mocking
+#   - Special tests need root, SSH, or remote nodes
+#   - Automatically sets UTILITYPATH and SKIP_INSTALL_CHECKS
+#   - Suppresses verbose logging by default (LOG_LEVEL=ERROR)
+#
 # Function Index:
-#   - print_usage
 #   - list_test_suites
 #
 
 set -euo pipefail
 
-################################################################################
-# RunAllTests.sh - Master test runner for all Proxmox Scripts utilities
-################################################################################
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
+
+# Skip install checks in test environment
+export SKIP_INSTALL_CHECKS=true
+
+# Suppress verbose logging by default (tests can override)
+export LOG_LEVEL="${LOG_LEVEL:-ERROR}"
+
 source "${SCRIPT_DIR}/TestFramework.sh"
 
 # Configuration
@@ -21,66 +57,75 @@ GENERATE_REPORTS=false
 REPORT_FORMAT="console"
 REPORT_DIR="${SCRIPT_DIR}/../test-reports"
 
-# Test files to run
-TEST_FILES=(
+# Test files to run (categorized)
+# Unit tests - can run anywhere
+UNIT_TESTS=(
     "_TestArgumentParser.sh"
     "_TestColors.sh"
     "_TestCommunication.sh"
     "_TestConversion.sh"
-    "_TestPrompts.sh"
+    "_TestConfigManager.sh"
+    "_TestDisplay.sh"
+    "_TestMenu.sh"
+    "_TestManualViewer.sh"
+)
+
+# Integration tests - need Proxmox environment or mocking
+INTEGRATION_TESTS=(
     "_TestCluster.sh"
-    "_TestSSH.sh"
+    "_TestDiscovery.sh"
     "_TestOperations.sh"
+    "_TestNodeSelection.sh"
+    "_TestProxmoxAPI.sh"
+    "_TestIntegrationExample.sh"
+    "_TestQueries.sh"
     "_TestBulkOperations.sh"
     "_TestStateManager.sh"
     "_TestNetwork.sh"
 )
 
+# Special environment tests
+SPECIAL_TESTS=(
+    "_TestPrompts.sh"    # Needs root
+    "_TestSSH.sh"        # Needs SSH
+    "_TestRemoteExec.sh" # Needs remote nodes
+)
+
+# Default: run unit + integration tests
+TEST_FILES=("${UNIT_TESTS[@]}" "${INTEGRATION_TESTS[@]}")
+
 ################################################################################
 # PARSE ARGUMENTS
 ################################################################################
 
-print_usage() {
-    cat << EOF
-Usage: $(basename "$0") [OPTIONS] [TEST_FILES...]
-
-Run all or specific test suites for Proxmox Scripts utilities.
-
-OPTIONS:
-    -v, --verbose           Enable verbose test output
-    -s, --stop-on-failure   Stop execution on first test failure
-    -r, --report FORMAT     Generate test report (console, junit, json, markdown)
-    -o, --output DIR        Output directory for reports (default: ../test-reports)
-    -f, --filter PATTERN    Only run tests matching pattern
-    -l, --list              List all available test suites
-    -h, --help              Show this help message
-
-EXAMPLES:
-    # Run all tests
-    ./RunAllTests.sh
-
-    # Run with verbose output
-    ./RunAllTests.sh -v
-
-    # Run specific test file
-    ./RunAllTests.sh _TestOperations.sh
-
-    # Generate JUnit report
-    ./RunAllTests.sh -r junit -o ./reports
-
-    # Run tests matching pattern
-    ./RunAllTests.sh -f "network"
-
-EOF
-}
-
 list_test_suites() {
     echo "${BOLD}${BLUE}Available Test Suites:${NC}"
     echo ""
-    for test_file in "${TEST_FILES[@]}"; do
+    echo "${BOLD}${GREEN}Unit Tests (Always Safe):${NC}"
+    for test_file in "${UNIT_TESTS[@]}"; do
         if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
-            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" | sed -E 's/.*"([^"]+)".*/\1/')
+            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
             echo "  ${GREEN}✓${NC} ${test_file} - ${suite_name}"
+        else
+            echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
+        fi
+    done
+    echo ""
+    echo "${BOLD}${YELLOW}Integration Tests (Need Proxmox or Mocks):${NC}"
+    for test_file in "${INTEGRATION_TESTS[@]}"; do
+        if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
+            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
+            echo "  ${YELLOW}⚠${NC} ${test_file} - ${suite_name}"
+        else
+            echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
+        fi
+    done
+    echo ""
+    echo "${BOLD}${RED}Special Environment Tests:${NC}"
+    for test_file in "${SPECIAL_TESTS[@]}"; do
+        if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
+            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
+            echo "  ${RED}!${NC} ${test_file} - ${suite_name}"
         else
             echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
         fi
@@ -92,36 +137,54 @@ list_test_suites() {
 FILTER_PATTERN=""
 LIST_ONLY=false
 SELECTED_TESTS=()
+RUN_MODE="default" # default, unit-only, integration-only, all
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -v|--verbose)
+        -v | --verbose)
             VERBOSE_TESTS=true
+            export LOG_LEVEL="INFO"
             shift
             ;;
-        -s|--stop-on-failure)
+        -s | --stop-on-failure)
             STOP_ON_FAILURE=true
             shift
             ;;
-        -r|--report)
+        -r | --report)
             GENERATE_REPORTS=true
             REPORT_FORMAT="$2"
             shift 2
             ;;
-        -o|--output)
+        -o | --output)
             REPORT_DIR="$2"
             shift 2
             ;;
-        -f|--filter)
+        -f | --filter)
             FILTER_PATTERN="$2"
             shift 2
             ;;
-        -l|--list)
+        -l | --list)
             LIST_ONLY=true
             shift
             ;;
-        -h|--help)
-            print_usage
+        -u | --unit-only)
+            RUN_MODE="unit-only"
+            TEST_FILES=("${UNIT_TESTS[@]}")
+            shift
+            ;;
+        -i | --integration-only)
+            RUN_MODE="integration-only"
+            TEST_FILES=("${INTEGRATION_TESTS[@]}")
+            shift
+            ;;
+        -a | --all)
+            RUN_MODE="all"
+            TEST_FILES=("${UNIT_TESTS[@]}" "${INTEGRATION_TESTS[@]}" "${SPECIAL_TESTS[@]}")
+            shift
+            ;;
+        -h | --help)
+            # Show usage from header
+            head -35 "$0" | grep -E "^#" | sed 's/^# //'
             exit 0
             ;;
         _Test*.sh)
@@ -130,7 +193,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "${RED}Error:${NC} Unknown option: $1"
-            print_usage
+            echo "Use --help for usage information"
             exit 1
             ;;
     esac
@@ -145,6 +208,19 @@ fi
 ################################################################################
 # RUN TESTS
 ################################################################################
+
+# Print environment info
+echo ""
+echo "${BOLD}${BLUE}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+echo "${BOLD}${BLUE}║${NC} ${BOLD}Proxmox Scripts - Test Suite Runner${NC}"
+echo "${BOLD}${BLUE}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo "${DIM}Environment:${NC}"
+echo "  Hostname: $(hostname)"
+echo "  Mode: $RUN_MODE"
+echo "  SKIP_INSTALL_CHECKS: ${SKIP_INSTALL_CHECKS:-false}"
+echo "  LOG_LEVEL: ${LOG_LEVEL:-INFO}"
+echo ""
 
 # Create report directory if needed
 if [[ "$GENERATE_REPORTS" == true ]]; then
@@ -189,7 +265,7 @@ for test_file in "${TESTS_TO_RUN[@]}"; do
         continue
     fi
 
-    ((TOTAL_SUITES++))
+    ((TOTAL_SUITES += 1))
 
     # Reset test counters for this suite
     TEST_TOTAL=0
@@ -201,9 +277,9 @@ for test_file in "${TESTS_TO_RUN[@]}"; do
 
     # Run the test file
     if bash "$test_path"; then
-        ((PASSED_SUITES++))
+        ((PASSED_SUITES += 1))
     else
-        ((FAILED_SUITES++))
+        ((FAILED_SUITES += 1))
 
         if [[ "$STOP_ON_FAILURE" == true ]]; then
             echo "${RED}${BOLD}Stopping on test suite failure${NC}"

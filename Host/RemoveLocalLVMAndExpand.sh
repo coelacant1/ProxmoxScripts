@@ -11,7 +11,7 @@
 # Examples:
 #   RemoveLocalLVMAndExpand.sh                    # Interactive mode with prompts
 #   RemoveLocalLVMAndExpand.sh --force            # Skip confirmation prompt
-#   
+#
 # Note:
 #   - When running from GUI, NON_INTERACTIVE is automatically set
 #   - Destructive operations require --force in non-interactive mode
@@ -142,3 +142,4 @@ main
 # Testing status:
 #   - Updated to use utility functions
 #   - Pending validation
+#   - Tested execution on 11/17

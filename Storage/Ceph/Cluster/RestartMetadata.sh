@@ -21,6 +21,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -52,10 +54,10 @@ fi
 #
 # Note: The address is of the format IP:port/nonce. We extract the IP before the first colon.
 mdsInfo=$(
-  {
-    echo "$fsJSON" | jq -r '.filesystems[] | .mdsmap.info | to_entries[] | "\(.value.name) \(.value.addr)"'
-    echo "$fsJSON" | jq -r '.standbys[] | "\(.name) \(.addr)"'
-  }
+    {
+        echo "$fsJSON" | jq -r '.filesystems[] | .mdsmap.info | to_entries[] | "\(.value.name) \(.value.addr)"'
+        echo "$fsJSON" | jq -r '.standbys[] | "\(.name) \(.addr)"'
+    }
 )
 
 declare -a mdsNames
@@ -70,7 +72,7 @@ while read -r name addr; do
     fi
     mdsNames+=("$name")
     mdsIPs+=("$mdsIP")
-done <<< "$mdsInfo"
+done <<<"$mdsInfo"
 
 totalMDS="${#mdsNames[@]}"
 if [ "$totalMDS" -eq 0 ]; then
@@ -85,7 +87,7 @@ __info__ "Found ${totalMDS} Ceph Metadata Server(s). Restarting them one at a ti
 # Waits until the ceph-mds@<mdsName> service is active on the specified target host
 # (local or remote), or until a timeout (120 seconds) is reached.
 ###############################################################################
-wait_for_mds_active(){
+wait_for_mds_active() {
     local targetHost="$1"
     local mdsName="$2"
     local timeout=120
@@ -101,7 +103,7 @@ wait_for_mds_active(){
             break
         fi
         sleep 5
-        elapsed=$((elapsed+5))
+        elapsed=$((elapsed + 5))
         if [ $elapsed -ge $timeout ]; then
             __err__ "MDS ceph-mds@${mdsName} did not become active after restart on ${targetHost}."
             break
@@ -153,7 +155,7 @@ for index in "${!mdsNames[@]}"; do
     wait_for_mds_active "${targetHost}" "${mdsName}"
 
     sleep 5
-    currentMDS=$((currentMDS+1))
+    currentMDS=$((currentMDS + 1))
 done
 
 __ok__ "All Ceph Metadata Servers processed."

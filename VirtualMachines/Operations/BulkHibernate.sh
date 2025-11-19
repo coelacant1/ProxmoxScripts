@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - hibernate_callback
 #
 
 set -euo pipefail
@@ -55,7 +54,7 @@ main() {
         local vmid="$1"
 
         if ! __vm_is_running__ "$vmid"; then
-            return 2  # Skip non-running VMs
+            return 2 # Skip non-running VMs
         fi
 
         __vm_suspend__ "$vmid" --todisk

@@ -39,7 +39,7 @@ get_latest_proxmox_codename() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    if ! curl -s "http://download.proxmox.com/debian/pve/dists/" > "$tmpfile"; then
+    if ! curl -s "http://download.proxmox.com/debian/pve/dists/" >"$tmpfile"; then
         __err__ "Could not retrieve Proxmox dists directory"
         rm -f "$tmpfile"
         exit 1
@@ -48,8 +48,8 @@ get_latest_proxmox_codename() {
     local latest_codename
     latest_codename=$(
         grep -Po '(?<=href=")[^"]+(?=/")' "$tmpfile" \
-        | grep -Ev 'pvetest|publickey|^$' \
-        | tail -n 1
+            | grep -Ev 'pvetest|publickey|^$' \
+            | tail -n 1
     )
     rm -f "$tmpfile"
 
@@ -72,7 +72,7 @@ ensure_latest_repo() {
             __info__ "[DRY-RUN] Would create $repo_file"
         else
             __info__ "Creating $repo_file"
-            echo "$repo_line" > "$repo_file"
+            echo "$repo_line" >"$repo_file"
             __ok__ "Repository file created"
         fi
         return
@@ -85,7 +85,7 @@ ensure_latest_repo() {
             __info__ "[DRY-RUN] Would update $repo_file to codename: $latest"
         else
             __info__ "Updating repository to codename: $latest"
-            echo "$repo_line" > "$repo_file"
+            echo "$repo_line" >"$repo_file"
             __ok__ "Repository updated"
         fi
     fi
@@ -105,7 +105,7 @@ main() {
                 DRY_RUN=true
                 __info__ "Dry-run mode enabled"
                 ;;
-            --help|-h)
+            --help | -h)
                 __info__ "Usage: $0 [--dry-run]"
                 exit 0
                 ;;

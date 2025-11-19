@@ -20,7 +20,6 @@
 #
 # Function Index:
 #   - main
-#   - change_userpass_callback
 #
 
 set -euo pipefail

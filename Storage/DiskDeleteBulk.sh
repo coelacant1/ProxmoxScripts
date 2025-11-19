@@ -81,9 +81,9 @@ main() {
         local disk_name="vm-${vm_index}-disk-${DISK_NUM}"
 
         if delete_disk "$POOL" "$disk_name"; then
-            ((deleted++))
+            ((deleted += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

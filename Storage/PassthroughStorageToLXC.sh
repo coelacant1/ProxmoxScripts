@@ -83,7 +83,7 @@ process_container() {
     # Find next available mount point index
     local next_mp_index=0
     while pct config "$ctid" | grep -q "^mp${next_mp_index}:"; do
-        ((next_mp_index++))
+        ((next_mp_index += 1))
     done
 
     local mount_point="/mnt/$(basename "$host_dir")"
@@ -121,9 +121,9 @@ main() {
 
     for ctid in "${CTIDS[@]}"; do
         if process_container "$ctid" "$HOST_DIR" "$ro_flag"; then
-            ((mounted++))
+            ((mounted += 1))
         else
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

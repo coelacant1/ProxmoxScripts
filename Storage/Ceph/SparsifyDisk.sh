@@ -63,12 +63,12 @@ main() {
         __update__ "Sparsifying ${POOL_NAME}/${image_name}"
         if rbd sparsify "${POOL_NAME}/${image_name}" &>/dev/null; then
             __ok__ "Sparsified ${image_name}"
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to sparsify ${image_name}"
-            ((failed++))
+            ((failed += 1))
         fi
-    done <<< "$images"
+    done <<<"$images"
 
     __info__ "Success: $success, Failed: $failed"
     [[ $failed -gt 0 ]] && exit 1

@@ -19,7 +19,6 @@
 #
 # Function Index:
 #   - main
-#   - move_disk_callback
 #
 
 set -euo pipefail

@@ -68,8 +68,8 @@ validate_custom_options() {
     fi
 
     # Check that at least one disk option is specified
-    if [[ -z "$CACHE" && -z "$DISCARD" && -z "$IOTHREAD" && -z "$RO" && \
-          -z "$SSD" && -z "$BACKUP" && -z "$REPLICATE" && -z "$AIO" ]]; then
+    if [[ -z "$CACHE" && -z "$DISCARD" && -z "$IOTHREAD" && -z "$RO" &&
+        -z "$SSD" && -z "$BACKUP" && -z "$REPLICATE" && -z "$AIO" ]]; then
         __err__ "At least one disk option must be specified"
         exit 64
     fi

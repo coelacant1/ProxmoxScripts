@@ -14,8 +14,8 @@
 #   --link1    - Optional second link addresses (must match node count)
 #
 # Examples:
-#   AddNodes.sh 172.20.120.65 172.20.120.66 172.20.120.67
-#   AddNodes.sh 172.20.120.65 172.20.120.66 172.20.120.67 --link1 10.10.10.66 10.10.10.67
+#   AddNodes.sh 192.168.1.65 192.168.1.66 192.168.1.67
+#   AddNodes.sh 192.168.1.65 192.168.1.66 192.168.1.67 --link1 10.10.10.66 10.10.10.67
 #
 # Function Index:
 #   - main
@@ -23,8 +23,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -80,7 +78,7 @@ main() {
             __err__ "Not enough link1 addresses for ${#nodes[@]} node(s)"
             exit 1
         fi
-        for ((i=0; i<${#nodes[@]}; i++)); do
+        for ((i = 0; i < ${#nodes[@]}; i++)); do
             link1+=("$1")
             shift
         done
@@ -104,10 +102,10 @@ main() {
             __ok__ "Node ${node_ip} added successfully"
         else
             __warn__ "Failed to add node ${node_ip}"
-            ((failed++))
+            ((failed += 1))
         fi
 
-        ((counter++))
+        ((counter += 1))
     done
 
     echo

@@ -38,6 +38,10 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Operations.sh
 source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -60,7 +64,7 @@ main() {
     source_node=$(__get_vm_node__ "$SOURCE_VMID")
 
     # Extract IP address and subnet mask from CIDR notation
-    IFS='/' read -r start_ip_addr subnet_mask <<< "$START_IP"
+    IFS='/' read -r start_ip_addr subnet_mask <<<"$START_IP"
 
     # Convert starting IP to integer for incrementing
     local start_ip_int
@@ -79,7 +83,7 @@ main() {
     local failed=0
 
     # Clone VMs sequentially
-    for (( i=0; i<COUNT; i++ )); do
+    for ((i = 0; i < COUNT; i++)); do
         local target_vmid=$((START_VMID + i))
         local name_index=$((i + 1))
         local vm_name="${BASE_NAME}${name_index}"
@@ -98,7 +102,7 @@ main() {
         # Execute clone on source VM's node
         if ! __node_exec__ "$source_node" "$clone_cmd" &>/dev/null; then
             __warn__ "Failed to clone VM ${target_vmid}"
-            ((failed++))
+            ((failed += 1))
             continue
         fi
 
@@ -108,14 +112,14 @@ main() {
 
         if ! __node_exec__ "$source_node" "qm set ${target_vmid} --ipconfig0 ${ipconfig}" &>/dev/null; then
             __warn__ "Failed to set IP config for VM ${target_vmid}"
-            ((failed++))
+            ((failed += 1))
             continue
         fi
 
         # Set network bridge
         if ! __node_exec__ "$source_node" "qm set ${target_vmid} --net0 virtio,bridge=${BRIDGE}" &>/dev/null; then
             __warn__ "Failed to set network bridge for VM ${target_vmid}"
-            ((failed++))
+            ((failed += 1))
             continue
         fi
 
@@ -127,7 +131,7 @@ main() {
             fi
         fi
 
-        ((success++))
+        ((success += 1))
     done
 
     # Display summary

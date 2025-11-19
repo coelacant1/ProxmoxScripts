@@ -18,7 +18,6 @@
 #
 # Function Index:
 #   - main
-#   - toggle_onboot_callback
 #
 
 set -euo pipefail

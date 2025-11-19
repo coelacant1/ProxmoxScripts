@@ -92,7 +92,7 @@ main() {
     for conf_file in "${conf_files[@]}"; do
         local vmid
         vmid="$(basename "$conf_file" .conf)"
-        ((scanned++))
+        ((scanned += 1))
 
         # Skip base VM itself
         if [[ "$vmid" == "$BASE_VMID" ]]; then

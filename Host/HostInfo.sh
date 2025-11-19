@@ -29,8 +29,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export UTILITYPATH="${UTILITYPATH:-$REPO_ROOT/Utilities}"
 
-source "$UTILITYPATH/Communication.sh" 2>/dev/null || { echo "Error: Cannot find Communication.sh"; exit 1; }
-source "$UTILITYPATH/Prompts.sh" 2>/dev/null || { echo "Error: Cannot find Prompts.sh"; exit 1; }
+source "$UTILITYPATH/Communication.sh" 2>/dev/null || {
+    echo "Error: Cannot find Communication.sh"
+    exit 1
+}
+source "$UTILITYPATH/Prompts.sh" 2>/dev/null || {
+    echo "Error: Cannot find Prompts.sh"
+    exit 1
+}
 
 export -f __check_root__ 2>/dev/null || true
 export -f __check_proxmox__ 2>/dev/null || true
@@ -53,17 +59,17 @@ OUTPUT_JSON=0
 # @description Retrieves detailed CPU information
 get_cpu_info() {
     local cpu_model cpu_cores cpu_threads cpu_mhz cpu_cache cpu_flags
-    
+
     cpu_model=$(lscpu | grep "Model name" | cut -d: -f2 | xargs)
     cpu_cores=$(lscpu | grep "^Core(s) per socket" | cut -d: -f2 | xargs)
     local sockets=$(lscpu | grep "^Socket(s)" | cut -d: -f2 | xargs)
     cpu_threads=$(lscpu | grep "^CPU(s):" | head -1 | cut -d: -f2 | xargs)
     cpu_mhz=$(lscpu | grep "CPU max MHz" | cut -d: -f2 | xargs || echo "N/A")
     cpu_cache=$(lscpu | grep "L3 cache" | cut -d: -f2 | xargs || echo "N/A")
-    
+
     # CPU flags of interest
     local virtualization=$(lscpu | grep -E "Virtualization|VT-x|AMD-V" | cut -d: -f2 | xargs || echo "None")
-    
+
     echo "CPU_MODEL|$cpu_model"
     echo "CPU_SOCKETS|$sockets"
     echo "CPU_CORES|$cpu_cores"
@@ -78,13 +84,13 @@ get_cpu_info() {
 # @description Retrieves memory information including type, speed, and channels
 get_memory_info() {
     local total_mem used_mem free_mem available_mem mem_type mem_speed
-    
+
     # Basic memory info
     total_mem=$(free -h | awk '/^Mem:/ {print $2}')
     used_mem=$(free -h | awk '/^Mem:/ {print $3}')
     free_mem=$(free -h | awk '/^Mem:/ {print $4}')
     available_mem=$(free -h | awk '/^Mem:/ {print $7}')
-    
+
     # Detailed memory info from dmidecode
     if command -v dmidecode &>/dev/null; then
         mem_type=$(dmidecode -t memory 2>/dev/null | grep -m1 "Type:" | grep -v "Type Detail" | cut -d: -f2 | xargs || echo "Unknown")
@@ -97,7 +103,7 @@ get_memory_info() {
         mem_channels="Unknown"
         mem_sticks="Unknown"
     fi
-    
+
     echo "MEM_TOTAL|$total_mem"
     echo "MEM_USED|$used_mem"
     echo "MEM_FREE|$free_mem"
@@ -118,14 +124,14 @@ get_storage_info() {
         echo "DEVICE|$line"
     done
     echo "STORAGE_DEVICES_END"
-    
+
     # Filesystem usage
     echo "STORAGE_FS_START"
     df -h -t ext4 -t xfs -t zfs -t btrfs 2>/dev/null | tail -n +2 | while read -r line; do
         echo "FS|$line"
     done
     echo "STORAGE_FS_END"
-    
+
     # ZFS pools if available
     if command -v zpool &>/dev/null; then
         echo "STORAGE_ZFS_START"
@@ -134,7 +140,7 @@ get_storage_info() {
         done
         echo "STORAGE_ZFS_END"
     fi
-    
+
     # LVM info
     if command -v vgs &>/dev/null; then
         echo "STORAGE_LVM_START"
@@ -154,17 +160,17 @@ get_network_info() {
         local iface=$(echo "$line" | awk '{print $2}' | tr -d ':')
         local state=$(echo "$line" | grep -oP 'state \K\w+')
         local mac=$(echo "$line" | grep -oP 'link/ether \K[0-9a-f:]+' || echo "N/A")
-        
+
         # Get speed if available
         local speed="N/A"
         if [[ -f "/sys/class/net/$iface/speed" ]]; then
             speed=$(cat "/sys/class/net/$iface/speed" 2>/dev/null || echo "N/A")
             [[ "$speed" != "N/A" ]] && speed="${speed}Mb/s"
         fi
-        
+
         # Get IP address
         local ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1 || echo "N/A")
-        
+
         echo "IFACE|$iface|$state|$mac|$speed|$ip"
     done
     echo "NETWORK_END"
@@ -186,19 +192,19 @@ get_pcie_devices() {
 # @description Retrieves Proxmox-specific information
 get_proxmox_info() {
     local pve_version kernel_version uptime_info hostname cluster_status
-    
+
     pve_version=$(pveversion 2>/dev/null | head -1 || echo "N/A")
     kernel_version=$(uname -r)
     uptime_info=$(uptime -p 2>/dev/null || uptime | cut -d',' -f1)
     hostname=$(hostname -f)
-    
+
     # Check cluster status
     if command -v pvecm &>/dev/null; then
         cluster_status=$(pvecm status 2>/dev/null | grep -E "Cluster name|Quorum:" || echo "Standalone")
     else
         cluster_status="Standalone"
     fi
-    
+
     # Get VM/LXC counts
     local vm_count=0
     local lxc_count=0
@@ -208,7 +214,7 @@ get_proxmox_info() {
     if command -v pct &>/dev/null; then
         lxc_count=$(pct list 2>/dev/null | tail -n +2 | wc -l || echo "0")
     fi
-    
+
     echo "PVE_VERSION|$pve_version"
     echo "KERNEL|$kernel_version"
     echo "UPTIME|$uptime_info"
@@ -223,7 +229,7 @@ get_proxmox_info() {
 # @description Displays collected information in a formatted manner
 display_info() {
     local -A data
-    
+
     # Collect all information
     while IFS='|' read -r key value rest; do
         if [[ -n "$key" && -n "$value" ]]; then
@@ -241,10 +247,10 @@ display_info() {
         get_network_info
         get_pcie_devices
     )
-    
+
     # ASCII Art Header
     echo -e "${CYAN}"
-    cat << 'EOF'
+    cat <<'EOF'
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
 ║   ██████╗ ██████╗  ██████╗ ██╗  ██╗███╗   ███╗ ██████╗ ██╗  ██╗   ║
@@ -259,7 +265,7 @@ display_info() {
 EOF
     echo -e "${NC}"
     echo ""
-    
+
     # System Information
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  SYSTEM INFORMATION${NC}"
@@ -271,7 +277,7 @@ EOF
     echo -e "${CYAN}Cluster:${NC}       ${data[CLUSTER]}"
     echo -e "${CYAN}VMs/LXCs:${NC}      ${GREEN}${data[VM_COUNT]}${NC} VMs, ${GREEN}${data[LXC_COUNT]}${NC} LXCs"
     echo ""
-    
+
     # CPU Information
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  CPU INFORMATION${NC}"
@@ -283,7 +289,7 @@ EOF
     echo -e "${CYAN}Cache:${NC}         ${data[CPU_CACHE]:-N/A}"
     echo -e "${CYAN}Virtualization:${NC} ${data[CPU_VIRT]:-N/A}"
     echo ""
-    
+
     # Memory Information
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  MEMORY INFORMATION${NC}"
@@ -296,7 +302,7 @@ EOF
     echo -e "${CYAN}Speed:${NC}         ${data[MEM_SPEED]}"
     echo -e "${CYAN}Sticks:${NC}        ${data[MEM_STICKS]} of ${data[MEM_CHANNELS]} slots"
     echo ""
-    
+
     # Storage - Block Devices
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  STORAGE - BLOCK DEVICES${NC}"
@@ -310,7 +316,7 @@ EOF
         done
     fi
     echo ""
-    
+
     # Storage - Filesystems
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  STORAGE - FILESYSTEMS${NC}"
@@ -324,7 +330,7 @@ EOF
         done
     fi
     echo ""
-    
+
     # Storage - ZFS (if available)
     if [[ -v data[ZPOOL] && -n "${data[ZPOOL]}" ]]; then
         echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
@@ -338,7 +344,7 @@ EOF
         done
         echo ""
     fi
-    
+
     # Storage - LVM (if available)
     if [[ -v data[VG] && -n "${data[VG]}" ]]; then
         echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
@@ -352,7 +358,7 @@ EOF
         done
         echo ""
     fi
-    
+
     # Network Information
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  NETWORK INTERFACES${NC}"
@@ -368,24 +374,24 @@ EOF
         done
     fi
     echo ""
-    
+
     # PCIe Devices
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}${YELLOW}  PCIE DEVICES${NC}"
     echo -e "${BOLD}${WHITE}════════════════════════════════════════════════════════════════════════════${NC}"
     if [[ -v data[PCIE] ]]; then
         echo "${data[PCIE]}" | grep -iE "VGA|Audio|Network|RAID|SATA|NVMe|USB|Ethernet" | while IFS='|' read -r rest; do
-        [[ -z "$rest" ]] && continue
-        # Highlight important device types
-        if echo "$rest" | grep -qi "vga"; then
-            echo -e "${MAGENTA}$rest${NC}"
-        elif echo "$rest" | grep -qi "network\|ethernet"; then
-            echo -e "${GREEN}$rest${NC}"
-        elif echo "$rest" | grep -qi "nvme\|sata\|raid"; then
-            echo -e "${CYAN}$rest${NC}"
-        else
-            echo "$rest"
-        fi
+            [[ -z "$rest" ]] && continue
+            # Highlight important device types
+            if echo "$rest" | grep -qi "vga"; then
+                echo -e "${MAGENTA}$rest${NC}"
+            elif echo "$rest" | grep -qi "network\|ethernet"; then
+                echo -e "${GREEN}$rest${NC}"
+            elif echo "$rest" | grep -qi "nvme\|sata\|raid"; then
+                echo -e "${CYAN}$rest${NC}"
+            else
+                echo "$rest"
+            fi
         done
     fi
     echo ""
@@ -398,7 +404,7 @@ EOF
 display_json() {
     local -A data
     local -a devices filesystems zpools vgs ifaces pcie
-    
+
     # Collect all information
     local in_section=""
     while IFS='|' read -r key value rest; do
@@ -431,7 +437,7 @@ display_json() {
         get_network_info
         get_pcie_devices
     )
-    
+
     # Output JSON
     echo "{"
     echo "  \"system\": {"
@@ -498,7 +504,7 @@ display_json() {
 main() {
     __check_root__
     __check_proxmox__
-    
+
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -513,7 +519,7 @@ main() {
                 ;;
         esac
     done
-    
+
     if [[ $OUTPUT_JSON -eq 1 ]]; then
         display_json
     else
@@ -522,3 +528,6 @@ main() {
 }
 
 main "$@"
+
+# Testing Status:
+#   - Tested execution on 11/17

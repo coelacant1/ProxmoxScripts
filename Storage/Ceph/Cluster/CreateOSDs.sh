@@ -45,7 +45,7 @@ create_osds() {
 
         if [ ! -b "$device" ]; then
             __update__ "Skipping $device (not a valid block device)"
-            ((skipped++))
+            ((skipped += 1))
             continue
         fi
 
@@ -54,14 +54,14 @@ create_osds() {
             __update__ "Creating OSD for $device..."
             if ceph-volume lvm create --data "$device" 2>/dev/null; then
                 __ok__ "Created OSD for $device"
-                ((created++))
+                ((created += 1))
             else
                 __warn__ "Failed to create OSD for $device"
-                ((failed++))
+                ((failed += 1))
             fi
         else
             __update__ "Skipping $device (in use - mounted or in pvs)"
-            ((skipped++))
+            ((skipped += 1))
         fi
     done
 
@@ -87,7 +87,7 @@ main() {
     local current=0
 
     for node_ip in "${remote_nodes[@]}"; do
-        ((current++))
+        ((current += 1))
         __update__ "Processing node $current/$total_nodes: $node_ip"
 
         if ssh root@"$node_ip" "$(typeset -f create_osds); create_osds" 2>/dev/null; then

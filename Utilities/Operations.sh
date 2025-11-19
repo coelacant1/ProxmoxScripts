@@ -17,6 +17,7 @@
 #   - State management helpers
 #
 # Function Index:
+#   - __api_log__
 #   - __vm_exists__
 #   - __vm_get_status__
 #   - __vm_is_running__
@@ -50,9 +51,29 @@
 #   - __vm_node_exec__
 #   - __ct_node_exec__
 #   - __pve_exec__
+#   - __ct_set_cpu__
+#   - __ct_set_memory__
+#   - __ct_set_onboot__
+#   - __ct_unlock__
+#   - __ct_delete__
+#   - __ct_set_protection__
+#   - __vm_unlock__
+#   - __vm_delete__
+#   - __vm_set_protection__
+#   - __vm_reset__
+#   - __ct_set_dns__
+#   - __ct_set_network__
+#   - __ct_change_password__
+#   - __ct_add_ssh_key__
+#   - __ct_resize_disk__
+#   - __vm_resize_disk__
+#   - __vm_backup__
+#   - __ct_change_storage__
+#   - __ct_move_volume__
+#   - __ct_update_packages__
+#   - __ct_add_ip_to_note__
+#   - __vm_add_ip_to_note__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -85,7 +106,7 @@ source "${UTILITYPATH}/Cluster.sh"
 # @return 0 if exists, 1 if not
 __vm_exists__() {
     local vmid="$1"
-    
+
     __api_log__ "DEBUG" "Checking if VM $vmid exists"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
@@ -96,7 +117,7 @@ __vm_exists__() {
     # Use __get_vm_node__ to check existence
     local node
     node=$(__get_vm_node__ "$vmid" 2>/dev/null)
-    
+
     if [[ -n "$node" ]]; then
         __api_log__ "DEBUG" "VM $vmid exists on node $node"
         return 0
@@ -114,7 +135,7 @@ __vm_exists__() {
 # @return Prints status to stdout, returns 1 on error
 __vm_get_status__() {
     local vmid="$1"
-    
+
     __api_log__ "DEBUG" "Getting status for VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
@@ -144,14 +165,14 @@ __vm_get_status__() {
 __vm_is_running__() {
     local vmid="$1"
     local status
-    
+
     __api_log__ "DEBUG" "Checking if VM $vmid is running"
 
     status=$(__vm_get_status__ "$vmid" 2>/dev/null) || {
         __api_log__ "ERROR" "Failed to get status for VM $vmid"
         return 1
     }
-    
+
     if [[ "$status" == "running" ]]; then
         __api_log__ "DEBUG" "VM $vmid is running"
         return 0
@@ -171,7 +192,7 @@ __vm_is_running__() {
 __vm_start__() {
     local vmid="$1"
     shift
-    
+
     __api_log__ "INFO" "Starting VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
@@ -194,7 +215,7 @@ __vm_start__() {
 
     local node
     node=$(__get_vm_node__ "$vmid")
-    
+
     __api_log__ "DEBUG" "Executing: qm start $vmid --node $node $*"
 
     if qm start "$vmid" --node "$node" "$@" 2>/dev/null; then
@@ -221,7 +242,7 @@ __vm_stop__() {
 
     local timeout=""
     local force=false
-    
+
     __api_log__ "INFO" "Stopping VM $vmid"
 
     # Parse options
@@ -268,7 +289,7 @@ __vm_stop__() {
     local cmd="qm stop \"$vmid\" --node \"$node\""
     [[ -n "$timeout" ]] && cmd+=" --timeout \"$timeout\""
     [[ "$force" == true ]] && cmd+=" --force"
-    
+
     __api_log__ "DEBUG" "Executing: $cmd"
 
     if eval "$cmd" 2>/dev/null; then
@@ -291,7 +312,7 @@ __vm_stop__() {
 __vm_set_config__() {
     local vmid="$1"
     shift
-    
+
     __api_log__ "INFO" "Setting configuration for VM $vmid: $*"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
@@ -329,7 +350,7 @@ __vm_set_config__() {
 __vm_get_config__() {
     local vmid="$1"
     local param="$2"
-    
+
     __api_log__ "DEBUG" "Getting config parameter '$param' for VM $vmid"
 
     if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
@@ -364,7 +385,7 @@ __vm_get_config__() {
 # @return 0 if exists, 1 if not
 __ct_exists__() {
     local ctid="$1"
-    
+
     __api_log__ "DEBUG" "Checking if CT $ctid exists"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
@@ -389,7 +410,7 @@ __ct_exists__() {
 # @return Prints status to stdout, returns 1 on error
 __ct_get_status__() {
     local ctid="$1"
-    
+
     __api_log__ "DEBUG" "Getting status for CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
@@ -418,14 +439,14 @@ __ct_get_status__() {
 __ct_is_running__() {
     local ctid="$1"
     local status
-    
+
     __api_log__ "DEBUG" "Checking if CT $ctid is running"
 
     status=$(__ct_get_status__ "$ctid" 2>/dev/null) || {
         __api_log__ "ERROR" "Failed to get status for CT $ctid"
         return 1
     }
-    
+
     if [[ "$status" == "running" ]]; then
         __api_log__ "DEBUG" "CT $ctid is running"
         return 0
@@ -443,7 +464,7 @@ __ct_is_running__() {
 # @return 0 on success, 1 on error
 __ct_start__() {
     local ctid="$1"
-    
+
     __api_log__ "INFO" "Starting CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
@@ -485,7 +506,7 @@ __ct_stop__() {
     shift
 
     local force=false
-    
+
     __api_log__ "INFO" "Stopping CT $ctid"
 
     while [[ $# -gt 0 ]]; do
@@ -520,7 +541,7 @@ __ct_stop__() {
 
     local cmd="pct stop \"$ctid\""
     [[ "$force" == true ]] && cmd+=" --force"
-    
+
     __api_log__ "DEBUG" "Executing: $cmd"
 
     if eval "$cmd" 2>/dev/null; then
@@ -543,7 +564,7 @@ __ct_stop__() {
 __ct_set_config__() {
     local ctid="$1"
     shift
-    
+
     __api_log__ "INFO" "Setting configuration for CT $ctid: $*"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
@@ -577,7 +598,7 @@ __ct_set_config__() {
 __ct_get_config__() {
     local ctid="$1"
     local param="$2"
-    
+
     __api_log__ "DEBUG" "Getting config parameter '$param' for CT $ctid"
 
     if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
@@ -628,13 +649,13 @@ __iterate_vms__() {
     local failed_count=0
     local success_count=0
 
-    for ((vmid=start_id; vmid<=end_id; vmid++)); do
+    for ((vmid = start_id; vmid <= end_id; vmid++)); do
         if __vm_exists__ "$vmid"; then
             __api_log__ "DEBUG" "Calling $callback for VM $vmid"
             if "$callback" "$vmid" "$@"; then
-                ((success_count++))
+                ((success_count += 1))
             else
-                ((failed_count++))
+                ((failed_count += 1))
             fi
         fi
     done
@@ -671,13 +692,13 @@ __iterate_cts__() {
     local failed_count=0
     local success_count=0
 
-    for ((ctid=start_id; ctid<=end_id; ctid++)); do
+    for ((ctid = start_id; ctid <= end_id; ctid++)); do
         if __ct_exists__ "$ctid"; then
             __api_log__ "DEBUG" "Calling $callback for CT $ctid"
             if "$callback" "$ctid" "$@"; then
-                ((success_count++))
+                ((success_count += 1))
             else
-                ((failed_count++))
+                ((failed_count += 1))
             fi
         fi
     done
@@ -725,7 +746,7 @@ __vm_shutdown__() {
     shift
 
     local timeout=60
-    
+
     __api_log__ "INFO" "Shutting down VM $vmid"
 
     while [[ $# -gt 0 ]]; do
@@ -876,7 +897,7 @@ __vm_resume__() {
 # @return Prints VM IDs to stdout, one per line
 __vm_list_all__() {
     local filter=""
-    
+
     __api_log__ "DEBUG" "Listing all VMs with filter: ${1:-<none>}"
 
     while [[ $# -gt 0 ]]; do
@@ -901,7 +922,7 @@ __vm_list_all__() {
     else
         vm_list=$(qm list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
-    
+
     local count=$(echo "$vm_list" | grep -c .)
     __api_log__ "DEBUG" "Found $count VMs matching filter: ${filter:-all}"
     echo "$vm_list"
@@ -949,7 +970,7 @@ __vm_wait_for_status__() {
     fi
 
     local elapsed=0
-    while (( elapsed < timeout )); do
+    while ((elapsed < timeout)); do
         local current_status
         current_status=$(__vm_get_status__ "$vmid" 2>/dev/null)
 
@@ -1081,7 +1102,7 @@ __ct_list_all__() {
     else
         ct_list=$(pct list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
-    
+
     local count=$(echo "$ct_list" | grep -c .)
     __api_log__ "DEBUG" "Found $count CTs matching filter: ${filter:-all}"
     echo "$ct_list"
@@ -1129,7 +1150,7 @@ __ct_wait_for_status__() {
     fi
 
     local elapsed=0
-    while (( elapsed < timeout )); do
+    while ((elapsed < timeout)); do
         local current_status
         current_status=$(__ct_get_status__ "$ctid" 2>/dev/null)
 
@@ -1221,7 +1242,7 @@ __get_vm_info__() {
     echo "memory=$(__vm_get_config__ "$vmid" "memory")"
     echo "cores=$(__vm_get_config__ "$vmid" "cores")"
     echo "sockets=$(__vm_get_config__ "$vmid" "sockets")"
-    
+
     __api_log__ "DEBUG" "Retrieved info for VM $vmid: node=$node, status=$status"
 }
 
@@ -1255,7 +1276,7 @@ __get_ct_info__() {
     echo "memory=$(__ct_get_config__ "$ctid" "memory")"
     echo "cores=$(__ct_get_config__ "$ctid" "cores")"
     echo "hostname=$(__ct_get_config__ "$ctid" "hostname")"
-    
+
     __api_log__ "DEBUG" "Retrieved info for CT $ctid: status=$status"
 }
 
@@ -1339,7 +1360,7 @@ __vm_node_exec__() {
 
     # Replace {vmid} placeholder in command
     command="${command//\{vmid\}/$vmid}"
-    
+
     __api_log__ "DEBUG" "Executing on node $node for VM $vmid"
 
     __node_exec__ "$node" "$command"
@@ -1373,7 +1394,7 @@ __ct_node_exec__() {
     fi
 
     local node
-    node=$(__get_vm_node__ "$ctid")  # Works for CTs too
+    node=$(__get_vm_node__ "$ctid") # Works for CTs too
 
     if [[ -z "$node" ]]; then
         __api_log__ "ERROR" "Could not determine node for CT $ctid"
@@ -1419,6 +1440,649 @@ __pve_exec__() {
     else
         __api_log__ "ERROR" "VM/CT $id does not exist"
         echo "Error: VM/CT $id does not exist" >&2
+        return 1
+    fi
+}
+
+# --- __ct_set_cpu__ ----------------------------------------------------------
+# @function __ct_set_cpu__
+# @description Set CPU configuration for a container
+# @usage __ct_set_cpu__ <ctid> <cores> [sockets]
+# @param 1 Container ID
+# @param 2 Number of CPU cores
+# @param 3 Number of sockets (optional, default: 1)
+# @return 0 on success, 1 on error
+__ct_set_cpu__() {
+    local ctid="$1"
+    local cores="$2"
+    local sockets="${3:-1}"
+
+    __api_log__ "INFO" "Setting CPU for CT $ctid: cores=$cores, sockets=$sockets"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct set "$ctid" --cores "$cores" --sockets "$sockets" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set CPU for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set CPU for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_set_memory__ -------------------------------------------------------
+# @function __ct_set_memory__
+# @description Set memory configuration for a container
+# @usage __ct_set_memory__ <ctid> <memory_mb> [swap_mb]
+# @param 1 Container ID
+# @param 2 Memory in MB
+# @param 3 Swap in MB (optional)
+# @return 0 on success, 1 on error
+__ct_set_memory__() {
+    local ctid="$1"
+    local memory="$2"
+    local swap="${3:-}"
+
+    __api_log__ "INFO" "Setting memory for CT $ctid: memory=${memory}MB, swap=${swap}MB"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    local cmd="pct set $ctid --memory $memory"
+    [[ -n "$swap" ]] && cmd+=" --swap $swap"
+
+    if eval "$cmd" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set memory for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set memory for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_set_onboot__ -------------------------------------------------------
+# @function __ct_set_onboot__
+# @description Set container to start at boot
+# @usage __ct_set_onboot__ <ctid> <value>
+# @param 1 Container ID
+# @param 2 Value (0 or 1)
+# @return 0 on success, 1 on error
+__ct_set_onboot__() {
+    local ctid="$1"
+    local value="$2"
+
+    __api_log__ "INFO" "Setting onboot for CT $ctid: $value"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct set "$ctid" --onboot "$value" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set onboot for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set onboot for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_unlock__ -----------------------------------------------------------
+# @function __ct_unlock__
+# @description Unlock a container
+# @usage __ct_unlock__ <ctid>
+# @param 1 Container ID
+# @return 0 on success, 1 on error
+__ct_unlock__() {
+    local ctid="$1"
+
+    __api_log__ "INFO" "Unlocking CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct unlock "$ctid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully unlocked CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to unlock CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_delete__ -----------------------------------------------------------
+# @function __ct_delete__
+# @description Delete/destroy a container
+# @usage __ct_delete__ <ctid>
+# @param 1 Container ID
+# @return 0 on success, 1 on error
+__ct_delete__() {
+    local ctid="$1"
+
+    __api_log__ "INFO" "Deleting CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct destroy "$ctid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully deleted CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to delete CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_set_protection__ ---------------------------------------------------
+# @function __ct_set_protection__
+# @description Set protection flag for a container
+# @usage __ct_set_protection__ <ctid> <value>
+# @param 1 Container ID
+# @param 2 Value (0 or 1)
+# @return 0 on success, 1 on error
+__ct_set_protection__() {
+    local ctid="$1"
+    local value="$2"
+
+    __api_log__ "INFO" "Setting protection for CT $ctid: $value"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct set "$ctid" --protection "$value" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set protection for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set protection for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __vm_unlock__ -----------------------------------------------------------
+# @function __vm_unlock__
+# @description Unlock a VM
+# @usage __vm_unlock__ <vmid>
+# @param 1 VM ID
+# @return 0 on success, 1 on error
+__vm_unlock__() {
+    local vmid="$1"
+
+    __api_log__ "INFO" "Unlocking VM $vmid"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    if qm unlock "$vmid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully unlocked VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to unlock VM $vmid"
+        return 1
+    fi
+}
+
+# --- __vm_delete__ -----------------------------------------------------------
+# @function __vm_delete__
+# @description Delete/destroy a VM
+# @usage __vm_delete__ <vmid>
+# @param 1 VM ID
+# @return 0 on success, 1 on error
+__vm_delete__() {
+    local vmid="$1"
+
+    __api_log__ "INFO" "Deleting VM $vmid"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    if qm destroy "$vmid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully deleted VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to delete VM $vmid"
+        return 1
+    fi
+}
+
+# --- __vm_set_protection__ ---------------------------------------------------
+# @function __vm_set_protection__
+# @description Set protection flag for a VM
+# @usage __vm_set_protection__ <vmid> <value>
+# @param 1 VM ID
+# @param 2 Value (0 or 1)
+# @return 0 on success, 1 on error
+__vm_set_protection__() {
+    local vmid="$1"
+    local value="$2"
+
+    __api_log__ "INFO" "Setting protection for VM $vmid: $value"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    local node
+    node=$(__get_vm_node__ "$vmid")
+
+    if qm set "$vmid" --node "$node" --protection "$value" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set protection for VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set protection for VM $vmid"
+        return 1
+    fi
+}
+
+# --- __vm_reset__ ------------------------------------------------------------
+# @function __vm_reset__
+# @description Reset/reboot a VM
+# @usage __vm_reset__ <vmid>
+# @param 1 VM ID
+# @return 0 on success, 1 on error
+__vm_reset__() {
+    local vmid="$1"
+
+    __api_log__ "INFO" "Resetting VM $vmid"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    if qm reset "$vmid" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully reset VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to reset VM $vmid"
+        return 1
+    fi
+}
+
+# --- __ct_set_dns__ ----------------------------------------------------------
+# @function __ct_set_dns__
+# @description Set DNS servers for a container
+# @usage __ct_set_dns__ <ctid> <dns_servers>
+# @param 1 Container ID
+# @param 2 DNS servers (space or comma separated)
+# @return 0 on success, 1 on error
+__ct_set_dns__() {
+    local ctid="$1"
+    local dns="$2"
+
+    __api_log__ "INFO" "Setting DNS for CT $ctid: $dns"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct set "$ctid" --nameserver "$dns" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set DNS for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set DNS for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_set_network__ ------------------------------------------------------
+# @function __ct_set_network__
+# @description Set network configuration for a container
+# @usage __ct_set_network__ <ctid> <net_config>
+# @param 1 Container ID
+# @param 2 Network config string (e.g., "name=eth0,bridge=vmbr0,ip=192.168.1.10/24,gw=192.168.1.1")
+# @return 0 on success, 1 on error
+__ct_set_network__() {
+    local ctid="$1"
+    local net_config="$2"
+
+    __api_log__ "INFO" "Setting network for CT $ctid: $net_config"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct set "$ctid" --net0 "$net_config" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully set network for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to set network for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_change_password__ --------------------------------------------------
+# @function __ct_change_password__
+# @description Change password for a user in a container
+# @usage __ct_change_password__ <ctid> <username> <password>
+# @param 1 Container ID
+# @param 2 Username
+# @param 3 New password
+# @return 0 on success, 1 on error
+__ct_change_password__() {
+    local ctid="$1"
+    local username="$2"
+    local password="$3"
+
+    __api_log__ "INFO" "Changing password for user $username in CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if __ct_exec__ "$ctid" "echo '${username}:${password}' | chpasswd" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully changed password for user $username in CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to change password for user $username in CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_add_ssh_key__ ------------------------------------------------------
+# @function __ct_add_ssh_key__
+# @description Add SSH key to root's authorized_keys in a container
+# @usage __ct_add_ssh_key__ <ctid> <ssh_key>
+# @param 1 Container ID
+# @param 2 SSH public key
+# @return 0 on success, 1 on error
+__ct_add_ssh_key__() {
+    local ctid="$1"
+    local ssh_key="$2"
+
+    __api_log__ "INFO" "Adding SSH key to CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if __ct_exec__ "$ctid" "mkdir -p /root/.ssh && chmod 700 /root/.ssh && echo '$ssh_key' >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully added SSH key to CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to add SSH key to CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_resize_disk__ ------------------------------------------------------
+# @function __ct_resize_disk__
+# @description Resize a container disk
+# @usage __ct_resize_disk__ <ctid> <disk_id> <size>
+# @param 1 Container ID
+# @param 2 Disk identifier (e.g., "rootfs", "mp0")
+# @param 3 New size (e.g., "+5G", "20G")
+# @return 0 on success, 1 on error
+__ct_resize_disk__() {
+    local ctid="$1"
+    local disk="$2"
+    local size="$3"
+
+    __api_log__ "INFO" "Resizing disk $disk for CT $ctid to $size"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct resize "$ctid" "$disk" "$size" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully resized disk $disk for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to resize disk $disk for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __vm_resize_disk__ ------------------------------------------------------
+# @function __vm_resize_disk__
+# @description Resize a VM disk
+# @usage __vm_resize_disk__ <vmid> <disk> <size>
+# @param 1 VM ID
+# @param 2 Disk identifier (e.g., "scsi0", "ide0")
+# @param 3 Size increment (e.g., "+5G")
+# @return 0 on success, 1 on error
+__vm_resize_disk__() {
+    local vmid="$1"
+    local disk="$2"
+    local size="$3"
+
+    __api_log__ "INFO" "Resizing disk $disk for VM $vmid by $size"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    if qm resize "$vmid" "$disk" "$size" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully resized disk $disk for VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to resize disk $disk for VM $vmid"
+        return 1
+    fi
+}
+
+# --- __vm_backup__ -----------------------------------------------------------
+# @function __vm_backup__
+# @description Backup a VM
+# @usage __vm_backup__ <vmid> <storage> <mode>
+# @param 1 VM ID
+# @param 2 Storage location for backup
+# @param 3 Backup mode (snapshot, suspend, stop)
+# @return 0 on success, 1 on error
+__vm_backup__() {
+    local vmid="$1"
+    local storage="$2"
+    local mode="$3"
+
+    __api_log__ "INFO" "Backing up VM $vmid to $storage with mode $mode"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    if vzdump "$vmid" --storage "$storage" --mode "$mode" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully backed up VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to backup VM $vmid"
+        return 1
+    fi
+}
+
+# --- __ct_change_storage__ ---------------------------------------------------
+# @function __ct_change_storage__
+# @description Change storage configuration for container volumes
+# @usage __ct_change_storage__ <ctid> <current_storage> <new_storage>
+# @param 1 Container ID
+# @param 2 Current storage
+# @param 3 New storage
+# @return 0 on success, 1 on error
+# @note This is a complex operation that may require moving volumes
+__ct_change_storage__() {
+    local ctid="$1"
+    local current_storage="$2"
+    local new_storage="$3"
+
+    __api_log__ "INFO" "Changing storage for CT $ctid from $current_storage to $new_storage"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    # This is a placeholder - actual implementation would need to:
+    # 1. Get all volumes from current storage
+    # 2. Move each volume to new storage using pct move-volume
+    # For now, log a warning
+    __api_log__ "WARN" "Storage change for CT $ctid requires manual volume migration"
+    echo "Warning: Storage change requires manual intervention" >&2
+    return 1
+}
+
+# --- __ct_move_volume__ ------------------------------------------------------
+# @function __ct_move_volume__
+# @description Move a container volume to different storage
+# @usage __ct_move_volume__ <ctid> <volume> <target_storage>
+# @param 1 Container ID
+# @param 2 Volume identifier (e.g., "rootfs", "mp0")
+# @param 3 Target storage
+# @return 0 on success, 1 on error
+__ct_move_volume__() {
+    local ctid="$1"
+    local volume="$2"
+    local target="$3"
+
+    __api_log__ "INFO" "Moving volume $volume for CT $ctid to $target"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    if pct move-volume "$ctid" "$volume" "$target" --delete 2>/dev/null; then
+        __api_log__ "INFO" "Successfully moved volume $volume for CT $ctid to $target"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to move volume $volume for CT $ctid to $target"
+        return 1
+    fi
+}
+
+# --- __ct_update_packages__ --------------------------------------------------
+# @function __ct_update_packages__
+# @description Update packages in a container
+# @usage __ct_update_packages__ <ctid>
+# @param 1 Container ID
+# @return 0 on success, 1 on error
+__ct_update_packages__() {
+    local ctid="$1"
+
+    __api_log__ "INFO" "Updating packages for CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    # Try apt-get first (Debian/Ubuntu), then apk (Alpine), then dnf (Fedora)
+    if __ct_exec__ "$ctid" "which apt-get >/dev/null 2>&1 && apt-get update && apt-get upgrade -y" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully updated packages (apt) for CT $ctid"
+        return 0
+    elif __ct_exec__ "$ctid" "which apk >/dev/null 2>&1 && apk update && apk upgrade" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully updated packages (apk) for CT $ctid"
+        return 0
+    elif __ct_exec__ "$ctid" "which dnf >/dev/null 2>&1 && dnf upgrade -y" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully updated packages (dnf) for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to update packages for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __ct_add_ip_to_note__ ---------------------------------------------------
+# @function __ct_add_ip_to_note__
+# @description Add container IP address to its notes/description
+# @usage __ct_add_ip_to_note__ <ctid>
+# @param 1 Container ID
+# @return 0 on success, 1 on error
+__ct_add_ip_to_note__() {
+    local ctid="$1"
+
+    __api_log__ "INFO" "Adding IP to note for CT $ctid"
+
+    if ! __validate_numeric__ "$ctid" "CTID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid CTID: $ctid"
+        return 1
+    fi
+
+    local ip
+    ip=$(__ct_get_config__ "$ctid" "net0" | grep -oP 'ip=\K[^/,]+' || echo "")
+
+    if [[ -z "$ip" ]]; then
+        __api_log__ "WARN" "No IP found for CT $ctid"
+        return 1
+    fi
+
+    local current_note
+    current_note=$(__ct_get_config__ "$ctid" "description" 2>/dev/null || echo "")
+    local new_note="IP: $ip"
+
+    if [[ -n "$current_note" ]]; then
+        new_note="$current_note\n$new_note"
+    fi
+
+    if pct set "$ctid" --description "$new_note" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully added IP to note for CT $ctid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to add IP to note for CT $ctid"
+        return 1
+    fi
+}
+
+# --- __vm_add_ip_to_note__ ---------------------------------------------------
+# @function __vm_add_ip_to_note__
+# @description Add VM IP address to its notes/description
+# @usage __vm_add_ip_to_note__ <vmid>
+# @param 1 VM ID
+# @return 0 on success, 1 on error
+__vm_add_ip_to_note__() {
+    local vmid="$1"
+
+    __api_log__ "INFO" "Adding IP to note for VM $vmid"
+
+    if ! __validate_numeric__ "$vmid" "VMID" 2>/dev/null; then
+        __api_log__ "ERROR" "Invalid VMID: $vmid"
+        return 1
+    fi
+
+    local ip
+    ip=$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | jq -r '.[].["ip-addresses"][]? | select(.["ip-address-type"] == "ipv4") | .["ip-address"]' | grep -v "^127\." | head -1 || echo "")
+
+    if [[ -z "$ip" ]]; then
+        __api_log__ "WARN" "No IP found for VM $vmid (guest agent may not be running)"
+        return 1
+    fi
+
+    local node
+    node=$(__get_vm_node__ "$vmid")
+
+    local current_note
+    current_note=$(__vm_get_config__ "$vmid" "description" 2>/dev/null || echo "")
+    local new_note="IP: $ip"
+
+    if [[ -n "$current_note" ]]; then
+        new_note="$current_note\n$new_note"
+    fi
+
+    if qm set "$vmid" --node "$node" --description "$new_note" 2>/dev/null; then
+        __api_log__ "INFO" "Successfully added IP to note for VM $vmid"
+        return 0
+    else
+        __api_log__ "ERROR" "Failed to add IP to note for VM $vmid"
         return 1
     fi
 }

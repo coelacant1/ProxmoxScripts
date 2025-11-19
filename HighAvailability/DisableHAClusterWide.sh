@@ -57,12 +57,12 @@ main() {
             __update__ "Removing HA resource: ${res}"
             if pvesh delete "/cluster/ha/resources/${res}" 2>&1; then
                 __ok__ "Removed ${res}"
-                ((removed++))
+                ((removed += 1))
             else
                 __warn__ "Failed to remove ${res}"
-                ((failed++))
+                ((failed += 1))
             fi
-        done <<< "$all_resources"
+        done <<<"$all_resources"
 
         echo
         __info__ "Removed ${removed} HA resource(s)"

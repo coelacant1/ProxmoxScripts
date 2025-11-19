@@ -20,7 +20,6 @@
 #
 # Function Index:
 #   - main
-#   - change_ip_callback
 #
 
 set -euo pipefail
@@ -35,6 +34,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Operations.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -47,7 +48,7 @@ main() {
     __check_proxmox__
 
     # Parse IP and CIDR
-    IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
+    IFS='/' read -r START_IP SUBNET_MASK <<<"$START_IP_CIDR"
 
     __info__ "Starting IP: ${START_IP}/${SUBNET_MASK}, Bridge: ${BRIDGE}"
     [[ -n "${GATEWAY:-}" ]] && __info__ "Gateway: ${GATEWAY}"

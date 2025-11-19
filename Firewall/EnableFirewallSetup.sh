@@ -35,14 +35,16 @@ source "${UTILITYPATH}/Cluster.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/ArgumentParser.sh
 source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # CONFIGURATION
 ###############################################################################
-CLUSTER_INTERFACE="vmbr0"  # Interface for cluster/storage network
-VXLAN_PORT="4789"          # Default VXLAN UDP port
+CLUSTER_INTERFACE="vmbr0" # Interface for cluster/storage network
+VXLAN_PORT="4789"         # Default VXLAN UDP port
 
 # --- ipset_contains_cidr -----------------------------------------------------
 ipset_contains_cidr() {
@@ -50,7 +52,7 @@ ipset_contains_cidr() {
     local existing_cidrs
     existing_cidrs=$(
         pvesh get /cluster/firewall/ipset/proxmox-nodes --output-format json 2>/dev/null \
-        | jq -r '.[].cidr'
+            | jq -r '.[].cidr'
     )
     echo "${existing_cidrs}" | grep -qx "${cidr}"
 }
@@ -61,7 +63,7 @@ rule_exists_by_comment() {
     local existing_comments
     existing_comments=$(
         pvesh get /cluster/firewall/rules --output-format json 2>/dev/null \
-        | jq -r '.[].comment // empty'
+            | jq -r '.[].comment // empty'
     )
     echo "${existing_comments}" | grep -Fxq "${comment}"
 }
@@ -101,7 +103,7 @@ main() {
     # Create and populate proxmox-nodes IP set
     __info__ "Creating IP set 'proxmox-nodes'"
     if ! pvesh get /cluster/firewall/ipset --output-format json 2>/dev/null \
-       | jq -r '.[].name' | grep -qx 'proxmox-nodes'; then
+        | jq -r '.[].name' | grep -qx 'proxmox-nodes'; then
         pvesh create /cluster/firewall/ipset --name proxmox-nodes \
             --comment "IP set for Proxmox nodes"
         __ok__ "Created IP set 'proxmox-nodes'"

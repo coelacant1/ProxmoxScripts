@@ -6,10 +6,10 @@
 # Provides functions for cluster membership, node queries, VM/CT listing, and validation
 #
 # Note: IP discovery functions have been moved to Discovery.sh
-#   - get_ip_from_vmid → Discovery.sh
-#   - __get_ip_from_guest_agent__ → Discovery.sh  
-#   - __get_ip_from_name__ → Discovery.sh
-#   - __get_name_from_ip__ → Discovery.sh
+#   - get_ip_from_vmid -> Discovery.sh
+#   - __get_ip_from_guest_agent__ -> Discovery.sh
+#   - __get_ip_from_name__ -> Discovery.sh
+#   - __get_name_from_ip__ -> Discovery.sh
 #
 # Dependencies:
 #   - Logger.sh (for logging)
@@ -19,30 +19,26 @@
 #   source "${UTILITYPATH}/Cluster.sh"
 #
 # Function Index:
-#   Cluster Topology:
+#   - __query_log__
 #   - __get_remote_node_ips__
 #   - __check_cluster_membership__
 #   - __get_number_of_cluster_nodes__
 #   - __init_node_mappings__
-#   
-#   VM/CT Listing:
-#   - __get_cluster_lxc__
 #   - __get_server_lxc__
 #   - __get_cluster_vms__
 #   - __get_server_vms__
 #   - __get_vm_node__
-#   
-#   Node Resolution:
+#   - __get_ct_node__
 #   - __resolve_node_name__
-#   
-#   Validation:
 #   - __validate_vm_id_range__
 #   - __validate_vmid__
 #   - __check_vm_status__
 #   - __validate_ctid__
 #   - __check_ct_status__
-
-set -euo pipefail
+#   - __is_local_ip__
+#   - __get_cluster_cts__
+#   - __get_pool_vms__
+#
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -154,10 +150,10 @@ __init_node_mappings__() {
     while IFS= read -r line; do
         # Extract the first and third fields.
         local nodeid_hex ip_part
-        nodeid_hex=$(awk '{print $1}' <<< "$line" | xargs)  # xargs trims whitespace.
-        ip_part=$(awk '{print $3}' <<< "$line" | xargs)
+        nodeid_hex=$(awk '{print $1}' <<<"$line" | xargs) # xargs trims whitespace.
+        ip_part=$(awk '{print $3}' <<<"$line" | xargs)
         ip_part="${ip_part//(local)/}"
-        ip_part=$(echo "$ip_part" | xargs)  # Trim any leftover spaces.
+        ip_part=$(echo "$ip_part" | xargs) # Trim any leftover spaces.
 
         # Ensure the extracted nodeid_hex starts with "0x" and valid hex digits.
         if [[ "$nodeid_hex" != 0x[0-9a-fA-F]* ]]; then
@@ -173,8 +169,8 @@ __init_node_mappings__() {
     # Process the output from pvecm nodes.
     while IFS= read -r line; do
         local nodeid_dec name_part
-        nodeid_dec=$(awk '{print $1}' <<< "$line" | xargs)
-        name_part=$(awk '{print $3}' <<< "$line" | xargs)
+        nodeid_dec=$(awk '{print $1}' <<<"$line" | xargs)
+        name_part=$(awk '{print $3}' <<<"$line" | xargs)
         name_part="${name_part//(local)/}"
         name_part=$(echo "$name_part" | xargs)
         NODEID_TO_NAME["$nodeid_dec"]="$name_part"
@@ -197,24 +193,6 @@ __init_node_mappings__() {
     __query_log__ "INFO" "Node mappings initialized: ${#NAME_TO_IP[@]} nodes"
 }
 
-# --- __get_cluster_lxc__ ------------------------------------------------------------
-# @function __get_cluster_lxc__
-# @description Retrieves the VMIDs for all LXC containers across the entire cluster.
-# @usage readarray -t ALL_CLUSTER_LXC < <( __get_cluster_lxc__ )
-# @return Prints each LXC VMID on a separate line.
-# @example_output The function may output:
-#   101
-#   102
-__get_cluster_lxc__() {
-    __query_log__ "DEBUG" "Retrieving cluster LXC containers"
-    local lxc_list
-    lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r '.[] | select(.type=="lxc") | .vmid')
-    local count=$(echo "$lxc_list" | grep -c '^' || echo 0)
-    __query_log__ "DEBUG" "Found $count LXC containers in cluster"
-    echo "$lxc_list"
-}
-
 # --- __get_server_lxc__ ------------------------------------------------------------
 # @function __get_server_lxc__
 # @description Retrieves the VMIDs for all LXC containers on a specific server.
@@ -228,7 +206,7 @@ __get_cluster_lxc__() {
 __get_server_lxc__() {
     local nodeSpec="$1"
     local nodeName
-    
+
     __query_log__ "DEBUG" "Retrieving LXC containers for node: $nodeSpec"
 
     if [[ "$nodeSpec" == "local" ]]; then
@@ -244,12 +222,12 @@ __get_server_lxc__() {
         echo "Error: Unable to determine node name for '$nodeSpec'." >&2
         return 1
     fi
-    
+
     __query_log__ "DEBUG" "Resolved node name: $nodeName"
 
     local lxc_list
-    lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r --arg NODENAME "$nodeName" \
+    lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="lxc" and .node==$NODENAME) | .vmid')
     local count=$(echo "$lxc_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count LXC containers on $nodeName"
@@ -268,8 +246,8 @@ __get_cluster_vms__() {
     __query_log__ "DEBUG" "Retrieving cluster QEMU VMs"
     __install_or_prompt__ "jq"
     local vm_list
-    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r '.[] | select(.type=="qemu") | .vmid')
+    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r '.[] | select(.type=="qemu") | .vmid')
     local count=$(echo "$vm_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count QEMU VMs in cluster"
     echo "$vm_list"
@@ -288,7 +266,7 @@ __get_cluster_vms__() {
 __get_server_vms__() {
     local nodeSpec="$1"
     local nodeName
-    
+
     __query_log__ "DEBUG" "Retrieving QEMU VMs for node: $nodeSpec"
 
     if [[ "$nodeSpec" == "local" ]]; then
@@ -304,12 +282,12 @@ __get_server_vms__() {
         echo "Error: Unable to determine node name for '$nodeSpec'." >&2
         return 1
     fi
-    
+
     __query_log__ "DEBUG" "Resolved node name: $nodeName"
 
     local vm_list
-    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-        jq -r --arg NODENAME "$nodeName" \
+    vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid')
     local count=$(echo "$vm_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count QEMU VMs on $nodeName"
@@ -328,7 +306,7 @@ __get_server_vms__() {
 __get_vm_node__() {
     local vmid="$1"
     __query_log__ "TRACE" "Getting node for VM: $vmid"
-    
+
     if [[ -z "$vmid" ]]; then
         __query_log__ "ERROR" "No VMID provided"
         echo "Error: __get_vm_node__ requires a VMID argument." >&2
@@ -338,15 +316,53 @@ __get_vm_node__() {
     __install_or_prompt__ "jq"
 
     local node
-    node=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
-        jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true)
-    
+    node=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r --arg VMID "$vmid" '.[] | select(.type=="qemu" and .vmid==($VMID|tonumber)) | .node' 2>/dev/null || true)
+
     if [[ -n "$node" ]]; then
         __query_log__ "DEBUG" "VM $vmid is on node: $node"
     else
         __query_log__ "WARN" "VM $vmid not found in cluster"
     fi
-    
+
+    echo "$node"
+}
+
+# --- __get_ct_node__ ---------------------------------------------------------
+# @function __get_ct_node__
+# @description Get the node name where a container is located
+# @usage local node=$(__get_ct_node__ <ctid>)
+# @param 1 Container ID
+# @return Prints node name to stdout
+__get_ct_node__() {
+    local ctid="$1"
+    __query_log__ "TRACE" "Getting node for CT: $ctid"
+
+    if [[ -z "$ctid" ]]; then
+        __query_log__ "ERROR" "No CTID provided"
+        echo "Error: __get_ct_node__ requires a CTID argument." >&2
+        return 1
+    fi
+
+    __install_or_prompt__ "jq"
+
+    local node
+    # First try cluster resources
+    node=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r --arg CTID "$ctid" '.[] | select(.type=="lxc" and .vmid==($CTID|tonumber)) | .node' 2>/dev/null || true)
+
+    # If not found in cluster, try local pct config
+    if [[ -z "$node" ]] && pct config "$ctid" &>/dev/null; then
+        node=$(hostname)
+        __query_log__ "DEBUG" "CT $ctid found locally on: $node"
+    fi
+
+    if [[ -n "$node" ]]; then
+        __query_log__ "DEBUG" "CT $ctid is on node: $node"
+    else
+        __query_log__ "WARN" "CT $ctid not found"
+    fi
+
     echo "$node"
 }
 
@@ -364,7 +380,7 @@ __get_vm_node__() {
 __resolve_node_name__() {
     local node_spec="$1"
     local node_name
-    
+
     __query_log__ "TRACE" "Resolving node spec: $node_spec"
 
     if [[ -z "$node_spec" ]]; then
@@ -402,7 +418,7 @@ __resolve_node_name__() {
 __validate_vm_id_range__() {
     local start_id="$1"
     local end_id="$2"
-    
+
     __query_log__ "TRACE" "Validating VM ID range: $start_id to $end_id"
 
     if [[ -z "$start_id" ]] || [[ -z "$end_id" ]]; then
@@ -417,12 +433,12 @@ __validate_vm_id_range__() {
         return 1
     fi
 
-    if (( start_id > end_id )); then
+    if ((start_id > end_id)); then
         __query_log__ "ERROR" "Invalid range: start ($start_id) > end ($end_id)"
         echo "Error: Start VM ID must be less than or equal to end VM ID (got start=$start_id, end=$end_id)." >&2
         return 1
     fi
-    
+
     __query_log__ "DEBUG" "VM ID range validated: $start_id-$end_id"
     return 0
 }
@@ -487,7 +503,7 @@ __validate_vmid__() {
 __check_vm_status__() {
     local vmid="$1"
     shift
-    
+
     __query_log__ "TRACE" "Checking VM status: $vmid"
 
     local should_stop=false
@@ -558,7 +574,7 @@ __check_vm_status__() {
             return 1
         fi
     done
-    
+
     __query_log__ "INFO" "VM $vmid stopped successfully"
     return 0
 }
@@ -623,7 +639,7 @@ __validate_ctid__() {
 __check_ct_status__() {
     local ctid="$1"
     shift
-    
+
     __query_log__ "TRACE" "Checking container status: $ctid"
 
     local should_stop=false
@@ -694,7 +710,7 @@ __check_ct_status__() {
             return 1
         fi
     done
-    
+
     __query_log__ "INFO" "Container $ctid stopped successfully"
     return 0
 }
@@ -716,7 +732,7 @@ __check_ct_status__() {
 __is_local_ip__() {
     local ip_to_check="$1"
     local local_ips ip
-    
+
     __query_log__ "TRACE" "Checking if IP is local: $ip_to_check"
 
     local_ips=$(hostname -I)
@@ -727,7 +743,31 @@ __is_local_ip__() {
             return 0
         fi
     done
-    
+
     __query_log__ "DEBUG" "IP $ip_to_check is not local"
     return 1
+}
+
+# --- __get_cluster_cts__ -----------------------------------------------------
+# @function __get_cluster_cts__
+# @description Get all container IDs across the cluster
+# @usage mapfile -t cts < <(__get_cluster_cts__)
+# @return Prints container IDs, one per line
+__get_cluster_cts__() {
+    __query_log__ "DEBUG" "Getting all cluster containers"
+    pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+        | jq -r '.[] | select(.type == "lxc") | .vmid' | sort -n
+}
+
+# --- __get_pool_vms__ --------------------------------------------------------
+# @function __get_pool_vms__
+# @description Get all VM IDs in a specific pool
+# @usage mapfile -t vms < <(__get_pool_vms__ "pool_name")
+# @param 1 Pool name
+# @return Prints VM IDs, one per line
+__get_pool_vms__() {
+    local pool_name="$1"
+    __query_log__ "DEBUG" "Getting VMs from pool: $pool_name"
+    pvesh get "/pools/$pool_name" --output-format json 2>/dev/null \
+        | jq -r '.members[]? | select(.type == "qemu") | .vmid' | sort -n
 }

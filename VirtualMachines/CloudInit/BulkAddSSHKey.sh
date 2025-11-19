@@ -18,7 +18,6 @@
 #
 # Function Index:
 #   - main
-#   - add_ssh_key_callback
 #
 
 set -euo pipefail
@@ -51,8 +50,8 @@ main() {
     add_ssh_key_callback() {
         local vmid="$1"
 
-        if __vm_node_exec__ "$vmid" "qm cloudinit get {vmid} ssh-authorized-keys" > "$temp_file" 2>/dev/null; then
-            echo "$SSH_PUBLIC_KEY" >> "$temp_file"
+        if __vm_node_exec__ "$vmid" "qm cloudinit get {vmid} ssh-authorized-keys" >"$temp_file" 2>/dev/null; then
+            echo "$SSH_PUBLIC_KEY" >>"$temp_file"
             __vm_set_config__ "$vmid" --sshkeys "$temp_file"
             __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid}" >/dev/null 2>&1 || true
         else

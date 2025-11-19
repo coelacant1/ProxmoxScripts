@@ -76,8 +76,8 @@ parse_backup_info() {
     local backup_date="Unknown"
     if [[ "$backup_path" =~ ([0-9]{4}[-_][0-9]{2}[-_][0-9]{2}[-_][0-9]{2}[-_:][0-9]{2}[-_:][0-9]{2}) ]]; then
         backup_date="${BASH_REMATCH[1]}"
-        backup_date="${backup_date//_/ }"  # Replace underscores with spaces
-        backup_date="${backup_date//-/:}"  # Fix time separators
+        backup_date="${backup_date//_/ }" # Replace underscores with spaces
+        backup_date="${backup_date//-/:}" # Fix time separators
     fi
 
     BACKUP_PATHS+=("$backup_path")
@@ -111,15 +111,15 @@ list_backups() {
 
         # Only process container backups (skip VM backups)
         case "$backup_type" in
-            pbs-ct|vzdump|lxc)
+            pbs-ct | vzdump | lxc)
                 parse_backup_info "$line"
                 ;;
-            pbs-vm|vma|qemu)
+            pbs-vm | vma | qemu)
                 # Skip VM backups
                 continue
                 ;;
         esac
-    done <<< "$backup_output"
+    done <<<"$backup_output"
 
     if [[ ${#BACKUP_PATHS[@]} -eq 0 ]]; then
         __err__ "No container backups found on storage '${SOURCE_STORAGE}'"
@@ -143,7 +143,7 @@ select_backup() {
         local size_mb=$((BACKUP_SIZES[i] / 1024 / 1024))
 
         printf "%3d) CTID: %-5s Size: %6d MB  Date: %s\n" \
-            $((i+1)) \
+            $((i + 1)) \
             "${BACKUP_CTIDS[i]}" \
             "$size_mb" \
             "${BACKUP_DATES[i]}"
@@ -160,9 +160,9 @@ select_backup() {
             exit 0
         fi
 
-        if [[ "$selection" =~ ^[0-9]+$ ]] && \
-           [[ "$selection" -ge 1 ]] && \
-           [[ "$selection" -le ${#BACKUP_PATHS[@]} ]]; then
+        if [[ "$selection" =~ ^[0-9]+$ ]] \
+            && [[ "$selection" -ge 1 ]] \
+            && [[ "$selection" -le ${#BACKUP_PATHS[@]} ]]; then
             return $((selection - 1))
         fi
 

@@ -57,7 +57,7 @@ enable_firewall_lxc() {
 
             pct set "$vmid" -net"${nic_index}" "$net_line" &>/dev/null
         fi
-    done <<< "$config_lines"
+    done <<<"$config_lines"
 
     pct set "$vmid" --features "firewall=1" &>/dev/null
 }
@@ -107,26 +107,26 @@ main() {
     local success=0
     local failed=0
 
-    for (( vmid=START_VMID; vmid<=END_VMID; vmid++ )); do
+    for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
         __update__ "Processing ${vmid}"
 
         if pct status "$vmid" &>/dev/null; then
             # LXC container
             if enable_firewall_lxc "$vmid" && configure_resource_firewall "$vmid"; then
                 __ok__ "CT ${vmid} configured"
-                ((success++))
+                ((success += 1))
             else
                 __warn__ "Failed to configure CT ${vmid}"
-                ((failed++))
+                ((failed += 1))
             fi
         elif qm config "$vmid" &>/dev/null; then
             # VM
             if enable_firewall_vm "$vmid" && configure_resource_firewall "$vmid"; then
                 __ok__ "VM ${vmid} configured"
-                ((success++))
+                ((success += 1))
             else
                 __warn__ "Failed to configure VM ${vmid}"
-                ((failed++))
+                ((failed += 1))
             fi
         else
             __update__ "Skipped ${vmid} (not found)"

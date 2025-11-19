@@ -19,8 +19,8 @@ Installation (for full functionality):
     # Or download binary from:
     # https://github.com/mvdan/sh/releases
 
-Formatting rules (shfmt defaults):
-    - Indent with tabs
+Formatting rules:
+    - Indent with 4 spaces
     - Binary operators at start of line
     - Switch cases indented
     - Redirect operators preceded by space
@@ -62,8 +62,8 @@ def run_shfmt_check(file_path, fix=False, show_diff=False):
     Returns:
         (has_issues, diff_output)
     """
-    # shfmt flags: -i 0 (tabs), -bn (binary ops at start), -ci (switch case indent)
-    cmd = ["shfmt", "-i", "0", "-bn", "-ci"]
+    # shfmt flags: -i 4 (4 spaces), -bn (binary ops at start), -ci (switch case indent)
+    cmd = ["shfmt", "-i", "4", "-bn", "-ci"]
     
     if show_diff:
         cmd.append("-d")

@@ -20,7 +20,6 @@
 #
 # Function Index:
 #   - main
-#   - resize_storage_callback
 #
 
 set -euo pipefail
@@ -33,11 +32,13 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid disk_id:string new_size:string" "$@"
+__parse_args__ "start_vmid:int end_vmid:int disk_id:string new_size:string" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {

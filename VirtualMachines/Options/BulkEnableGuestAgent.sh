@@ -19,7 +19,6 @@
 #
 # Function Index:
 #   - main
-#   - enable_agent_callback
 #
 
 set -euo pipefail

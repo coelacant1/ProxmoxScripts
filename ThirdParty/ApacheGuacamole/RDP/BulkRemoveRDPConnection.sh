@@ -14,7 +14,7 @@
 #   BulkRemoveRDPConnection.sh GUAC_SERVER_URL --vmid-range START_VMID END_VMID [DATA_SOURCE] [--force]
 #
 # Examples:
-#   BulkRemoveRDPConnection.sh "http://172.20.192.10:8080/guacamole" "TestVM"
+#   BulkRemoveRDPConnection.sh "http://192.168.1.10:8080/guacamole" "TestVM"
 #   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" "Clone" mysql --force
 #   BulkRemoveRDPConnection.sh "http://guac.example.com:8080/guacamole" --vmid-range 100 110 mysql --force
 #
@@ -31,10 +31,10 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -137,8 +137,8 @@ if [[ "$MODE" == "vmid-range" ]]; then
     # Build list of VM names for the VMID range
     vmNames=()
     for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
-        vmName="$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-            jq -r --arg VMID "$vmid" '.[] | select(.vmid == ($VMID|tonumber)) | .name')"
+        vmName="$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+            | jq -r --arg VMID "$vmid" '.[] | select(.vmid == ($VMID|tonumber)) | .name')"
 
         if [[ -n "$vmName" && "$vmName" != "null" ]]; then
             vmNames+=("$vmName")

@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - start_callback
 #
 
 set -euo pipefail

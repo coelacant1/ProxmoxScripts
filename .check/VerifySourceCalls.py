@@ -79,6 +79,9 @@ def build_global_function_map(utilities_dir):
     """
     Recursively parse all .sh files under 'utilities_dir'
     Return { "__func__": {"FileA.sh", "FileB.sh"} }
+    
+    Excludes test files (starting with _Test) from the map since they're
+    not real utility libraries.
     """
     global_map = {}
     utilities_path = Path(utilities_dir).resolve()
@@ -89,6 +92,10 @@ def build_global_function_map(utilities_dir):
 
     all_utility_scripts = list(utilities_path.rglob("*.sh"))
     for util_script in all_utility_scripts:
+        # Skip test files - they mock functions but aren't real utilities
+        if util_script.name.startswith("_Test") or util_script.name.startswith("_"):
+            continue
+            
         funcs = parse_functions_in_file(util_script)
         for f in funcs:
             if f not in global_map:
@@ -144,22 +151,34 @@ def parse_script_for_includes_and_local_funcs(script_path):
 # 4) Gather function calls from lines that are not function definitions
 # -----------------------------------------------------------------------------
 def gather_function_calls(script_path):
+    """
+    Extract all function calls (__function_name__) from a script.
+    Uses regex to find all occurrences, not just whitespace-separated tokens.
+    This handles cases like:
+        - var=$(__function__ arg)
+        - if __function__; then
+        - echo "$(__function__)"
+    """
     calls = set()
     if not os.path.isfile(script_path):
         return calls
 
+    # Regex to find all __word__ patterns (function calls)
+    call_pattern = re.compile(r'__[a-zA-Z0-9_]+__')
+
     with open(script_path, "r", encoding="utf-8", newline='\n') as f:
         for line in f:
+            # Skip lines that are function definitions
             if FUNC_DEF_REGEX.search(line.strip()):
-                # skip lines that define a function
                 continue
 
-            tokens = line.strip().split()
-            for t in tokens:
-                if CALL_REGEX.match(t):
-                    if t == "__base__":
-                        continue #Skip this function, as it is used by RBD, not a library function
-                    calls.add(t)
+            # Find all function call patterns in the line
+            for match in call_pattern.finditer(line):
+                func_name = match.group(0)
+                if func_name == "__base__":
+                    continue  # Skip this function, as it is used by RBD, not a library function
+                calls.add(func_name)
+    
     return calls
 
 # -----------------------------------------------------------------------------

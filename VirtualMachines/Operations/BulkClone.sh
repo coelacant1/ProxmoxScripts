@@ -33,6 +33,8 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Operations.sh
 source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -65,7 +67,7 @@ main() {
     local failed=0
 
     # Clone VMs sequentially
-    for (( i=0; i<COUNT; i++ )); do
+    for ((i = 0; i < COUNT; i++)); do
         local target_vmid=$((START_VMID + i))
         local name_index=$((i + 1))
         local vm_name="${BASE_NAME}${name_index}"
@@ -79,10 +81,10 @@ main() {
 
         # Execute clone on source VM's node
         if __node_exec__ "$source_node" "$clone_cmd" &>/dev/null; then
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to clone VM ${target_vmid}"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

@@ -21,8 +21,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -76,17 +74,17 @@ main() {
             resource_type="vm"
         else
             __warn__ "Resource ${resource_id} not found in cluster"
-            ((failed++))
+            ((failed += 1))
             continue
         fi
 
         __update__ "Adding ${resource_type}:${resource_id} to HA group ${GROUP_NAME}"
         if pvesh create /cluster/ha/resources --sid "${resource_type}:${resource_id}" --group "${GROUP_NAME}" 2>&1; then
             __ok__ "Added ${resource_type}:${resource_id}"
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to add ${resource_type}:${resource_id}"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

@@ -59,21 +59,21 @@ main() {
         if ssh -o StrictHostKeyChecking=no "root@${node_ip}" \
             "echo -e 'search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}' > /etc/resolv.conf" 2>&1; then
             __ok__ "DNS configured on $node_ip"
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to configure DNS on $node_ip"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 
     # Update DNS on local node
     __update__ "Setting DNS on local node"
-    if echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" > /etc/resolv.conf 2>&1; then
+    if echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" >/etc/resolv.conf 2>&1; then
         __ok__ "DNS configured on local node"
-        ((success++))
+        ((success += 1))
     else
         __warn__ "Failed to configure DNS on local node"
-        ((failed++))
+        ((failed += 1))
     fi
 
     echo

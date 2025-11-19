@@ -5,12 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2025-11-19
+
+Script fixes, documentation updates, and function standardization
+
+### Changed
+- **Function naming standardization** - Renamed functions for consistency
+  - `__get_cluster_lxc__` -> `__get_cluster_cts__` for consistent container terminology
+  - `__prompt_yes_no__` -> `__prompt_user_yn__`
+- **Test suite updates** - Updated test file to reflect renamed functions
+  - `_TestQueries.sh`: Renamed `test_get_cluster_lxc` -> `test_get_cluster_cts`
+- **BulkOperations.sh** - Removed internal wrapper functions
+  - Removed `vm_wrapper` and `ct_wrapper` helper functions
+- **Documentation cleanup** - Updated auto-generated utility documentation
+  - Removed duplicate `__get_cluster_lxc__` documentation entries
+  - Updated IP address examples for documentation
+- **Testing documentation** - Enhanced test coverage documentation
+  - Updated `_TestingStatus.md` with comprehensive test implementation status
+  - Added test enhancement opportunities and integration test scenarios
+  - Fixed issues in several scripts
+
+### Removed
+- **Deprecated function aliases** - Cleaned up backward compatibility aliases
+  - Removed `__prompt_yes_no__` function (use `__prompt_user_yn__` instead)
+  - Removed `__get_cluster_lxc__` function (use `__get_cluster_cts__` instead)
+
 ## [2.1.2] - 2025-11-14
 
 Multi-remote execution improvements and debug logging support
 
 ### Added
-- **Temporary Multi-Remote Mode** - Execute on IP ranges (172.20.83.100-200) or VMID ranges without saving connections
+- **Temporary Multi-Remote Mode** - Execute on IP ranges (192.168.1.100-200) or VMID ranges without saving connections
 - **Dual Log Output** - Remote execution creates both output log (.log) and debug log (.debug.log) with structured logging
 - **Debug Flag Support** - `./GUI.sh -d` enables DEBUG level logging on remote nodes
 - **Interrupt Handling** - Ctrl+C during remote execution cleanly cancels remaining nodes
@@ -58,7 +83,7 @@ Utility library consolidation and dependency cleanup
   - Removed `BatchRunCLI.sh` - functionality integrated in GUI.sh
 - **Source dependency cleanup** - Updated scripts with correct utility imports
   - Replaced `ProxmoxAPI.sh` -> `Operations.sh` across all VM/LXC bulk operations
-  - Fixed `Queries.sh` → `Cluster.sh` references in storage scripts
+  - Fixed `Queries.sh` -> `Cluster.sh` references in storage scripts
   - Updated `NetworkHelper.sh` -> `Network.sh` references
 - **Function standardization** - Unified prompt API across all scripts
   - Updated `__prompt_yes_no__` -> `__prompt_user_yn__`

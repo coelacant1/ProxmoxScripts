@@ -25,6 +25,7 @@
 #   fi
 #
 # Function Index:
+#   - __prompt_log__
 #   - __check_root__
 #   - __check_proxmox__
 #   - __prompt_user_yn__
@@ -33,8 +34,6 @@
 #   - __ensure_dependencies__
 #   - __require_root_and_proxmox__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -104,19 +103,19 @@ __check_proxmox__() {
 #   __prompt_user_yn__ "Continue with operation?" && echo "Proceeding..." || echo "Cancelled"
 __prompt_user_yn__() {
     local question="$1"
-    
+
     __prompt_log__ "DEBUG" "Prompting user: $question"
-    
+
     # Auto-answer YES in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
         echo "[AUTO] $question: YES (non-interactive mode)"
         __prompt_log__ "INFO" "Auto-answered YES (non-interactive mode)"
         return 0
     fi
-    
+
     local response
     read -r -p "${question} [y/N]: " response
-    
+
     __prompt_log__ "DEBUG" "User response: ${response:-<empty>}"
 
     if [[ "$response" =~ ^[Yy]$ ]]; then
@@ -140,12 +139,18 @@ __prompt_user_yn__() {
 # @example_output If "curl" is missing and the user declines installation, the output is: "Aborting script because 'curl' is not installed."
 __install_or_prompt__() {
     local cmd="$1"
-    
+
+    # Skip install checks if requested (useful for testing)
+    if [[ "${SKIP_INSTALL_CHECKS:-}" == "true" ]]; then
+        __prompt_log__ "DEBUG" "Skipping install check for: $cmd (SKIP_INSTALL_CHECKS=true)"
+        return 0
+    fi
+
     __prompt_log__ "DEBUG" "Checking for command: $cmd"
 
     if ! command -v "$cmd" &>/dev/null; then
         __prompt_log__ "WARN" "Command not found: $cmd"
-        
+
         # Auto-install in non-interactive mode
         if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
             echo "[AUTO] Installing '$cmd'..."
@@ -160,12 +165,12 @@ __install_or_prompt__() {
                 return 1
             fi
         fi
-        
+
         # Interactive mode - prompt user
         echo "The '$cmd' utility is required but is not installed."
         read -r -p "Would you like to install '$cmd' now? [y/N]: " response
         __prompt_log__ "DEBUG" "User response for installing $cmd: ${response:-<empty>}"
-        
+
         if [[ "$response" =~ ^[Yy]$ ]]; then
             __prompt_log__ "INFO" "User chose to install: $cmd"
             apt-get install -y "$cmd"
@@ -195,7 +200,7 @@ __prompt_keep_installed_packages__() {
         __prompt_log__ "DEBUG" "No packages to clean up"
         return
     fi
-    
+
     __prompt_log__ "INFO" "Cleanup check for ${#SESSION_INSTALLED_PACKAGES[@]} installed packages: ${SESSION_INSTALLED_PACKAGES[*]}"
 
     # Auto-keep in non-interactive mode
@@ -237,7 +242,7 @@ __ensure_dependencies__() {
     local autoInstall=0
     local quiet=0
     local -a deps=()
-    
+
     __prompt_log__ "DEBUG" "Ensuring dependencies: $*"
 
     while [ "$#" -gt 0 ]; do
@@ -267,7 +272,7 @@ __ensure_dependencies__() {
         echo "Error: __ensure_dependencies__ requires at least one command name." >&2
         return 1
     fi
-    
+
     __prompt_log__ "INFO" "Checking ${#deps[@]} dependencies (auto-install: $autoInstall, quiet: $quiet)"
 
     local dep
@@ -280,8 +285,8 @@ __ensure_dependencies__() {
             __prompt_log__ "DEBUG" "Dependency present: $dep"
             continue
         fi
-        
-        ((missing_count++))
+
+        ((missing_count += 1))
         __prompt_log__ "WARN" "Missing dependency: $dep"
 
         if [[ "$autoInstall" -eq 1 ]]; then
@@ -294,7 +299,7 @@ __ensure_dependencies__() {
             __install_or_prompt__ "$dep"
         fi
     done
-    
+
     __prompt_log__ "INFO" "Dependency check complete (missing: $missing_count)"
 }
 

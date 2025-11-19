@@ -68,7 +68,7 @@ main() {
     # Blacklist NVIDIA framebuffer (NVIDIA only)
     if [[ "$GPU_TYPE" == "nvidia" ]]; then
         if [[ ! -f "$blacklist_config" ]] || ! grep -q "blacklist nvidiafb" "$blacklist_config"; then
-            echo "blacklist nvidiafb" >> "$blacklist_config"
+            echo "blacklist nvidiafb" >>"$blacklist_config"
             __ok__ "NVIDIA framebuffer driver blacklisted"
         else
             __update__ "NVIDIA framebuffer already blacklisted"
@@ -77,7 +77,7 @@ main() {
 
     # Update IOMMU unsafe interrupts config
     if [[ ! -f "$iommu_config" ]] || ! grep -q "allow_unsafe_interrupts=1" "$iommu_config"; then
-        echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" >> "$iommu_config"
+        echo "options vfio_iommu_type1 allow_unsafe_interrupts=1" >>"$iommu_config"
         __ok__ "IOMMU unsafe interrupts configured"
     else
         __update__ "IOMMU config already set"
@@ -85,7 +85,7 @@ main() {
 
     # Update VFIO configuration with GPU IDs
     if [[ ! -f "$vfio_config" ]] || ! grep -q "options vfio-pci ids=$GPU_IDS disable_vga=1" "$vfio_config"; then
-        echo "options vfio-pci ids=$GPU_IDS disable_vga=1" >> "$vfio_config"
+        echo "options vfio-pci ids=$GPU_IDS disable_vga=1" >>"$vfio_config"
         __ok__ "VFIO configured for GPU IDs: $GPU_IDS"
     else
         __update__ "VFIO config already set for these IDs"

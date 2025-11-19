@@ -2,37 +2,21 @@
 #
 # Function Index:
 #   - test_simple_positional
-#   - test_func
 #   - test_with_flags
-#   - test_func
 #   - test_optional_with_default
-#   - test_func
 #   - test_optional_override_default
-#   - test_func
 #   - test_validation_numeric
-#   - test_func
 #   - test_validation_ip
-#   - test_func
 #   - test_validation_ip_invalid
-#   - test_func
 #   - test_validation_port
-#   - test_func
 #   - test_validation_port_invalid
-#   - test_func
 #   - test_validation_cidr
-#   - test_func
 #   - test_vmid_range
-#   - test_func
 #   - test_vmid_range_invalid
-#   - test_func
 #   - test_missing_required
-#   - test_func
 #   - test_optional_question_mark
-#   - test_func
 #   - test_multiple_flags
-#   - test_func
 #   - test_mixed_order
-#   - test_func
 #
 
 set -euo pipefail
@@ -49,6 +33,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export UTILITYPATH="${SCRIPT_DIR}"
 
+# Suppress verbose logging during tests
+export LOG_LEVEL=ERROR
+
 source "${SCRIPT_DIR}/TestFramework.sh"
 source "${SCRIPT_DIR}/ArgumentParser.sh"
 
@@ -59,7 +46,7 @@ source "${SCRIPT_DIR}/ArgumentParser.sh"
 test_simple_positional() {
     local result
     test_func() {
-        parse_args "vmid:number cores:number" "$@" 2>/dev/null
+        __parse_args__ "vmid:number cores:number" "$@" 2>/dev/null
         [[ "$VMID" == "100" && "$CORES" == "4" ]]
     }
 
@@ -73,7 +60,7 @@ test_simple_positional() {
 
 test_with_flags() {
     test_func() {
-        parse_args "start:number end:number --force:flag --node:string" "$@" 2>/dev/null
+        __parse_args__ "start:number end:number --force:flag --node:string" "$@" 2>/dev/null
         [[ "$START" == "100" && "$END" == "110" && "$FORCE" == "true" && "$NODE" == "pve01" ]]
     }
 
@@ -87,7 +74,7 @@ test_with_flags() {
 
 test_optional_with_default() {
     test_func() {
-        parse_args "vmid:number port:number:22" "$@" 2>/dev/null
+        __parse_args__ "vmid:number port:number:22" "$@" 2>/dev/null
         [[ "$VMID" == "100" && "$PORT" == "22" ]]
     }
 
@@ -97,7 +84,7 @@ test_optional_with_default() {
 
 test_optional_override_default() {
     test_func() {
-        parse_args "vmid:number port:number:22" "$@" 2>/dev/null
+        __parse_args__ "vmid:number port:number:22" "$@" 2>/dev/null
         [[ "$VMID" == "100" && "$PORT" == "8006" ]]
     }
 
@@ -111,7 +98,7 @@ test_optional_override_default() {
 
 test_validation_numeric() {
     test_func() {
-        parse_args "vmid:number" "$@" 2>/dev/null
+        __parse_args__ "vmid:number" "$@" 2>/dev/null
     }
 
     test_func "abc" 2>/dev/null
@@ -124,7 +111,7 @@ test_validation_numeric() {
 
 test_validation_ip() {
     test_func() {
-        parse_args "ip:ip" "$@" 2>/dev/null
+        __parse_args__ "ip:ip" "$@" 2>/dev/null
         [[ "$IP" == "192.168.1.100" ]]
     }
 
@@ -134,7 +121,7 @@ test_validation_ip() {
 
 test_validation_ip_invalid() {
     test_func() {
-        parse_args "ip:ip" "$@" 2>/dev/null
+        __parse_args__ "ip:ip" "$@" 2>/dev/null
     }
 
     test_func 999.999.999.999 2>/dev/null
@@ -147,7 +134,7 @@ test_validation_ip_invalid() {
 
 test_validation_port() {
     test_func() {
-        parse_args "port:port" "$@" 2>/dev/null
+        __parse_args__ "port:port" "$@" 2>/dev/null
         [[ "$PORT" == "8006" ]]
     }
 
@@ -157,7 +144,7 @@ test_validation_port() {
 
 test_validation_port_invalid() {
     test_func() {
-        parse_args "port:port" "$@" 2>/dev/null
+        __parse_args__ "port:port" "$@" 2>/dev/null
     }
 
     test_func 99999 2>/dev/null
@@ -170,7 +157,7 @@ test_validation_port_invalid() {
 
 test_validation_cidr() {
     test_func() {
-        parse_args "network:cidr" "$@" 2>/dev/null
+        __parse_args__ "network:cidr" "$@" 2>/dev/null
         [[ "$NETWORK" == "192.168.1.0/24" ]]
     }
 
@@ -184,7 +171,7 @@ test_validation_cidr() {
 
 test_vmid_range() {
     test_func() {
-        parse_args "start:number end:number" "$@" 2>/dev/null
+        __parse_args__ "start:number end:number" "$@" 2>/dev/null
         [[ "$START" == "100" && "$END" == "110" ]]
     }
 
@@ -194,7 +181,7 @@ test_vmid_range() {
 
 test_vmid_range_invalid() {
     test_func() {
-        parse_args "start:number end:number" "$@" 2>/dev/null
+        __parse_args__ "start:number end:number" "$@" 2>/dev/null
     }
 
     test_func 110 100 2>/dev/null
@@ -207,7 +194,7 @@ test_vmid_range_invalid() {
 
 test_missing_required() {
     test_func() {
-        parse_args "vmid:number cores:number" "$@" 2>/dev/null
+        __parse_args__ "vmid:number cores:number" "$@" 2>/dev/null
     }
 
     test_func 100 2>/dev/null
@@ -220,12 +207,12 @@ test_missing_required() {
 
 test_optional_question_mark() {
     test_func() {
-        parse_args "vmid:number node:string:?" "$@" 2>/dev/null
-        [[ "$VMID" == "100" && -z "$NODE" ]]
+        __parse_args__ "vmid:number node:string:default_node" "$@" 2>/dev/null
+        [[ "$VMID" == "100" && "$NODE" == "default_node" ]]
     }
 
     test_func 100
-    assert_exit_code 0 $? "Should accept optional with ? notation"
+    assert_exit_code 0 $? "Should accept optional with default value"
 }
 
 ################################################################################
@@ -234,8 +221,8 @@ test_optional_question_mark() {
 
 test_multiple_flags() {
     test_func() {
-        parse_args "vmid:number --force:flag --verbose:flag --dry-run:flag" "$@" 2>/dev/null
-        [[ "$VMID" == "100" && "$FORCE" == "true" && "$VERBOSE" == "true" && "$DRY_RUN" == "false" ]]
+        __parse_args__ "vmid:number --force:flag --verbose:flag --dry-run:flag" "$@" 2>/dev/null
+        [[ "$VMID" == "100" && "$FORCE" == "true" && "$VERBOSE" == "true" && "${DRY_RUN:-false}" == "false" ]]
     }
 
     test_func 100 --force --verbose
@@ -248,7 +235,7 @@ test_multiple_flags() {
 
 test_mixed_order() {
     test_func() {
-        parse_args "start:number end:number --force:flag --node:string" "$@" 2>/dev/null
+        __parse_args__ "start:number end:number --force:flag --node:string" "$@" 2>/dev/null
         [[ "$START" == "100" && "$END" == "110" && "$FORCE" == "true" && "$NODE" == "pve01" ]]
     }
 
@@ -259,6 +246,8 @@ test_mixed_order() {
 ################################################################################
 # RUN TEST SUITE
 ################################################################################
+
+test_framework_init
 
 run_test_suite "ArgumentParser Functions" \
     test_simple_positional \

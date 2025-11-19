@@ -73,7 +73,7 @@ parse_config_files() {
                   END {print sum}
                 ' || echo "0")"
 
-                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >> "$output_file"
+                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
             done
         fi
     fi
@@ -106,7 +106,7 @@ parse_config_files() {
                   END {print sum}
                 ' || echo "0")"
 
-                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >> "$output_file"
+                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
             done
         fi
     fi
@@ -124,7 +124,7 @@ main() {
     __info__ "  Output: $output_file"
 
     # Initialize CSV
-    echo "Node,VMID,Name,CPU,Memory(MB),Disk(GB)" > "$output_file"
+    echo "Node,VMID,Name,CPU,Memory(MB),Disk(GB)" >"$output_file"
 
     # Get nodes
     local -a nodes
@@ -141,11 +141,11 @@ main() {
     for node in "${nodes[@]}"; do
         __update__ "Processing node: $node"
         parse_config_files "$node" "$TYPE" "$output_file"
-        ((processed++))
+        ((processed += 1))
     done
 
     local total_lines
-    total_lines=$(($(wc -l < "$output_file") - 1))
+    total_lines=$(($(wc -l <"$output_file") - 1))
 
     echo
     __ok__ "Export completed!"

@@ -51,18 +51,18 @@ main() {
         if [[ "${node_ip}" == "${local_node_ip}" ]]; then
             if apt-get update -qq && apt-get -y upgrade 2>&1; then
                 __ok__ "Local node upgraded"
-                ((success++))
+                ((success += 1))
             else
                 __warn__ "Failed to upgrade local node"
-                ((failed++))
+                ((failed += 1))
             fi
         else
             if ssh "root@${node_ip}" "apt-get update -qq && apt-get -y upgrade" 2>&1; then
                 __ok__ "Node ${node_ip} upgraded"
-                ((success++))
+                ((success += 1))
             else
                 __warn__ "Failed to upgrade node ${node_ip}"
-                ((failed++))
+                ((failed += 1))
             fi
         fi
     done

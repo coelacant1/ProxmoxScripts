@@ -19,10 +19,12 @@
 #   --skip-errors        Skip error handling checks
 #   --strict             Enable strict mode for all checks
 #   --quick              Run only essential checks (line endings, function index, sources)
+#   --verbose, -v        Show detailed output for all checks
 #
 # Checks performed:
 #   1. Convert line endings (CRLF -> LF)
 #   2. Update function indices in scripts
+#   2b. Update utility documentation
 #   3. Verify source calls are correct
 #   4. Format check (shfmt or basic)
 #   5. Security check (shellharden or basic patterns)
@@ -44,6 +46,7 @@ SKIP_DOCS=false
 SKIP_ERRORS=false
 STRICT_MODE=false
 QUICK_MODE=false
+VERBOSE=false
 
 for arg in "$@"; do
     case $arg in
@@ -84,6 +87,9 @@ for arg in "$@"; do
             SKIP_DOCS=true
             SKIP_ERRORS=true
             ;;
+        --verbose|-v)
+            VERBOSE=true
+            ;;
         --help|-h)
             grep "^#" "$0" | grep -v "^#!/" | sed 's/^# //' | sed 's/^#//'
             exit 0
@@ -105,6 +111,7 @@ echo ""
 CHECKS_RUN=0
 CHECKS_PASSED=0
 CHECKS_FAILED=0
+CHECKS_RECOMMENDATIONS=0
 
 # Check 1: Convert line endings
 echo "1. Converting line endings (CRLF -> LF)..."
@@ -126,6 +133,18 @@ if [ ${PIPESTATUS[0]} -eq 0 ]; then
     CHECKS_PASSED=$((CHECKS_PASSED + 1))
 else
     echo "- FAILED: Function index update"
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
+fi
+CHECKS_RUN=$((CHECKS_RUN + 1))
+echo ""
+
+# Check 2b: Update utility documentation
+echo "2b. Updating utility documentation..."
+if python3 .check/UpdateUtilityDocumentation.py >/dev/null 2>&1; then
+    echo "- Utility documentation updated"
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
+else
+    echo "- FAILED: Utility documentation update"
     CHECKS_FAILED=$((CHECKS_FAILED + 1))
 fi
 CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -165,8 +184,14 @@ if [ "$SKIP_FORMAT" = false ]; then
     python3 .check/FormatCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    # Show summary lines only
-    grep -E "^(WARNING:|Total files checked:|Files with formatting issues:|All files are properly formatted)" "$TEMP_OUTPUT" || true
+    
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary lines only
+        grep -E "^(WARNING:|Total files checked:|Files with formatting issues:|All files are properly formatted)" "$TEMP_OUTPUT" || true
+    fi
     rm -f "$TEMP_OUTPUT"
     
     if [ $EXIT_CODE -eq 0 ]; then
@@ -202,20 +227,35 @@ if [ "$SKIP_SECURITY" = false ]; then
     set -e
     
     # Show summary only, hide individual file checks
-    sed -n '/^NOTE:/p; /^Scanning/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
-    rm -f "$TEMP_OUTPUT"
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary only
+        sed -n '/^NOTE:/p; /^Note:/p; /^Scanning/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    fi
     
     if [ $EXIT_CODE -eq 0 ]; then
-        echo "- Security check passed"
-        CHECKS_PASSED=$((CHECKS_PASSED + 1))
+        # Check if there are recommendations
+        if grep -q "Files with security issues: 0" "$TEMP_OUTPUT"; then
+            echo "- Security check passed"
+            CHECKS_PASSED=$((CHECKS_PASSED + 1))
+        else
+            echo "- Security check passed (with recommendations)"
+            CHECKS_PASSED=$((CHECKS_PASSED + 1))
+            CHECKS_RECOMMENDATIONS=$((CHECKS_RECOMMENDATIONS + 1))
+        fi
     else
         if [ "$STRICT_MODE" = true ]; then
-            echo "- FAILED: Security issues found (strict mode)"
+            echo "- FAILED: Critical security issues found"
             CHECKS_FAILED=$((CHECKS_FAILED + 1))
         else
-            echo "- Security issues found (review recommended)"
+            echo "- FAILED: Security issues found"
+            CHECKS_FAILED=$((CHECKS_FAILED + 1))
         fi
     fi
+    
+    rm -f "$TEMP_OUTPUT"
     CHECKS_RUN=$((CHECKS_RUN + 1))
     echo ""
 else
@@ -231,8 +271,14 @@ if [ "$SKIP_DEADCODE" = false ]; then
     python3 .check/DeadCodeCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    # Show summary only
-    sed -n '/^Building/p; /^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary only
+        sed -n '/^Building/p; /^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    fi
     rm -f "$TEMP_OUTPUT"
     
     echo "- Dead code check completed"
@@ -252,8 +298,14 @@ if [ "$SKIP_CYCLES" = false ]; then
     python3 .check/DependencyCycleCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    # Show summary only
-    sed -n '/^Building/p; /^Analyzed/p; /^\[OK\]/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary only
+        sed -n '/^Building/p; /^Analyzed/p; /^\[OK\]/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    fi
     rm -f "$TEMP_OUTPUT"
     
     if [ $EXIT_CODE -eq 0 ]; then
@@ -283,11 +335,14 @@ if [ "$SKIP_DOCS" = false ]; then
     $DOCS_CMD > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     
-    # Show summary only (hide individual file issues unless there are few)
+    # Show summary only (hide individual file issues unless there are few or verbose)
     FILE_COUNT=$(grep "^\[DOC\]" "$TEMP_OUTPUT" 2>/dev/null | wc -l)
     set -e
     
-    if [ "$FILE_COUNT" -lt 5 ]; then
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    elif [ "$FILE_COUNT" -lt 5 ]; then
         # Show all if only a few files
         sed -n '/^\[DOC\]/,/^$/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     else
@@ -304,7 +359,9 @@ if [ "$SKIP_DOCS" = false ]; then
             echo "- FAILED: Documentation issues (strict mode)"
             CHECKS_FAILED=$((CHECKS_FAILED + 1))
         else
-            echo "- Documentation issues found (informational)"
+            echo "- Documentation check passed (with recommendations)"
+            CHECKS_PASSED=$((CHECKS_PASSED + 1))
+            CHECKS_RECOMMENDATIONS=$((CHECKS_RECOMMENDATIONS + 1))
         fi
     fi
     CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -327,8 +384,14 @@ if [ "$SKIP_ERRORS" = false ]; then
     $ERROR_CMD > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    # Show summary only
-    sed -n '/^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    
+    if [ "$VERBOSE" = true ]; then
+        # Show full output in verbose mode
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary only
+        sed -n '/^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
+    fi
     rm -f "$TEMP_OUTPUT"
     
     if [ $EXIT_CODE -eq 0 ]; then
@@ -339,7 +402,9 @@ if [ "$SKIP_ERRORS" = false ]; then
             echo "- FAILED: Error handling issues (strict mode)"
             CHECKS_FAILED=$((CHECKS_FAILED + 1))
         else
-            echo "- Error handling issues found (review recommended)"
+            echo "- Error handling check passed (with recommendations)"
+            CHECKS_PASSED=$((CHECKS_PASSED + 1))
+            CHECKS_RECOMMENDATIONS=$((CHECKS_RECOMMENDATIONS + 1))
         fi
     fi
     CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -383,12 +448,19 @@ echo "Summary:"
 echo "  Total checks: $CHECKS_RUN"
 echo "  Passed: $CHECKS_PASSED"
 echo "  Failed: $CHECKS_FAILED"
+if [ $CHECKS_RECOMMENDATIONS -gt 0 ]; then
+    echo "  With recommendations: $CHECKS_RECOMMENDATIONS"
+fi
 echo ""
 
 if [ $CHECKS_FAILED -gt 0 ]; then
     echo "Some checks failed. Please review the output above."
     exit 1
 else
-    echo "All checks passed successfully!"
+    if [ $CHECKS_RECOMMENDATIONS -gt 0 ]; then
+        echo "All checks passed! ($CHECKS_RECOMMENDATIONS with recommendations for improvement)"
+    else
+        echo "All checks passed successfully!"
+    fi
     exit 0
 fi

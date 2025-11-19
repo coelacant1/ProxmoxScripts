@@ -28,6 +28,8 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -71,14 +73,14 @@ __check_proxmox__
 ###############################################################################
 function clear_local_lvm() {
     __warn__ "DESTRUCTIVE: This will remove the local-lvm 'pve/data' and all data within it!"
-    
+
     # Safety check: Require --force in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
         __err__ "Destructive operation requires --force flag in non-interactive mode"
         __err__ "Usage: CephSingleDrive.sh clear_local_lvm --force"
         exit 1
     fi
-    
+
     # Prompt for confirmation (unless force is set)
     if [[ $FORCE -eq 1 ]]; then
         __info__ "Force mode enabled - proceeding without confirmation"
@@ -86,7 +88,7 @@ function clear_local_lvm() {
         __info__ "Aborting operation."
         return 0
     fi
-    
+
     __info__ "Removing LVM volume 'pve/data'..."
     lvremove -y pve/data
     __ok__ "Local-lvm 'pve/data' removed successfully."
@@ -95,7 +97,7 @@ function clear_local_lvm() {
 function create_osd() {
     echo "Creating OSD on this node..."
     echo "Bootstrapping Ceph auth..."
-    ceph auth get client.bootstrap-osd > /var/lib/ceph/bootstrap-osd/ceph.keyring
+    ceph auth get client.bootstrap-osd >/var/lib/ceph/bootstrap-osd/ceph.keyring
     echo "Bootstrap auth completed."
 
     echo "Creating new logical volume with all remaining free space..."

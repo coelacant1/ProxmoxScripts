@@ -63,7 +63,7 @@ main() {
         exit 1
     fi
 
-    echo "$auth_token" > "$TOKEN_PATH"
+    echo "$auth_token" >"$TOKEN_PATH"
 
     __ok__ "Authentication token retrieved successfully!"
     __info__ "Token saved to: $TOKEN_PATH"

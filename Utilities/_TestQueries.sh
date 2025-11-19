@@ -6,7 +6,7 @@
 #   - test_check_cluster_membership
 #   - test_get_number_of_nodes
 #   - test_init_node_mappings
-#   - test_get_cluster_lxc
+#   - test_get_cluster_cts
 #   - test_get_server_vms
 #
 
@@ -77,10 +77,10 @@ test_init_node_mappings() {
     assert_exit_code 0 $? "Should init mappings"
 }
 
-test_get_cluster_lxc() {
-    local lxcs
-    lxcs=$(__get_cluster_lxc__ 2>/dev/null)
-    assert_exit_code 0 $? "Should get LXC containers"
+test_get_cluster_cts() {
+    local cts
+    cts=$(__get_cluster_cts__ 2>/dev/null)
+    assert_exit_code 0 $? "Should get cluster containers"
 }
 
 test_get_server_vms() {
@@ -92,6 +92,8 @@ test_get_server_vms() {
 ################################################################################
 # RUN TEST SUITE
 ################################################################################
+
+test_framework_init
 
 run_test_suite "Queries Functions" \
     test_check_cluster_membership \

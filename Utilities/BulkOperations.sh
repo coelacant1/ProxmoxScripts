@@ -17,11 +17,10 @@
 #   - Filtering capabilities
 #
 # Function Index:
+#   - __bulk_log__
 #   - __bulk_operation__
 #   - __bulk_vm_operation__
-#   - vm_wrapper
 #   - __bulk_ct_operation__
-#   - ct_wrapper
 #   - __bulk_summary__
 #   - __bulk_report__
 #   - __bulk_print_results__
@@ -32,8 +31,6 @@
 #   - __bulk_load_state__
 #   - __bulk_validate_range__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -111,17 +108,17 @@ __bulk_operation__() {
     __update__ "Processing IDs ${start_id} to ${end_id} (${BULK_TOTAL} total)"
 
     # Process each ID
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         local current=$((id - start_id + 1))
         __bulk_log__ "TRACE" "Processing ID $id ($current/$BULK_TOTAL)"
         __update__ "Processing ID ${id} (${current}/${BULK_TOTAL})..."
 
         if "$callback" "$id" "$@" 2>/dev/null; then
-            ((BULK_SUCCESS++))
+            ((BULK_SUCCESS += 1))
             BULK_SUCCESS_IDS[$id]=1
             __bulk_log__ "DEBUG" "Success: ID $id"
         else
-            ((BULK_FAILED++))
+            ((BULK_FAILED += 1))
             BULK_FAILED_IDS[$id]=1
             __bulk_log__ "WARN" "Failed: ID $id"
         fi
@@ -132,7 +129,7 @@ __bulk_operation__() {
     __bulk_summary__
 
     # Return status
-    if (( BULK_FAILED > 0 )); then
+    if ((BULK_FAILED > 0)); then
         return 1
     else
         return 0
@@ -198,7 +195,7 @@ __bulk_vm_operation__() {
 
         # Check existence
         if ! __vm_exists__ "$vmid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$vmid]="not found"
             __bulk_log__ "DEBUG" "Skipped VM $vmid: not found"
             return 1
@@ -206,14 +203,14 @@ __bulk_vm_operation__() {
 
         # Check state filters
         if [[ "$skip_stopped" == "true" ]] && ! __vm_is_running__ "$vmid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$vmid]="stopped"
             __bulk_log__ "DEBUG" "Skipped VM $vmid: stopped"
             return 1
         fi
 
         if [[ "$skip_running" == "true" ]] && __vm_is_running__ "$vmid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$vmid]="running"
             __bulk_log__ "DEBUG" "Skipped VM $vmid: running"
             return 1
@@ -301,20 +298,20 @@ __bulk_ct_operation__() {
 
         # Check existence
         if ! __ct_exists__ "$ctid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$ctid]="not found"
             return 1
         fi
 
         # Check state filters
         if [[ "$skip_stopped" == "true" ]] && ! __ct_is_running__ "$ctid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$ctid]="stopped"
             return 1
         fi
 
         if [[ "$skip_running" == "true" ]] && __ct_is_running__ "$ctid"; then
-            ((BULK_SKIPPED++))
+            ((BULK_SKIPPED += 1))
             BULK_SKIPPED_IDS[$ctid]="running"
             return 1
         fi
@@ -360,7 +357,7 @@ __bulk_summary__() {
     echo "  Skipped:   ${BULK_SKIPPED}"
     echo "  Duration:  ${duration}s"
 
-    if (( BULK_FAILED > 0 )); then
+    if ((BULK_FAILED > 0)); then
         echo ""
         __warn__ "Some operations failed"
     fi
@@ -376,7 +373,7 @@ __bulk_report__() {
     __bulk_summary__
 
     # Show failed IDs
-    if (( BULK_FAILED > 0 )); then
+    if ((BULK_FAILED > 0)); then
         __bulk_log__ "DEBUG" "Reporting $BULK_FAILED failed IDs"
         echo ""
         echo "Failed IDs:"
@@ -386,7 +383,7 @@ __bulk_report__() {
     fi
 
     # Show skipped IDs with reasons
-    if (( BULK_SKIPPED > 0 )); then
+    if ((BULK_SKIPPED > 0)); then
         __bulk_log__ "DEBUG" "Reporting $BULK_SKIPPED skipped IDs"
         echo ""
         echo "Skipped IDs:"
@@ -469,7 +466,7 @@ __bulk_with_retry__() {
 
     # Retry failed operations
     local retry_count=1
-    while (( BULK_FAILED > 0 && retry_count <= max_retries )); do
+    while ((BULK_FAILED > 0 && retry_count <= max_retries)); do
         __bulk_log__ "DEBUG" "Retry attempt $retry_count/$max_retries for $BULK_FAILED failed operations"
         __info__ "Retry attempt ${retry_count}/${max_retries} for ${BULK_FAILED} failed operations"
 
@@ -485,21 +482,21 @@ __bulk_with_retry__() {
         # Retry each failed ID
         for id in "${failed_ids[@]}"; do
             if "$callback" "$id" "$@" 2>/dev/null; then
-                ((BULK_SUCCESS++))
+                ((BULK_SUCCESS += 1))
                 BULK_SUCCESS_IDS[$id]=1
             else
-                ((BULK_FAILED++))
+                ((BULK_FAILED += 1))
                 BULK_FAILED_IDS[$id]=1
             fi
         done
 
-        ((retry_count++))
+        ((retry_count += 1))
         sleep 2
     done
 
     __bulk_summary__
 
-    if (( BULK_FAILED > 0 )); then
+    if ((BULK_FAILED > 0)); then
         return 1
     else
         return 0
@@ -522,13 +519,13 @@ __bulk_filter__() {
     __bulk_log__ "DEBUG" "Filtering IDs: range=$start_id-$end_id, filter=$filter_fn"
 
     local count=0
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         if "$filter_fn" "$id" 2>/dev/null; then
             echo "$id"
-            ((count++))
+            ((count += 1))
         fi
     done
-    
+
     __bulk_log__ "DEBUG" "Filter returned $count IDs"
 }
 
@@ -565,9 +562,9 @@ __bulk_parallel__() {
     mkdir -p "$tmpdir"
 
     local running=0
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         # Wait if at max jobs
-        while (( running >= max_jobs )); do
+        while ((running >= max_jobs)); do
             wait -n
             ((running--))
         done
@@ -575,27 +572,27 @@ __bulk_parallel__() {
         # Start job in background
         (
             if "$callback" "$id" "$@" &>/dev/null; then
-                echo "success" > "$tmpdir/$id"
+                echo "success" >"$tmpdir/$id"
             else
-                echo "failed" > "$tmpdir/$id"
+                echo "failed" >"$tmpdir/$id"
             fi
         ) &
 
-        ((running++))
+        ((running += 1))
     done
 
     # Wait for all jobs
     wait
 
     # Collect results
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         if [[ -f "$tmpdir/$id" ]]; then
             local result=$(cat "$tmpdir/$id")
             if [[ "$result" == "success" ]]; then
-                ((BULK_SUCCESS++))
+                ((BULK_SUCCESS += 1))
                 BULK_SUCCESS_IDS[$id]=1
             else
-                ((BULK_FAILED++))
+                ((BULK_FAILED += 1))
                 BULK_FAILED_IDS[$id]=1
             fi
         fi
@@ -606,7 +603,7 @@ __bulk_parallel__() {
 
     __bulk_summary__
 
-    if (( BULK_FAILED > 0 )); then
+    if ((BULK_FAILED > 0)); then
         return 1
     else
         return 0
@@ -635,8 +632,8 @@ __bulk_save_state__() {
         echo "BULK_SKIPPED=$BULK_SKIPPED"
         echo "BULK_FAILED_IDS=(${!BULK_FAILED_IDS[@]})"
         echo "BULK_SUCCESS_IDS=(${!BULK_SUCCESS_IDS[@]})"
-    } > "$filename"
-    
+    } >"$filename"
+
     __bulk_log__ "INFO" "Bulk state saved successfully"
 }
 
@@ -690,7 +687,7 @@ __bulk_validate_range__() {
 
     local range=$((end_id - start_id + 1))
 
-    if (( range > max_range )); then
+    if ((range > max_range)); then
         __bulk_log__ "ERROR" "Range too large: $range > $max_range"
         echo "Error: Range too large ($range > $max_range)" >&2
         echo "Use --max-range to override" >&2

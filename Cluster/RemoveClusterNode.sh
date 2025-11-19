@@ -28,6 +28,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
 
@@ -49,7 +51,7 @@ main() {
         local vms_on_node
         vms_on_node=$(
             pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-            | jq -r --arg N "$NODE_NAME" '.[] | select(.node == $N) | "\(.type) \(.vmid)"'
+                | jq -r --arg N "$NODE_NAME" '.[] | select(.node == $N) | "\(.type) \(.vmid)"'
         )
 
         if [[ -n "$vms_on_node" ]]; then

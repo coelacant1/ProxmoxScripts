@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - resume_callback
 #
 
 set -euo pipefail
@@ -54,7 +53,7 @@ main() {
         local vmid="$1"
 
         if __vm_is_running__ "$vmid"; then
-            return 2  # Skip running VMs
+            return 2 # Skip running VMs
         fi
 
         __vm_resume__ "$vmid"

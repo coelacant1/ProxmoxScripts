@@ -37,11 +37,15 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Operations.sh
 source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "source_vmid:vmid base_name:string start_vmid:vmid count:number start_ip_cidr:string bridge:string gateway:string:? --pool:string:?" "$@"
+__parse_args__ "source_vmid:ctid base_name:string start_vmid:int count:number start_ip_cidr:string bridge:string gateway:string:? --pool:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -56,13 +60,13 @@ main() {
 
     # Get source container node for remote execution
     local source_node
-    source_node=$(__get_vm_node__ "$SOURCE_VMID")
+    source_node=$(__get_ct_node__ "$SOURCE_VMID")
 
     # Calculate end VMID
     local end_vmid=$((START_VMID + COUNT - 1))
 
     # Parse IP and subnet mask
-    IFS='/' read -r start_ip subnet_mask <<< "$START_IP_CIDR"
+    IFS='/' read -r start_ip subnet_mask <<<"$START_IP_CIDR"
     local start_ip_int
     start_ip_int=$(__ip_to_int__ "$start_ip")
 
@@ -76,7 +80,7 @@ main() {
     local failed=0
 
     # Clone containers sequentially
-    for (( i=0; i<COUNT; i++ )); do
+    for ((i = 0; i < COUNT; i++)); do
         local target_vmid=$((START_VMID + i))
         local name_index=$((i + 1))
         local ct_name="${BASE_NAME}${name_index}"
@@ -100,14 +104,14 @@ main() {
             [[ -n "${GATEWAY:-}" ]] && net_cmd+=",gw=${GATEWAY}"
 
             if __node_exec__ "$source_node" "$net_cmd" &>/dev/null; then
-                ((success++))
+                ((success += 1))
             else
                 __warn__ "Cloned container ${target_vmid} but failed to set network configuration"
-                ((failed++))
+                ((failed += 1))
             fi
         else
             __warn__ "Failed to clone container ${target_vmid}"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

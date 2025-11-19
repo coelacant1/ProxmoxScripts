@@ -28,6 +28,10 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -67,8 +71,8 @@ main() {
         fi
 
         local vm_name
-        vm_name="$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null |
-            jq -r --arg VMID "$vmid" '.[] | select(.vmid == ($VMID|tonumber)) | .name')"
+        vm_name="$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+            | jq -r --arg VMID "$vmid" '.[] | select(.vmid == ($VMID|tonumber)) | .name')"
 
         if [[ -z "$vm_name" || "$vm_name" == "null" ]]; then
             vm_name="VM-$vmid"
@@ -77,12 +81,12 @@ main() {
         local create_payload
         create_payload="$(
             jq -n \
-            --arg NAME "${vm_name}" \
-            --arg HOST "$vm_ip" \
-            --arg PORT "3389" \
-            --arg USER "$RDP_USER" \
-            --arg PASS "$RDP_PASS" \
-            '{
+                --arg NAME "${vm_name}" \
+                --arg HOST "$vm_ip" \
+                --arg PORT "3389" \
+                --arg USER "$RDP_USER" \
+                --arg PASS "$RDP_PASS" \
+                '{
                 "parentIdentifier": "ROOT",
                 "name": $NAME,
                 "protocol": "rdp",
@@ -137,7 +141,6 @@ main
 
 # Testing status:
 #   - Pending validation
-
 
 # Testing status:
 #   - ArgumentParser.sh sourced

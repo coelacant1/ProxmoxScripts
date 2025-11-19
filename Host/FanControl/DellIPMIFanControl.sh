@@ -35,8 +35,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -86,7 +84,7 @@ prompt_user_config() {
     echo "Enter MAX fan speed in percent (e.g., 100):"
     read -r maxFanSpeed
 
-    cat <<EOF > "${CONFIG_FILE}"
+    cat <<EOF >"${CONFIG_FILE}"
 IPMI_HOST="${ipmiHost}"
 IPMI_USER="${ipmiUser}"
 IPMI_PASS="${ipmiPass}"
@@ -105,7 +103,7 @@ EOF
 ###############################################################################
 create_run_script() {
     echo "Creating background run script at \"${RUN_SCRIPT}\" ..."
-    cat <<'EOF' > "${RUN_SCRIPT}"
+    cat <<'EOF' >"${RUN_SCRIPT}"
 #!/bin/bash
 #
 # /usr/bin/DellServerFanControl-run.sh
@@ -234,7 +232,7 @@ EOF
 ###############################################################################
 create_systemd_service() {
     echo "Creating systemd service at \"${SERVICE_FILE}\" ..."
-    cat <<EOF > "${SERVICE_FILE}"
+    cat <<EOF >"${SERVICE_FILE}"
 [Unit]
 Description=Dell Server Fan Control Service
 After=network.target
@@ -295,8 +293,8 @@ show_usage() {
 ###############################################################################
 case "$ACTION" in
     install)
-        __check_root__          # Ensure script is run as root
-        __check_proxmox__       # Ensure we are on a Proxmox node
+        __check_root__    # Ensure script is run as root
+        __check_proxmox__ # Ensure we are on a Proxmox node
         __install_or_prompt__ "ipmitool"
         prompt_user_config
         create_run_script

@@ -63,9 +63,9 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 # @description Validates CPU-specific configuration options not covered by ArgumentParser.
 validate_custom_options() {
     # Check that at least one CPU option is specified
-    if [[ -z "$CORES" && -z "$SOCKETS" && -z "$NUMA" && -z "$TYPE" && \
-          -z "$VCPUS" && -z "$CPULIMIT" && -z "$CPUUNITS" && -z "$AFFINITY" && \
-          -z "$FLAGS" ]]; then
+    if [[ -z "$CORES" && -z "$SOCKETS" && -z "$NUMA" && -z "$TYPE" &&
+        -z "$VCPUS" && -z "$CPULIMIT" && -z "$CPUUNITS" && -z "$AFFINITY" &&
+        -z "$FLAGS" ]]; then
         __err__ "At least one CPU option must be specified"
         exit 64
     fi
@@ -73,7 +73,7 @@ validate_custom_options() {
     # Validate vCPUs doesn't exceed total cores
     if [[ -n "$VCPUS" && -n "$CORES" && -n "$SOCKETS" ]]; then
         local total_cores=$((CORES * SOCKETS))
-        if (( VCPUS > total_cores )); then
+        if ((VCPUS > total_cores)); then
             __err__ "vCPUs ($VCPUS) cannot exceed total cores ($total_cores)"
             exit 64
         fi
@@ -104,7 +104,7 @@ validate_custom_options() {
     # Warn about NUMA for small VMs
     if [[ -n "$NUMA" && "$NUMA" == "1" && -n "$CORES" && -n "$SOCKETS" ]]; then
         local total_cores=$((CORES * SOCKETS))
-        if (( total_cores <= 4 )); then
+        if ((total_cores <= 4)); then
             __warn__ "NUMA enabled for small VM (${total_cores} cores) - may not be beneficial"
         fi
     fi

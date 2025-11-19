@@ -51,7 +51,7 @@ main() {
                 | grep -i 'net' \
                 | grep -i 'macaddr' \
                 | sed 's/^/    /' || echo "    No MAC addresses found"
-            ((total_vms++))
+            ((total_vms += 1))
         done
     done
 

@@ -18,6 +18,7 @@
 #   LOG_TIMESTAMP - Whether to include timestamps (1=yes, 0=no) - default: 1
 #
 # Function Index:
+#   - __get_log_priority__
 #   - __log__
 #   - __log_debug__
 #   - __log_info__
@@ -26,6 +27,8 @@
 #   - __log_function_entry__
 #   - __log_function_exit__
 #   - __log_command__
+#   - __log_var__
+#   - __log_section__
 #
 
 # Default configuration
@@ -58,20 +61,20 @@ __log__() {
     local level="${1:-INFO}"
     local message="${2:-}"
     local category="${3:-}"
-    
+
     # Check if we should log this level
     local current_priority
     local min_priority
     current_priority=$(__get_log_priority__ "$level")
     min_priority=$(__get_log_priority__ "$LOG_LEVEL")
-    
+
     if [[ $current_priority -lt $min_priority ]]; then
         return 0
     fi
-    
+
     # Build log entry
     local log_entry=""
-    
+
     # Add timestamp if enabled
     if [[ $LOG_TIMESTAMP -eq 1 ]]; then
         # Use full path to date for environments with minimal PATH
@@ -86,26 +89,26 @@ __log__() {
             log_entry+="[NO-TIMESTAMP] "
         fi
     fi
-    
+
     # Add level
     log_entry+="[$level] "
-    
+
     # Add category if provided
     if [[ -n "$category" ]]; then
         log_entry+="[$category] "
     fi
-    
+
     # Add calling script/function context
     if [[ ${#FUNCNAME[@]} -gt 2 ]]; then
         log_entry+="[${FUNCNAME[2]}] "
     fi
-    
+
     # Add message
     log_entry+="$message"
-    
+
     # Write to log file
-    echo "$log_entry" >> "$LOG_FILE"
-    
+    echo "$log_entry" >>"$LOG_FILE"
+
     # Write to console if enabled
     if [[ $LOG_CONSOLE -eq 1 ]]; then
         case "$level" in
@@ -178,17 +181,17 @@ __log_function_exit__() {
 __log_command__() {
     local cmd="$1"
     __log__ "DEBUG" "Executing: $cmd" "CMD"
-    
+
     # Execute command and capture exit code
     eval "$cmd"
     local exit_code=$?
-    
+
     if [[ $exit_code -eq 0 ]]; then
         __log__ "DEBUG" "Command succeeded: $cmd" "CMD"
     else
         __log__ "ERROR" "Command failed (exit $exit_code): $cmd" "CMD"
     fi
-    
+
     return $exit_code
 }
 

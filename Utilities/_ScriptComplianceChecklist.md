@@ -526,10 +526,6 @@ __bulk_vm_operation__ --name "Start VMs" --report $START_VMID $END_VMID __vm_sta
 | Get VM IP | `get_ip_from_vmid` | `Cluster.sh` |
 | Parse arguments | `__parse_positional_args__` | `ArgumentParser.sh` |
 
-### Complete Function Reference
-
-See `Utilities/_Utilities.md` for comprehensive documentation of all 172+ utility functions.
-
 ---
 
 ## Script Conversion Workflow

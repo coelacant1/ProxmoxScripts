@@ -20,6 +20,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -62,7 +64,7 @@ while read -r name addr; do
 
     monNames+=("$name")
     monIPs+=("$monIP")
-done <<< "$monInfo"
+done <<<"$monInfo"
 
 totalMons="${#monNames[@]}"
 if [ "$totalMons" -eq 0 ]; then
@@ -78,7 +80,7 @@ __info__ "Found ${totalMons} Ceph monitor(s). Restarting them one at a time."
 # (either local or remote) or a timeout is reached.
 # Timeout is set to 120 seconds.
 ###############################################################################
-wait_for_mon_active(){
+wait_for_mon_active() {
     local targetHost="$1"
     local monName="$2"
     local timeout=120
@@ -94,7 +96,7 @@ wait_for_mon_active(){
             break
         fi
         sleep 5
-        elapsed=$((elapsed+5))
+        elapsed=$((elapsed + 5))
         if [ $elapsed -ge $timeout ]; then
             __err__ "Monitor ceph-mon@${monName} did not become active after restart on ${targetHost}."
             break
@@ -121,7 +123,7 @@ for index in "${!monNames[@]}"; do
         targetHost="$(__get_ip_from_name__ "$monName")"
         if [ -z "$targetHost" ]; then
             __err__ "Failed to resolve IP for monitor '$monName'. Skipping."
-            currentMon=$((currentMon+1))
+            currentMon=$((currentMon + 1))
             continue
         fi
     fi
@@ -147,7 +149,7 @@ for index in "${!monNames[@]}"; do
     wait_for_mon_active "${targetHost}" "${monName}"
 
     sleep 5
-    currentMon=$((currentMon+1))
+    currentMon=$((currentMon + 1))
 done
 
 __ok__ "All Ceph monitors processed."

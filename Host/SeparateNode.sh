@@ -48,7 +48,7 @@ main() {
 
     __warn__ "DESTRUCTIVE: This will forcibly remove the node from the cluster"
     __warn__ "Shared storage will still be accessible - migrate VMs/data first"
-    
+
     # Safety check: Require --force in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
         __err__ "Destructive operation requires --force flag in non-interactive mode"

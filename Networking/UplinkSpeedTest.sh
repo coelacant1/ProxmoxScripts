@@ -16,7 +16,7 @@
 #   UplinkSpeedTest.sh all
 #
 #   # Run speed test on specific remote nodes (by name or IP)
-#   UplinkSpeedTest.sh pve02 172.20.83.23
+#   UplinkSpeedTest.sh pve02 192.168.1.23
 #
 # This script requires:
 #   - 'speedtest' (or 'speedtest-cli') on each node
@@ -37,6 +37,8 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Communication.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -84,7 +86,7 @@ main() {
         echo "  $0 all"
         echo
         echo "  # Test speed on specific nodes (by name or IP)"
-        echo "  $0 pve02 172.20.83.23"
+        echo "  $0 pve02 192.168.1.23"
         exit 0
     fi
 

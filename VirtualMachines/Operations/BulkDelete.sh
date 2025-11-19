@@ -22,7 +22,6 @@
 #
 # Function Index:
 #   - main
-#   - delete_vm_callback
 #
 
 set -euo pipefail
@@ -50,7 +49,7 @@ main() {
 
     __warn__ "DESTRUCTIVE: This will permanently delete VMs ${FIRST_VM_ID} to ${LAST_VM_ID}"
     __warn__ "This operation cannot be undone!"
-    
+
     # Safety check: Require --yes flag in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "$YES" != "true" ]]; then
         __err__ "Destructive operation requires --yes flag in non-interactive mode"
@@ -95,7 +94,7 @@ main() {
     local result=$?
 
     # Exit with appropriate status
-    if (( result != 0 )); then
+    if ((result != 0)); then
         exit 1
     fi
 }

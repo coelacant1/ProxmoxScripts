@@ -132,7 +132,7 @@ main() {
     # Create sfdisk input
     local tmpfile
     tmpfile=$(mktemp)
-    cat <<EOF > "$tmpfile"
+    cat <<EOF >"$tmpfile"
 label: gpt
 label-id: $(uuidgen)
 device: $DEVICE
@@ -142,7 +142,7 @@ ${partition} : start=${start_sector}, size=${new_size}, type=0FC63DAF-8483-4772-
 EOF
 
     __info__ "Applying new partition layout"
-    if sfdisk --no-reread --force "$DEVICE" < "$tmpfile" 2>&1; then
+    if sfdisk --no-reread --force "$DEVICE" <"$tmpfile" 2>&1; then
         __ok__ "Partition table updated"
     else
         __err__ "Failed to update partition table"

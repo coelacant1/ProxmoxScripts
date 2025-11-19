@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - unmount_iso_callback
 #
 
 set -euo pipefail

@@ -69,7 +69,7 @@ main() {
             {
                 echo "blacklist nouveau"
                 echo "options nouveau modeset=0"
-            } >> "$blacklist_file"
+            } >>"$blacklist_file"
             __ok__ "Nouveau driver blacklisted"
         else
             __info__ "Nouveau driver already blacklisted"

@@ -18,7 +18,6 @@
 #
 # Function Index:
 #   - main
-#   - toggle_tablet_callback
 #
 
 set -euo pipefail
@@ -46,8 +45,8 @@ main() {
 
     local tablet_value
     case "$ACTION" in
-        enable|1) tablet_value="1" ;;
-        disable|0) tablet_value="0" ;;
+        enable | 1) tablet_value="1" ;;
+        disable | 0) tablet_value="0" ;;
     esac
 
     __warn__ "VMs must be restarted for changes to take effect"

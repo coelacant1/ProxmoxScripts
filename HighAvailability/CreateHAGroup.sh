@@ -20,8 +20,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -50,7 +48,10 @@ main() {
 
     # Convert nodes array to comma-separated string
     local nodes_string
-    nodes_string=$(IFS=,; echo "${NODES[*]}")
+    nodes_string=$(
+        IFS=,
+        echo "${NODES[*]}"
+    )
 
     __info__ "Creating HA group '${GROUP_NAME}' with nodes: ${nodes_string}"
 

@@ -215,15 +215,25 @@ def check_set_options(file_path):
     """Check if script uses proper error handling options."""
     recommendations = []
     
+    # Skip set option checks for utility libraries (they're sourced, not executed)
+    is_utility = '/Utilities/' in file_path and not file_path.endswith('RunAllTests.sh') and not file_path.endswith('RemoteRunAllTests.sh')
+    is_test = os.path.basename(file_path).startswith('_Test')
+    
+    if is_utility or is_test:
+        return recommendations
+    
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
     except Exception:
         return recommendations
     
+    # Check for 'e' option in any set command (including combined forms like -euo)
     has_set_e = re.search(r'^\s*set\s+-[a-z]*e', content, re.MULTILINE)
+    # Check for 'u' option in any set command
     has_set_u = re.search(r'^\s*set\s+-[a-z]*u', content, re.MULTILINE)
-    has_set_pipefail = re.search(r'^\s*set\s+(-[a-z]*o\s+pipefail|-o\s+pipefail)', content, re.MULTILINE)
+    # Check for pipefail option (can be -o pipefail or in combined form)
+    has_set_pipefail = re.search(r'^\s*set\s+.*pipefail', content, re.MULTILINE)
     
     if not has_set_e:
         recommendations.append("  Consider: Add 'set -e' to exit on errors")
@@ -335,6 +345,9 @@ def main():
     
     if not shellharden_available:
         print(f"Critical issues found: {critical_issues}")
+        has_critical = critical_issues > 0
+    else:
+        has_critical = False  # shellharden issues are recommendations
     
     if fix_mode:
         print(f"Files fixed: {files_fixed}")
@@ -343,10 +356,19 @@ def main():
     
     if files_with_issues == 0:
         print("\nNo security issues detected!")
+    elif not has_critical:
+        print("\nNote: All issues are recommendations (no critical security vulnerabilities)")
     
     print()
     
-    return 0 if (files_with_issues == 0 or fix_mode) else 1
+    # Return 0 if no issues, or if only recommendations (not critical)
+    # Return 1 only if there are critical issues
+    if files_with_issues == 0 or fix_mode:
+        return 0
+    elif has_critical:
+        return 1
+    else:
+        return 0  # Only recommendations, not critical
 
 if __name__ == "__main__":
     sys.exit(main())

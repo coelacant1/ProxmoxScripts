@@ -10,21 +10,14 @@
 #   - __warn__
 #   - __err__
 #   - test_bulk_operation_all_success
-#   - success_callback
 #   - test_bulk_operation_partial_failure
-#   - partial_callback
 #   - test_bulk_vm_operation_existing
-#   - vm_test_callback
 #   - test_bulk_vm_operation_skip_stopped
-#   - vm_start_callback
 #   - test_bulk_ct_operation_existing
-#   - ct_test_callback
 #   - test_bulk_summary_output
 #   - test_bulk_report_details
 #   - test_bulk_retry_success
-#   - retry_callback
 #   - test_bulk_filter_even
-#   - even_filter
 #   - test_bulk_validate_range_valid
 #   - test_bulk_validate_range_too_large
 #   - test_bulk_validate_range_custom_max
@@ -32,7 +25,6 @@
 #   - test_bulk_print_results_csv
 #   - test_bulk_state_save_load
 #   - test_integration_workflow
-#   - configure_and_start
 #
 
 set -euo pipefail
@@ -59,7 +51,7 @@ source "${SCRIPT_DIR}/TestFramework.sh"
 # Mock __get_vm_node__
 __get_vm_node__() {
     local vmid="$1"
-    if (( vmid >= 100 && vmid <= 120 )); then
+    if ((vmid >= 100 && vmid <= 120)); then
         echo "node1"
     else
         return 1
@@ -73,13 +65,13 @@ qm() {
 
     case "$action" in
         status)
-            if (( vmid >= 100 && vmid <= 105 )); then
+            if ((vmid >= 100 && vmid <= 105)); then
                 echo "status: running"
             else
                 echo "status: stopped"
             fi
             ;;
-        config|start|stop)
+        config | start | stop)
             return 0
             ;;
         list)
@@ -100,20 +92,20 @@ pct() {
 
     case "$action" in
         config)
-            if (( ctid >= 200 && ctid <= 210 )); then
+            if ((ctid >= 200 && ctid <= 210)); then
                 return 0
             else
                 return 1
             fi
             ;;
         status)
-            if (( ctid >= 200 && ctid <= 205 )); then
+            if ((ctid >= 200 && ctid <= 205)); then
                 echo "status: running"
             else
                 echo "status: stopped"
             fi
             ;;
-        start|stop)
+        start | stop)
             return 0
             ;;
         *)
@@ -123,11 +115,11 @@ pct() {
 }
 
 # Mock communication functions
-__info__() { : ; }
-__update__() { : ; }
-__ok__() { : ; }
-__warn__() { : ; }
-__err__() { : ; }
+__info__() { :; }
+__update__() { :; }
+__ok__() { :; }
+__warn__() { :; }
+__err__() { :; }
 
 # Export mocks
 export -f __get_vm_node__
@@ -158,7 +150,7 @@ test_bulk_operation_all_success() {
 test_bulk_operation_partial_failure() {
     partial_callback() {
         local id="$1"
-        if (( id % 2 == 0 )); then
+        if ((id % 2 == 0)); then
             return 0
         else
             return 1
@@ -255,8 +247,8 @@ test_bulk_report_details() {
 test_bulk_retry_success() {
     local attempt=0
     retry_callback() {
-        ((attempt++))
-        if (( attempt <= 2 )); then
+        ((attempt += 1))
+        if ((attempt <= 2)); then
             return 1
         else
             return 0
@@ -274,7 +266,7 @@ test_bulk_retry_success() {
 test_bulk_filter_even() {
     even_filter() {
         local id="$1"
-        (( id % 2 == 0 ))
+        ((id % 2 == 0))
     }
 
     local result=$(__bulk_filter__ 1 10 even_filter 2>/dev/null)
@@ -369,8 +361,8 @@ test_integration_workflow() {
             return 1
         fi
 
-        __vm_set_config__ "$vmid" --memory "$memory" 2>/dev/null && \
-        __vm_start__ "$vmid" 2>/dev/null
+        __vm_set_config__ "$vmid" --memory "$memory" 2>/dev/null \
+            && __vm_start__ "$vmid" 2>/dev/null
     }
 
     __bulk_vm_operation__ --name "Configure and Start" \
@@ -381,6 +373,8 @@ test_integration_workflow() {
 ################################################################################
 # RUN TEST SUITE
 ################################################################################
+
+test_framework_init
 
 run_test_suite "Bulk Operations - Core" \
     test_bulk_operation_all_success \

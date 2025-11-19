@@ -89,7 +89,7 @@ main() {
         {
             echo "# Enable automatic NUMA balancing"
             echo "kernel.numa_balancing=1"
-        } > "${sysctl_conf}"
+        } >"${sysctl_conf}"
         sysctl --system >/dev/null 2>&1
         __ok__ "NUMA balancing enabled"
     else

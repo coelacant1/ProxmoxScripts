@@ -80,36 +80,50 @@ GIT_BRANCH="main"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--help)
+        -h | --help)
             SHOW_HEADER="true"
             shift
             ;;
         --run)
-            RUN_SCRIPT="$2"; shift 2 ;;
+            RUN_SCRIPT="$2"
+            shift 2
+            ;;
         --args)
-            RUN_ARGS="$2"; shift 2 ;;
+            RUN_ARGS="$2"
+            shift 2
+            ;;
         --list)
-            DO_LIST="true"; shift ;;
+            DO_LIST="true"
+            shift
+            ;;
         --testing)
             # Short-hand to use the testing branch
-            GIT_BRANCH="testing"; shift ;;
+            GIT_BRANCH="testing"
+            shift
+            ;;
         --branch)
             if [ -n "$2" ]; then
-                GIT_BRANCH="$2"; shift 2
+                GIT_BRANCH="$2"
+                shift 2
             else
-                echo "Error: --branch requires an argument" >&2; exit 1
+                echo "Error: --branch requires an argument" >&2
+                exit 1
             fi
             ;;
         *)
             echo "Error: Unknown argument '$1'" >&2
-            exit 1 ;;
+            exit 1
+            ;;
     esac
 done
 
 # --- Branch Warning Banner --------------------------------------------------
 if [ "$GIT_BRANCH" != "main" ]; then
     # Basic ANSI colors (avoid relying on repo utilities before download)
-    YELLOW="\033[1;33m"; RED="\033[1;31m"; RESET="\033[0m"; BOLD="\033[1m";
+    YELLOW="\033[1;33m"
+    RED="\033[1;31m"
+    RESET="\033[0m"
+    BOLD="\033[1m"
     if [ "$GIT_BRANCH" = "testing" ]; then
         echo -e "${YELLOW}=============================================================${RESET}" >&2
         echo -e "${YELLOW}${BOLD}  TESTING BRANCH SELECTED${RESET}" >&2

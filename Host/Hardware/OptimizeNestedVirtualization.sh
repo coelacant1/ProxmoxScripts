@@ -45,7 +45,7 @@ main() {
     # Configure based on CPU vendor
     if [[ "$cpu_vendor" =~ [Ii]ntel ]]; then
         __info__ "Configuring nested virtualization for Intel"
-        echo "options kvm-intel nested=Y" > /etc/modprobe.d/kvm-intel.conf
+        echo "options kvm-intel nested=Y" >/etc/modprobe.d/kvm-intel.conf
 
         if lsmod | grep -q kvm_intel; then
             __update__ "Reloading kvm_intel module"
@@ -63,7 +63,7 @@ main() {
 
     elif [[ "$cpu_vendor" =~ [Aa][Mm][Dd] ]]; then
         __info__ "Configuring nested virtualization for AMD"
-        echo "options kvm-amd nested=1" > /etc/modprobe.d/kvm-amd.conf
+        echo "options kvm-amd nested=1" >/etc/modprobe.d/kvm-amd.conf
 
         if lsmod | grep -q kvm_amd; then
             __update__ "Reloading kvm_amd module"
@@ -81,7 +81,7 @@ main() {
 
     else
         __warn__ "Unknown CPU vendor, attempting Intel configuration"
-        echo "options kvm-intel nested=Y" > /etc/modprobe.d/kvm-intel.conf
+        echo "options kvm-intel nested=Y" >/etc/modprobe.d/kvm-intel.conf
         if lsmod | grep -q kvm_intel; then
             rmmod kvm_intel 2>/dev/null || true
         fi

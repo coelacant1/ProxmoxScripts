@@ -8,13 +8,13 @@
 #   BulkPrintRDPConfiguration.sh <guac_url> <search_substring> [data_source]
 #
 # Arguments:
-#   guac_url         - Guacamole server URL (e.g., http://172.20.192.10:8080/guacamole)
+#   guac_url         - Guacamole server URL (e.g., http://192.168.1.10:8080/guacamole)
 #   search_substring - Substring to match in connection names (case-insensitive)
 #   data_source      - Optional data source (default: mysql)
 #
 # Examples:
-#   BulkPrintRDPConfiguration.sh "http://172.20.192.10:8080/guacamole" "Clone"
-#   BulkPrintRDPConfiguration.sh "http://172.20.192.10:8080/guacamole" "Clone" mysql
+#   BulkPrintRDPConfiguration.sh "http://192.168.1.10:8080/guacamole" "Clone"
+#   BulkPrintRDPConfiguration.sh "http://192.168.1.10:8080/guacamole" "Clone" mysql
 #
 # Function Index:
 #   - main
@@ -50,7 +50,7 @@ main() {
 
     local connections_json
     connections_json="$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connectionGroups/ROOT/tree?token=${auth_token}")"
+        "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connectionGroups/ROOT/tree?token=${auth_token}")"
 
     if [[ -z "$connections_json" ]]; then
         __err__ "Could not retrieve connection tree from Guacamole"
@@ -59,7 +59,7 @@ main() {
     __update__ "Searching for RDP connections with names containing '$SEARCH_SUBSTRING'..."
     local matching_connections
     matching_connections=$(echo "$connections_json" | jq -r \
-      --arg SUBSTR "$SEARCH_SUBSTRING" '
+        --arg SUBSTR "$SEARCH_SUBSTRING" '
         [ (.childConnections // [])[]
           | select(.name | test($SUBSTR; "i"))
           | select(.protocol == "rdp")
@@ -91,7 +91,7 @@ main() {
 
         local connection_info
         connection_info=$(curl -s -X GET \
-          "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}?token=${auth_token}")
+            "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}?token=${auth_token}")
 
         if [[ -z "$connection_info" ]]; then
             __warn__ "Could not retrieve details for connection ID '$conn_id'. Skipping."
@@ -100,7 +100,7 @@ main() {
 
         local existing_params
         existing_params=$(curl -s -X GET \
-          "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}/parameters?token=${auth_token}")
+            "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections/${conn_id}/parameters?token=${auth_token}")
 
         existing_params=$(echo "$existing_params" | jq 'if . == null then {} else . end')
 

@@ -24,6 +24,11 @@ set -euo pipefail
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
+
+# Suppress verbose logging during tests
+export LOG_LEVEL=ERROR
+
 source "${SCRIPT_DIR}/TestFramework.sh"
 source "${SCRIPT_DIR}/Conversion.sh"
 
@@ -96,6 +101,8 @@ test_vmid_to_mac_long() {
 ################################################################################
 # RUN TEST SUITE
 ################################################################################
+
+test_framework_init
 
 run_test_suite "Conversion Functions" \
     test_ip_to_int_localhost \

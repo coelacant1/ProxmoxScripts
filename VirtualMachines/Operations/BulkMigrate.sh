@@ -24,7 +24,6 @@
 #
 # Function Index:
 #   - main
-#   - migrate_callback
 #
 
 set -euo pipefail
@@ -39,6 +38,8 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Operations.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -52,14 +53,14 @@ main() {
 
     # Validate mode selection
     local mode_count=0
-    [[ "$RANGE" == "true" ]] && ((mode_count++))
-    [[ "$POOL" == "true" ]] && ((mode_count++))
-    [[ "$LOCAL" == "true" ]] && ((mode_count++))
+    [[ "$RANGE" == "true" ]] && ((mode_count += 1))
+    [[ "$POOL" == "true" ]] && ((mode_count += 1))
+    [[ "$LOCAL" == "true" ]] && ((mode_count += 1))
 
-    if (( mode_count == 0 )); then
+    if ((mode_count == 0)); then
         __err__ "Mode not specified. Use --range, --pool, or --local"
         exit 64
-    elif (( mode_count > 1 )); then
+    elif ((mode_count > 1)); then
         __err__ "Multiple modes specified. Use only one of: --range, --pool, --local"
         exit 64
     fi
@@ -89,7 +90,7 @@ main() {
     local -a vm_list=()
     if [[ "$RANGE" == "true" ]]; then
         __info__ "Mode: Range (${START_VMID}-${END_VMID})"
-        for (( vmid=START_VMID; vmid<=END_VMID; vmid++ )); do
+        for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
             vm_list+=("$vmid")
         done
     elif [[ "$POOL" == "true" ]]; then
@@ -123,7 +124,7 @@ main() {
         source_node=$(__get_vm_node__ "$vmid")
 
         if [[ "$source_node" == "$TARGET" ]]; then
-            return 2  # Skip: already on target
+            return 2 # Skip: already on target
         fi
 
         local migrate_cmd="qm migrate {vmid} ${TARGET}"

@@ -21,6 +21,10 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -50,10 +54,10 @@ main() {
         __update__ "Updating container ${vmid}..."
 
         if __ct_update_packages__ "$vmid"; then
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to update container ${vmid}"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

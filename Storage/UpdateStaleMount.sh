@@ -72,10 +72,10 @@ main() {
 
         if ssh root@"${node_ip}" "umount -f '${MOUNT_PATH}' 2>/dev/null && rm -rf '${MOUNT_PATH}' 2>/dev/null"; then
             __ok__ "Cleaned up: $node_ip"
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Cleanup issues on: $node_ip"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 

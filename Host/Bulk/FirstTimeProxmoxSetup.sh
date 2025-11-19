@@ -74,7 +74,7 @@ setup_repositories() {
 
     # Check if the no-subscription repo is already in /etc/apt/sources.list
     if ! grep -q "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" "/etc/apt/sources.list"; then
-        echo "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" >> "/etc/apt/sources.list"
+        echo "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" >>"/etc/apt/sources.list"
         echo " - Added Proxmox no-subscription repository for \"${codename}\"."
     else
         echo " - Proxmox no-subscription repository already present."
@@ -82,7 +82,7 @@ setup_repositories() {
 
     # Check if the no-subscription repo is already in /etc/apt/sources.list.d/ceph.list
     if ! grep -q "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" "/etc/apt/sources.list.d/ceph.list"; then
-        echo "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" >> "/etc/apt/sources.list.d/ceph.list"
+        echo "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" >>"/etc/apt/sources.list.d/ceph.list"
         echo " - Added Ceph no-subscription repository for \"${codename}\"."
     else
         echo " - Ceph no-subscription repository already present."
@@ -105,7 +105,7 @@ disable_subscription_nag() {
 # Main Script Logic
 ###############################################################################
 echo "Gathering remote node IPs..."
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
+readarray -t REMOTE_NODES < <(__get_remote_node_ips__)
 
 if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
     echo " - No remote nodes detected; this might be a single-node setup."

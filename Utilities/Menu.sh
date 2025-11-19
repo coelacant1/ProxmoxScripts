@@ -10,6 +10,12 @@
 #   __menu_header__       - Display menu header
 #   __menu_footer__       - Display menu footer with common options
 #
+# Function Index:
+#   - __menu_header__
+#   - __menu_footer__
+#   - __menu_display__
+#   - __menu_choice__
+#
 
 # Display menu header
 # Args: title
@@ -25,7 +31,7 @@ __menu_footer__() {
     local show_help="${1:-true}"
     local show_back="${2:-true}"
     local show_exit="${3:-true}"
-    
+
     echo
     echo "----------------------------------------"
     echo
@@ -42,12 +48,12 @@ __menu_display__() {
     local item_type="$1"
     shift
     local items=("$@")
-    
+
     local i=1
     for item in "${items[@]}"; do
         if [[ "$item_type" == "numbered" ]]; then
             __line_rgb__ "$i) $item" 0 200 200
-            ((i++))
+            ((i += 1))
         else
             # Handle custom formatting if needed
             echo "$item"
@@ -60,19 +66,19 @@ __menu_display__() {
 # Returns: 0 for handled choice (should continue), 1 for back, 2 for exit, 3 for help, 4 for unhandled (custom)
 __menu_choice__() {
     local choice="$1"
-    
+
     case "$choice" in
-        h|\?)
-            return 3  # Help
+        h | \?)
+            return 3 # Help
             ;;
-        b|B)
-            return 1  # Back
+        b | B)
+            return 1 # Back
             ;;
-        e|E)
-            return 2  # Exit
+        e | E)
+            return 2 # Exit
             ;;
         *)
-            return 4  # Unhandled - let caller handle it
+            return 4 # Unhandled - let caller handle it
             ;;
     esac
 }

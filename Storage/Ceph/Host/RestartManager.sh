@@ -23,7 +23,10 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 __check_root__
 __check_proxmox__

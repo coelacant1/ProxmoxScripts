@@ -24,7 +24,6 @@
 #   - check_storage_exists
 #   - get_current_storage
 #   - main
-#   - migrate_cloud_init_callback
 #
 
 set -euo pipefail
@@ -37,6 +36,8 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/BulkOperations.sh
 source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -88,10 +89,10 @@ main() {
         __info__ "Processing all VMs in cluster"
         local all_vms
         all_vms=$(__get_cluster_vms__)
-        read -r -a vm_ids <<< "$all_vms"
+        read -r -a vm_ids <<<"$all_vms"
     else
         __info__ "Processing VMs ${START_VMID} to ${END_VMID}"
-        for (( vmid=START_VMID; vmid<=END_VMID; vmid++ )); do
+        for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
             vm_ids+=("$vmid")
         done
     fi
@@ -157,7 +158,7 @@ main() {
         local sshkeys_option=""
         if [[ -n "$ci_sshkeys" ]] && [[ "$ci_sshkeys" =~ ^ssh-(rsa|dss|ed25519|ecdsa) ]]; then
             temp_ssh_file=$(mktemp)
-            echo -e "$ci_sshkeys" > "$temp_ssh_file"
+            echo -e "$ci_sshkeys" >"$temp_ssh_file"
             sshkeys_option="--sshkeys ${temp_ssh_file}"
         fi
 
@@ -185,9 +186,9 @@ main() {
     BULK_OPERATION_NAME="Cloud-Init Migration"
     for vmid in "${vm_ids[@]}"; do
         if migrate_cloud_init_callback "$vmid"; then
-            ((BULK_SUCCESS++))
+            ((BULK_SUCCESS += 1))
         else
-            ((BULK_FAILED++))
+            ((BULK_FAILED += 1))
             BULK_FAILED_IDS+=("$vmid")
         fi
     done

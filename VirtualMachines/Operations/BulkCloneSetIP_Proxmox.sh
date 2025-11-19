@@ -11,7 +11,7 @@
 #   BulkCloneSetIPDebian.sh <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix>
 #
 # Example:
-#   BulkCloneSetIPDebian.sh 172.20.83.22 172.20.83.100/24 172.20.83.1 5 100 200 root pass123 CLOUD-
+#   BulkCloneSetIPDebian.sh 192.168.1.22 192.168.1.100/24 192.168.1.1 5 100 200 root pass123 CLOUD-
 #
 # Function Index:
 #   - rewrite_file_mac_prefix
@@ -23,6 +23,10 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/SSH.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
 
 ###############################################################################
 # Environment Checks
@@ -36,9 +40,9 @@ __ensure_dependencies__ sshpass
 # Argument Parsing
 ###############################################################################
 if [ "$#" -lt 9 ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix>"
-  exit 1
+    echo "Error: Missing arguments."
+    echo "Usage: $0 <templateIp> <startIpCIDR> <newGateway> <count> <templateId> <baseVmId> <sshUsername> <sshPassword> <vmNamePrefix>"
+    exit 1
 fi
 
 templateIpAddr="$1"
@@ -126,67 +130,67 @@ systemctl reload pvedaemon 2>/dev/null || true
 echo "Done."
 EOF
 
-for ((i=0; i<instanceCount; i++)); do
-  currentVmId=$((baseVmId + i))
-  currentIp="$(__int_to_ip__ "$ipInt")"
-  currentIpCidr="$currentIp/$startMask"
+for ((i = 0; i < instanceCount; i++)); do
+    currentVmId=$((baseVmId + i))
+    currentIp="$(__int_to_ip__ "$ipInt")"
+    currentIpCidr="$currentIp/$startMask"
 
-  echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
-  qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}" >/dev/null
-  echo "Starting VM \"$currentVmId\"..."
-  qm start "$currentVmId" >/dev/null || true
+    echo "Cloning VM ID \"$templateId\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
+    qm clone "$templateId" "$currentVmId" --name "${vmNamePrefix}${currentVmId}" >/dev/null
+    echo "Starting VM \"$currentVmId\"..."
+    qm start "$currentVmId" >/dev/null || true
 
-  __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
-  __ssh_exec_script__ \
-    --host "$templateIpAddr" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
-    --sudo \
-    --script-content "$networkUpdateScript" \
-    --arg "$templateIpAddr" \
-    --arg "$currentIpCidr" \
-    --arg "$newGateway"
+    __wait_for_ssh__ "$templateIpAddr" "$sshUsername" "$sshPassword"
+    __ssh_exec_script__ \
+        --host "$templateIpAddr" \
+        --user "$sshUsername" \
+        --password "$sshPassword" \
+        --sudo \
+        --script-content "$networkUpdateScript" \
+        --arg "$templateIpAddr" \
+        --arg "$currentIpCidr" \
+        --arg "$newGateway"
 
-  __ssh_exec__ \
-    --host "$templateIpAddr" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
-    --sudo \
-    --shell bash \
-    --command "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
+    __ssh_exec__ \
+        --host "$templateIpAddr" \
+        --user "$sshUsername" \
+        --password "$sshPassword" \
+        --sudo \
+        --shell bash \
+        --command "nohup sh -c 'sleep 2; systemctl restart networking' >/dev/null 2>&1 &"
 
-  __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
+    __wait_for_ssh__ "$currentIp" "$sshUsername" "$sshPassword"
 
-  # --- Child Proxmox: set datacenter mac_prefix and rewrite existing MACs ----
-  newPrefix="$(__vmid_to_mac_prefix__ --vmid "$currentVmId")"
-  echo "Computed MAC prefix for VMID $currentVmId: $newPrefix"
+    # --- Child Proxmox: set datacenter mac_prefix and rewrite existing MACs ----
+    newPrefix="$(__vmid_to_mac_prefix__ --vmid "$currentVmId")"
+    echo "Computed MAC prefix for VMID $currentVmId: $newPrefix"
 
-  __ssh_exec_script__ \
-    --host "$currentIp" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
-    --sudo \
-    --script-content "$macUpdateScript" \
-    --arg "$newPrefix"
+    __ssh_exec_script__ \
+        --host "$currentIp" \
+        --user "$sshUsername" \
+        --password "$sshPassword" \
+        --sudo \
+        --script-content "$macUpdateScript" \
+        --arg "$newPrefix"
 
-  echo "Verification on $currentIp:"
-  __ssh_exec__ \
-    --host "$currentIp" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
-    --sudo \
-    --command "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
-  __ssh_exec__ \
-    --host "$currentIp" \
-    --user "$sshUsername" \
-    --password "$sshPassword" \
-    --sudo \
-    --shell bash \
-    --command "qm list || true; pct list || true"
+    echo "Verification on $currentIp:"
+    __ssh_exec__ \
+        --host "$currentIp" \
+        --user "$sshUsername" \
+        --password "$sshPassword" \
+        --sudo \
+        --command "grep -H '^mac_prefix' /etc/pve/datacenter.cfg || true"
+    __ssh_exec__ \
+        --host "$currentIp" \
+        --user "$sshUsername" \
+        --password "$sshPassword" \
+        --sudo \
+        --shell bash \
+        --command "qm list || true; pct list || true"
 
-  # Next IP
-  ipInt=$((ipInt + 1))
-  echo "----- Completed VM $currentVmId ($currentIp) -----"
+    # Next IP
+    ipInt=$((ipInt + 1))
+    echo "----- Completed VM $currentVmId ($currentIp) -----"
 done
 
 ###############################################################################

@@ -35,6 +35,7 @@
 #   - Get PBS fingerprint: proxmox-backup-manager cert info | grep Fingerprint
 #
 # Function Index:
+#   - __early_err__
 #   - validate_custom_options
 #   - validate_storage_id
 #   - add_nfs_storage
@@ -76,7 +77,7 @@ validate_custom_options() {
     # Validate storage type
     local storage_type_lower="${STORAGE_TYPE,,}"
     case "$storage_type_lower" in
-        nfs|smb|cifs|pbs)
+        nfs | smb | cifs | pbs)
             STORAGE_TYPE="$storage_type_lower"
             ;;
         *)
@@ -101,7 +102,7 @@ validate_custom_options() {
             __err__ "PBS storage requires --username and --password"
             exit 64
         fi
-        
+
         if [[ -z "$FINGERPRINT" ]]; then
             __warn__ "WARNING: PBS without fingerprint is insecure!"
             __warn__ "Get fingerprint from PBS: proxmox-backup-manager cert info | grep Fingerprint"
@@ -202,10 +203,10 @@ add_pbs_storage() {
 # --- main --------------------------------------------------------------------
 main() {
     __log_function_entry__ "$@"
-    
+
     __check_root__
     __log_debug__ "Root check passed" "STORAGE"
-    
+
     __check_proxmox__
     __log_debug__ "Proxmox check passed" "STORAGE"
 
@@ -242,7 +243,7 @@ main() {
         nfs)
             add_nfs_storage
             ;;
-        smb|cifs)
+        smb | cifs)
             add_smb_storage
             ;;
         pbs)
@@ -261,5 +262,5 @@ main "$@"
 #   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
 #   - Removed manual usage() and parse_args() functions
 #   - Now uses __parse_args__ with automatic validation
-#   - Fixed __prompt_yes_no__ -> __prompt_user_yn__
 #   - Handles optional path argument for PBS storage
+#   - Tested execution on 11/17

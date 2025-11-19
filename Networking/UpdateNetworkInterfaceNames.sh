@@ -74,8 +74,8 @@ main() {
             local interface="${BASH_REMATCH[1]}"
 
             # Skip special interfaces
-            if [[ "$interface" == "lo" ]] || [[ "$interface" == *"tap"* ]] || \
-               [[ "$interface" == *"veth"* ]] || [[ "$interface" == *"fwbr"* ]]; then
+            if [[ "$interface" == "lo" ]] || [[ "$interface" == *"tap"* ]] \
+                || [[ "$interface" == *"veth"* ]] || [[ "$interface" == *"fwbr"* ]]; then
                 continue
             fi
 
@@ -114,7 +114,7 @@ main() {
         fi
 
         if update_interface_name "$old_name" "$new_name" "$config_file"; then
-            ((updated++))
+            ((updated += 1))
         fi
     done
 

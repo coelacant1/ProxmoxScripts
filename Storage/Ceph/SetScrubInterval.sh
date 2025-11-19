@@ -16,15 +16,15 @@
 # Arguments:
 #   mode              - Operation mode: 'local' or 'remote'
 #   action            - Action: 'install' or 'uninstall'
-#   
+#
 #   For local install:
 #     pool_name         - Ceph pool name
 #     schedule_type     - Schedule: 'daily', '12h', '6h', or 'weekly'
 #     schedule_time     - Time: '02:30' for daily, 'Sun 04:00' for weekly (optional for hourly)
-#   
+#
 #   For local uninstall:
 #     pool_name         - Ceph pool name
-#   
+#
 #   For remote install:
 #     node_name         - Proxmox cluster node name
 #     ssh_user          - SSH username
@@ -32,7 +32,7 @@
 #     pool_name         - Ceph pool name
 #     schedule_type     - Schedule type
 #     schedule_time     - Time for schedule (optional for hourly)
-#   
+#
 #   For remote uninstall:
 #     node_name         - Proxmox cluster node name
 #     ssh_user          - SSH username
@@ -73,11 +73,13 @@ source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Cluster.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Configuration constants
-readonly DISABLE_SCRUB_SECONDS=2592000  # 30 days
+readonly DISABLE_SCRUB_SECONDS=2592000 # 30 days
 readonly SCRUB_SCRIPT_DIR="/usr/local/bin"
 readonly SYSTEMD_DIR="/etc/systemd/system"
 
@@ -87,8 +89,7 @@ readonly SYSTEMD_DIR="/etc/systemd/system"
 validate_custom_options() {
     # Validate mode
     case "${MODE}" in
-        local|remote)
-            ;;
+        local | remote) ;;
         *)
             __err__ "Invalid mode '${MODE}'. Must be 'local' or 'remote'"
             exit 64
@@ -97,8 +98,7 @@ validate_custom_options() {
 
     # Validate action
     case "${ACTION}" in
-        install|uninstall)
-            ;;
+        install | uninstall) ;;
         *)
             __err__ "Invalid action '${ACTION}'. Must be 'install' or 'uninstall'"
             exit 64
@@ -108,15 +108,14 @@ validate_custom_options() {
     # Validate schedule type if installing
     if [[ "${ACTION}" == "install" && -n "${SCHEDULE_TYPE}" ]]; then
         case "${SCHEDULE_TYPE}" in
-            daily|12h|6h|weekly)
-                ;;
+            daily | 12h | 6h | weekly) ;;
             *)
                 __err__ "Invalid schedule type '${SCHEDULE_TYPE}'"
                 __err__ "Valid types: daily, 12h, 6h, weekly"
                 exit 64
                 ;;
         esac
-        
+
         # Validate schedule time for daily/weekly
         if [[ "${SCHEDULE_TYPE}" == "daily" || "${SCHEDULE_TYPE}" == "weekly" ]]; then
             if [[ -z "${SCHEDULE_TIME}" ]]; then
@@ -166,7 +165,7 @@ derive_oncalendar_expression() {
 # @param 1 Pool name
 local_disable_scrubbing() {
     local poolName="$1"
-    
+
     __info__ "Disabling automatic scrubbing for pool '${poolName}'"
     ceph osd pool set "${poolName}" noscrub true
     ceph osd pool set "${poolName}" nodeep-scrub true
@@ -179,7 +178,7 @@ local_disable_scrubbing() {
 # @param 1 Pool name
 local_revert_scrubbing() {
     local poolName="$1"
-    
+
     __info__ "Reverting scrubbing settings for pool '${poolName}'"
     ceph osd pool unset "${poolName}" noscrub
     ceph osd pool unset "${poolName}" nodeep-scrub
@@ -195,8 +194,8 @@ local_create_scrub_script() {
     local scriptName="${SCRUB_SCRIPT_DIR}/ceph-scrub-${poolName}.sh"
 
     __info__ "Creating scrub script: ${scriptName}"
-    
-    cat > "${scriptName}" <<EOSCRIPT
+
+    cat >"${scriptName}" <<EOSCRIPT
 #!/bin/bash
 # Auto-generated Ceph deep-scrub script for pool: ${poolName}
 set -euo pipefail
@@ -223,13 +222,13 @@ local_create_systemd_units() {
     local serviceFile="${SYSTEMD_DIR}/ceph-scrub-${poolName}.service"
     local timerFile="${SYSTEMD_DIR}/ceph-scrub-${poolName}.timer"
     local onCalendar
-    
+
     onCalendar="$(derive_oncalendar_expression "${scheduleType}" "${scheduleTime}")"
-    
+
     __info__ "Creating systemd units"
 
     # Create service unit
-    cat > "${serviceFile}" <<EOSERVICE
+    cat >"${serviceFile}" <<EOSERVICE
 [Unit]
 Description=Ceph deep-scrub for pool ${poolName}
 After=ceph.target
@@ -242,7 +241,7 @@ StandardError=journal
 EOSERVICE
 
     # Create timer unit
-    cat > "${timerFile}" <<EOTIMER
+    cat >"${timerFile}" <<EOTIMER
 [Unit]
 Description=Timer for Ceph deep-scrub of pool ${poolName}
 
@@ -263,7 +262,7 @@ EOTIMER
 # @param 1 Pool name
 local_enable_and_start_timer() {
     local poolName="$1"
-    
+
     __info__ "Enabling and starting timer"
     systemctl daemon-reload
     systemctl enable "ceph-scrub-${poolName}.timer"
@@ -415,21 +414,21 @@ main() {
             case "$ACTION" in
                 install)
                     __parse_args__ "pool_name:string schedule_type:string schedule_time:string:?" "$@"
-                    
+
                     __info__ "Configuring Ceph scrub schedule"
                     __info__ "  Pool: ${POOL_NAME}"
                     __info__ "  Schedule: ${SCHEDULE_TYPE} ${SCHEDULE_TIME}"
-                    
+
                     if ! __prompt_user_yn__ "Install scrub scheduler for pool '${POOL_NAME}'?"; then
                         __info__ "Operation cancelled"
                         exit 0
                     fi
-                    
+
                     local_disable_scrubbing "${POOL_NAME}"
                     local_create_scrub_script "${POOL_NAME}"
                     local_create_systemd_units "${POOL_NAME}" "${SCHEDULE_TYPE}" "${SCHEDULE_TIME}"
                     local_enable_and_start_timer "${POOL_NAME}"
-                    
+
                     echo ""
                     __ok__ "Scrub scheduler installed successfully"
                     __info__ "Pool '${POOL_NAME}' automatic scrubbing: disabled"
@@ -438,18 +437,18 @@ main() {
                     ;;
                 uninstall)
                     __parse_args__ "pool_name:string" "$@"
-                    
+
                     __info__ "Removing Ceph scrub schedule"
                     __info__ "  Pool: ${POOL_NAME}"
-                    
+
                     if ! __prompt_user_yn__ "Uninstall scrub scheduler for pool '${POOL_NAME}'?"; then
                         __info__ "Operation cancelled"
                         exit 0
                     fi
-                    
+
                     local_remove_systemd_units "${POOL_NAME}"
                     local_revert_scrubbing "${POOL_NAME}"
-                    
+
                     echo ""
                     __ok__ "Scrub scheduler removed successfully"
                     __info__ "Pool '${POOL_NAME}' reverted to default scrubbing"
@@ -462,7 +461,7 @@ main() {
                     __parse_args__ "node_name:string ssh_user:string ssh_pass:string pool_name:string schedule_type:string schedule_time:string:?" "$@"
 
                     # Convert node name to IP
-                    readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
+                    readarray -t REMOTE_NODE_IPS < <(__get_remote_node_ips__)
                     VM_HOST="$(__get_ip_from_name__ "${NODE_NAME}")"
 
                     # Verify node is in cluster
@@ -474,7 +473,7 @@ main() {
                     __info__ "Remote installation on node '${NODE_NAME}' (${VM_HOST})"
                     __info__ "  Pool: ${POOL_NAME}"
                     __info__ "  Schedule: ${SCHEDULE_TYPE} ${SCHEDULE_TIME}"
-                    
+
                     if ! __prompt_user_yn__ "Install scrub scheduler on remote node?"; then
                         __info__ "Operation cancelled"
                         exit 0
@@ -486,7 +485,7 @@ main() {
                     __parse_args__ "node_name:string ssh_user:string ssh_pass:string pool_name:string" "$@"
 
                     # Convert node name to IP
-                    readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
+                    readarray -t REMOTE_NODE_IPS < <(__get_remote_node_ips__)
                     VM_HOST="$(__get_ip_from_name__ "${NODE_NAME}")"
 
                     # Verify node is in cluster
@@ -497,7 +496,7 @@ main() {
 
                     __info__ "Remote uninstallation on node '${NODE_NAME}' (${VM_HOST})"
                     __info__ "  Pool: ${POOL_NAME}"
-                    
+
                     if ! __prompt_user_yn__ "Uninstall scrub scheduler on remote node?"; then
                         __info__ "Operation cancelled"
                         exit 0

@@ -36,6 +36,13 @@ set -euo pipefail
 ################################################################################
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
+
+# Suppress verbose logging during tests
+export LOG_LEVEL=ERROR
+# Skip install prompts in test environment
+export SKIP_INSTALL_CHECKS=true
+
 source "${SCRIPT_DIR}/TestFramework.sh"
 source "${SCRIPT_DIR}/Operations.sh"
 
@@ -151,7 +158,7 @@ test_exit_codes() {
     assert_exit_code 1 $exit_code "False should return 1"
 
     # Test command that should succeed
-    echo "test" > /dev/null
+    echo "test" >/dev/null
     assert_exit_code 0 $? "Echo should succeed"
 }
 
@@ -264,7 +271,7 @@ test_config_file_generation() {
     config_file=$(create_temp_file)
 
     # Generate config (simulated)
-    cat > "$config_file" << EOF
+    cat >"$config_file" <<EOF
 cores: 4
 memory: 8192
 name: test-vm
@@ -345,6 +352,8 @@ test_command_chains() {
 ################################################################################
 # RUN ALL TESTS
 ################################################################################
+
+test_framework_init
 
 run_test_suite "Integration Example Tests" \
     test_basic_assertions \

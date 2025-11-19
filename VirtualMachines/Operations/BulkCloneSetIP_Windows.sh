@@ -26,6 +26,10 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/SSH.sh
 source "${UTILITYPATH}/SSH.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -49,7 +53,7 @@ netmask="$(__cidr_to_netmask__ "$startMask")"
 # Create a temporary .bat file with netsh commands for Windows IP reconfiguration
 ###############################################################################
 tempBat="/tmp/ChangeIP.bat.$$"
-cat <<'EOF' > "$tempBat"
+cat <<'EOF' >"$tempBat"
 @echo off
 :: ChangeIP.bat
 :: Usage: ChangeIP.bat <InterfaceName> <NewIP> <Netmask> <Gateway> <DNS1> <DNS2>
@@ -83,49 +87,48 @@ remoteBatPathCmd="C:\\Users\\${SSH_USERNAME}\\ChangeIP.bat"
 ###############################################################################
 # Main logic: Clone and configure Windows VMs
 ###############################################################################
-for (( i=0; i<instanceCount; i++ )); do
-  currentVmId=$((baseVmId + i))
-  currentIp="$(__int_to_ip__ "$ipInt")"
+for ((i = 0; i < instanceCount; i++)); do
+    currentVmId=$((baseVmId + i))
+    currentIp="$(__int_to_ip__ "$ipInt")"
 
-  ssh-keygen -f "/root/.ssh/known_hosts" -R "${currentIp}"
+    ssh-keygen -f "/root/.ssh/known_hosts" -R "${currentIp}"
 
-  echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
-  qm clone "$TEMPLATE_ID" "$currentVmId" --name "${VM_NAME_PREFIX}${currentVmId}"
-  qm start "$currentVmId"
+    echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIp/$startMask\"..."
+    qm clone "$TEMPLATE_ID" "$currentVmId" --name "${VM_NAME_PREFIX}${currentVmId}"
+    qm start "$currentVmId"
 
-  echo "Waiting for SSH on template IP: \"$TEMPLATE_IP\"..."
-  __wait_for_ssh__ "$TEMPLATE_IP" "$SSH_USERNAME" "$SSH_PASSWORD"
+    echo "Waiting for SSH on template IP: \"$TEMPLATE_IP\"..."
+    __wait_for_ssh__ "$TEMPLATE_IP" "$SSH_USERNAME" "$SSH_PASSWORD"
 
-  echo "Uploading 'ChangeIP.bat' to Windows VM..."
-  __scp_send__ \
-    --host "$TEMPLATE_IP" \
-    --user "$SSH_USERNAME" \
-    --password "$SSH_PASSWORD" \
-    --source "$tempBat" \
-    --destination "$remoteBatPath"
+    echo "Uploading 'ChangeIP.bat' to Windows VM..."
+    __scp_send__ \
+        --host "$TEMPLATE_IP" \
+        --user "$SSH_USERNAME" \
+        --password "$SSH_PASSWORD" \
+        --source "$tempBat" \
+        --destination "$remoteBatPath"
 
-  echo "Starting IP change script in the background via 'start /b'..."
-  echo "DEBUG: interfaceName='${INTERFACE_NAME}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${NEW_GATEWAY}' dns1='${DNS1}' dns2='${DNS2}'"
-  remoteCmd="cmd /c \"${remoteBatPathCmd} ${INTERFACE_NAME} ${currentIp} ${netmask} ${NEW_GATEWAY} ${DNS1} ${DNS2}\""
-  echo "DEBUG: remoteCmd='${remoteCmd}'"
+    echo "Starting IP change script in the background via 'start /b'..."
+    echo "DEBUG: interfaceName='${INTERFACE_NAME}' currentIp='${currentIp}' netmask='${netmask}' newGateway='${NEW_GATEWAY}' dns1='${DNS1}' dns2='${DNS2}'"
+    remoteCmd="cmd /c \"${remoteBatPathCmd} ${INTERFACE_NAME} ${currentIp} ${netmask} ${NEW_GATEWAY} ${DNS1} ${DNS2}\""
+    echo "DEBUG: remoteCmd='${remoteCmd}'"
 
-  __ssh_exec__ \
-    --host "$TEMPLATE_IP" \
-    --user "$SSH_USERNAME" \
-    --password "$SSH_PASSWORD" \
-    --extra-ssh-arg "-o ServerAliveInterval=3" \
-    --extra-ssh-arg "-o ServerAliveCountMax=1" \
-    --command "$remoteCmd" || true
+    __ssh_exec__ \
+        --host "$TEMPLATE_IP" \
+        --user "$SSH_USERNAME" \
+        --password "$SSH_PASSWORD" \
+        --extra-ssh-arg "-o ServerAliveInterval=3" \
+        --extra-ssh-arg "-o ServerAliveCountMax=1" \
+        --command "$remoteCmd" || true
 
-  echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
-  __wait_for_ssh__ "$currentIp" "$SSH_USERNAME" "$SSH_PASSWORD"
+    echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
+    __wait_for_ssh__ "$currentIp" "$SSH_USERNAME" "$SSH_PASSWORD"
 
-  ipInt=$(( ipInt + 1 ))
+    ipInt=$((ipInt + 1))
 done
 
 rm -f "$tempBat"
 __prompt_keep_installed_packages__
-
 
 # Testing status:
 #   - ArgumentParser.sh sourced

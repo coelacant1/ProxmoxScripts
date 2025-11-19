@@ -17,6 +17,7 @@
 #   - Bulk state operations
 #
 # Function Index:
+#   - __state_log__
 #   - __state_save_vm__
 #   - __state_restore_vm__
 #   - __state_compare_vm__
@@ -36,8 +37,6 @@
 #   - __state_show_changes__
 #   - __state_validate__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -138,12 +137,12 @@ __state_save_vm__() {
             # Escape special characters in value
             value=$(echo "$value" | sed 's/\\/\\\\/g; s/"/\\"/g')
             echo -n "    \"$key\": \"$value\""
-        done <<< "$config"
+        done <<<"$config"
 
         echo ""
         echo "  }"
         echo "}"
-    } > "$state_file"
+    } >"$state_file"
 
     __state_log__ "INFO" "State file created successfully: $state_file"
     echo "State saved: $state_file"
@@ -215,7 +214,7 @@ __state_restore_vm__() {
             __state_log__ "WARN" "Failed to set $key=$value"
             echo "Warning: Failed to set $key=$value" >&2
         fi
-    done <<< "$config"
+    done <<<"$config"
 
     __state_log__ "INFO" "VM $vmid restored from state: $state_name"
     echo "VM $vmid restored from state: $state_name"
@@ -270,11 +269,11 @@ __state_compare_vm__() {
             echo "Changed: $key"
             echo "  Current: $current_value"
             echo "  Saved:   $saved_value"
-            ((differences++))
+            ((differences += 1))
         fi
-    done <<< "$saved_config"
+    done <<<"$saved_config"
 
-    if (( differences == 0 )); then
+    if ((differences == 0)); then
         __state_log__ "INFO" "No differences found between current and saved state"
         echo "No differences found"
         return 0
@@ -307,7 +306,7 @@ __state_export_vm__() {
     # Save to temporary state
     local temp_state="export_$(date +%s)"
     __state_log__ "DEBUG" "__state_export_vm__: Creating temporary state: $temp_state"
-    __state_save_vm__ "$vmid" "$temp_state" > /dev/null || return 1
+    __state_save_vm__ "$vmid" "$temp_state" >/dev/null || return 1
 
     # Copy to output location
     local state_file="${STATE_DIR}/vm_${vmid}_${temp_state}.json"
@@ -385,12 +384,12 @@ __state_save_ct__() {
 
             value=$(echo "$value" | sed 's/\\/\\\\/g; s/"/\\"/g')
             echo -n "    \"$key\": \"$value\""
-        done <<< "$config"
+        done <<<"$config"
 
         echo ""
         echo "  }"
         echo "}"
-    } > "$state_file"
+    } >"$state_file"
 
     __state_log__ "INFO" "State file created successfully: $state_file"
     echo "State saved: $state_file"
@@ -457,7 +456,7 @@ __state_restore_ct__() {
             __state_log__ "WARN" "Failed to set $key=$value"
             echo "Warning: Failed to set $key=$value" >&2
         fi
-    done <<< "$config"
+    done <<<"$config"
 
     __state_log__ "INFO" "CT $ctid restored from state: $state_name"
     echo "CT $ctid restored from state: $state_name"
@@ -512,11 +511,11 @@ __state_compare_ct__() {
             echo "Changed: $key"
             echo "  Current: $current_value"
             echo "  Saved:   $saved_value"
-            ((differences++))
+            ((differences += 1))
         fi
-    done <<< "$saved_config"
+    done <<<"$saved_config"
 
-    if (( differences == 0 )); then
+    if ((differences == 0)); then
         __state_log__ "INFO" "No differences found"
         echo "No differences found"
         return 0
@@ -548,7 +547,7 @@ __state_export_ct__() {
 
     local temp_state="export_$(date +%s)"
     __state_log__ "DEBUG" "__state_export_ct__: Creating temporary state: $temp_state"
-    __state_save_ct__ "$ctid" "$temp_state" > /dev/null || return 1
+    __state_save_ct__ "$ctid" "$temp_state" >/dev/null || return 1
 
     local state_file="${STATE_DIR}/ct_${ctid}_${temp_state}.json"
     __state_log__ "DEBUG" "__state_export_ct__: Copying to output file"
@@ -584,22 +583,22 @@ __state_save_bulk__() {
     local success=0
     local failed=0
 
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         __state_log__ "DEBUG" "__state_save_bulk__: Processing ID $id"
         if [[ "$type" == "vm" ]]; then
             if __state_save_vm__ "$id" "$state_name" 2>/dev/null; then
-                ((success++))
+                ((success += 1))
                 __state_log__ "DEBUG" "__state_save_bulk__: VM $id saved successfully"
             else
-                ((failed++))
+                ((failed += 1))
                 __state_log__ "DEBUG" "__state_save_bulk__: VM $id save failed"
             fi
         elif [[ "$type" == "ct" ]]; then
             if __state_save_ct__ "$id" "$state_name" 2>/dev/null; then
-                ((success++))
+                ((success += 1))
                 __state_log__ "DEBUG" "__state_save_bulk__: CT $id saved successfully"
             else
-                ((failed++))
+                ((failed += 1))
                 __state_log__ "DEBUG" "__state_save_bulk__: CT $id save failed"
             fi
         fi
@@ -608,7 +607,7 @@ __state_save_bulk__() {
     __state_log__ "INFO" "Bulk state save complete: $success succeeded, $failed failed"
     echo "Bulk state save complete: $success succeeded, $failed failed"
 
-    if (( failed > 0 )); then
+    if ((failed > 0)); then
         return 1
     else
         return 0
@@ -641,22 +640,22 @@ __state_restore_bulk__() {
     local success=0
     local failed=0
 
-    for ((id=start_id; id<=end_id; id++)); do
+    for ((id = start_id; id <= end_id; id++)); do
         __state_log__ "DEBUG" "__state_restore_bulk__: Processing ID $id"
         if [[ "$type" == "vm" ]]; then
             if __state_restore_vm__ "$id" "$state_name" $force_flag 2>/dev/null; then
-                ((success++))
+                ((success += 1))
                 __state_log__ "DEBUG" "__state_restore_bulk__: VM $id restored successfully"
             else
-                ((failed++))
+                ((failed += 1))
                 __state_log__ "DEBUG" "__state_restore_bulk__: VM $id restore failed"
             fi
         elif [[ "$type" == "ct" ]]; then
             if __state_restore_ct__ "$id" "$state_name" $force_flag 2>/dev/null; then
-                ((success++))
+                ((success += 1))
                 __state_log__ "DEBUG" "__state_restore_bulk__: CT $id restored successfully"
             else
-                ((failed++))
+                ((failed += 1))
                 __state_log__ "DEBUG" "__state_restore_bulk__: CT $id restore failed"
             fi
         fi
@@ -665,7 +664,7 @@ __state_restore_bulk__() {
     __state_log__ "INFO" "Bulk state restore complete: $success succeeded, $failed failed"
     echo "Bulk state restore complete: $success succeeded, $failed failed"
 
-    if (( failed > 0 )); then
+    if ((failed > 0)); then
         return 1
     else
         return 0
@@ -702,9 +701,9 @@ __state_snapshot_cluster__() {
     __state_log__ "DEBUG" "__state_snapshot_cluster__: Saving VM states"
     for vmid in $vm_ids; do
         if __state_save_vm__ "$vmid" "$state_name" &>/dev/null; then
-            ((vm_success++))
+            ((vm_success += 1))
         else
-            ((vm_failed++))
+            ((vm_failed += 1))
         fi
     done
 
@@ -712,9 +711,9 @@ __state_snapshot_cluster__() {
     __state_log__ "DEBUG" "__state_snapshot_cluster__: Saving CT states"
     for ctid in $ct_ids; do
         if __state_save_ct__ "$ctid" "$state_name" &>/dev/null; then
-            ((ct_success++))
+            ((ct_success += 1))
         else
-            ((ct_failed++))
+            ((ct_failed += 1))
         fi
     done
 
@@ -723,7 +722,7 @@ __state_snapshot_cluster__() {
     echo "  VMs: $vm_success succeeded, $vm_failed failed"
     echo "  CTs: $ct_success succeeded, $ct_failed failed"
 
-    if (( vm_failed > 0 || ct_failed > 0 )); then
+    if ((vm_failed > 0 || ct_failed > 0)); then
         return 1
     else
         return 0
@@ -854,7 +853,7 @@ __state_cleanup__() {
     local count=0
     find "$STATE_DIR" -name "*.json" -type f -mtime "+$days" 2>/dev/null | while read -r file; do
         rm -f "$file"
-        ((count++))
+        ((count += 1))
         __state_log__ "DEBUG" "__state_cleanup__: Deleted $(basename "$file")"
         echo "Deleted: $(basename "$file")"
     done
@@ -921,11 +920,11 @@ __state_diff__() {
             echo "Changed: $key"
             echo "  $state1: $value1"
             echo "  $state2: $value2"
-            ((differences++))
+            ((differences += 1))
         fi
-    done <<< "$all_keys"
+    done <<<"$all_keys"
 
-    if (( differences == 0 )); then
+    if ((differences == 0)); then
         __state_log__ "INFO" "No differences found between $state1 and $state2"
         echo "No differences found"
         return 0

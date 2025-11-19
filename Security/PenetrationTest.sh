@@ -23,8 +23,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
@@ -84,7 +82,7 @@ main() {
 
         if nmap -sV --script vuln "$host" 2>&1; then
             __ok__ "Scan completed: $host"
-            ((scanned++))
+            ((scanned += 1))
         else
             __warn__ "Scan failed: $host"
         fi
@@ -104,7 +102,6 @@ main "$@"
 # Testing status:
 #   - Updated to use utility functions
 #   - Pending validation
-
 
 # Testing status:
 #   - ArgumentParser.sh sourced (hybrid for "all" or variable hosts)

@@ -31,6 +31,8 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -53,11 +55,11 @@ echo "Using data source: '$GUAC_DATA_SOURCE'"
 ###############################################################################
 echo "Retrieving connection tree from Guacamole..."
 connectionsJson="$(curl -s -X GET \
-  "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
+    "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connectionGroups/ROOT/tree?token=${AUTH_TOKEN}")"
 
 if [[ -z "$connectionsJson" ]]; then
-  echo "Error: Could not retrieve connection tree from Guacamole."
-  exit 1
+    echo "Error: Could not retrieve connection tree from Guacamole."
+    exit 1
 fi
 
 ###############################################################################
@@ -65,7 +67,7 @@ fi
 ###############################################################################
 echo "Searching for RDP connections with names containing '$SEARCH_SUBSTRING'..."
 matchingConnections=$(echo "$connectionsJson" | jq -r \
-  --arg SUBSTR "$SEARCH_SUBSTRING" '
+    --arg SUBSTR "$SEARCH_SUBSTRING" '
     [ (.childConnections // [])[]
       | select(.name | test($SUBSTR; "i"))
       | select(.protocol == "rdp")
@@ -74,8 +76,8 @@ matchingConnections=$(echo "$connectionsJson" | jq -r \
 
 # Check if any matches were found.
 if [[ "$(echo "$matchingConnections" | jq 'length')" -eq 0 ]]; then
-  echo "No RDP connections found matching '$SEARCH_SUBSTRING'."
-  exit 0
+    echo "No RDP connections found matching '$SEARCH_SUBSTRING'."
+    exit 0
 fi
 
 echo "Found matching RDP connections:"
@@ -96,16 +98,16 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 
     # Retrieve the full connection JSON.
     connectionInfo=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ -z "$connectionInfo" ]]; then
-      echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
-      continue
+        echo "  Error: Could not retrieve details for connection ID '$connId'. Skipping."
+        continue
     fi
 
     # Retrieve existing parameters.
     existingParams=$(curl -s -X GET \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}/parameters?token=${AUTH_TOKEN}")
 
     # Default to an empty object if no parameters are returned.
     existingParams=$(echo "$existingParams" | jq 'if . == null then {} else . end')
@@ -117,10 +119,10 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 
     # Build new parameters by updating/adding SFTP settings.
     newParams=$(echo "$existingParams" | jq --arg sftpRoot "$SFTP_ROOT" \
-                                             --arg sftpPort "$SFTP_PORT" \
-                                             --arg currentHostname "$current_hostname" \
-                                             --arg sftpPassword "$current_password" \
-                                             --arg sftpUsername "$current_username" '
+        --arg sftpPort "$SFTP_PORT" \
+        --arg currentHostname "$current_hostname" \
+        --arg sftpPassword "$current_password" \
+        --arg sftpUsername "$current_username" '
         .["sftp-directory"]     = $sftpRoot |
         .["sftp-root-directory"] = $sftpRoot |
         .["sftp-hostname"]       = $currentHostname |
@@ -143,9 +145,9 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 
     # Send the updated JSON via a PUT request to update the connection.
     updateResponse=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-      -H "Content-Type: application/json" \
-      -d "$updatedJson" \
-      "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
+        -H "Content-Type: application/json" \
+        -d "$updatedJson" \
+        "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections/${connId}?token=${AUTH_TOKEN}")
 
     if [[ "$updateResponse" -eq 200 || "$updateResponse" -eq 204 ]]; then
         echo "  Successfully updated SFTP parameters for connection '$connId'."

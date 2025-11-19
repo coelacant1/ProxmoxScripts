@@ -40,11 +40,8 @@
 #   - show_top_comments
 #   - show_script_usage
 #   - display_path
-#   - show_common_footer (polymorphic menu system)
-#   - process_common_input (polymorphic menu system)
-#   - run_script
-#   - run_script_local
-#   - run_script_remote
+#   - show_common_footer
+#   - process_common_input
 #   - select_execution_mode
 #   - configure_single_remote
 #   - configure_multi_remote
@@ -52,12 +49,14 @@
 #   - configure_multi_ip_range
 #   - configure_multi_vmid_range
 #   - manage_nodes_menu
+#   - run_script
+#   - run_script_local
+#   - run_script_remote
 #   - settings_menu
 #   - update_scripts
 #   - change_branch
 #   - view_branches
 #   - navigate
-#
 #
 
 set -euo pipefail
@@ -71,19 +70,19 @@ CLEAR_LOGS=false
 REMOTE_LOG_LEVEL="INFO"
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -c|--clear-logs)
+        -c | --clear-logs)
             CLEAR_LOGS=true
             shift
             ;;
-        -d|--debug)
+        -d | --debug)
             REMOTE_LOG_LEVEL="DEBUG"
             shift
             ;;
-        -v|--verbose)
+        -v | --verbose)
             REMOTE_LOG_LEVEL="INFO"
             shift
             ;;
-        -q|--quiet)
+        -q | --quiet)
             REMOTE_LOG_LEVEL="ERROR"
             shift
             ;;
@@ -102,7 +101,7 @@ while [[ $# -gt 0 ]]; do
             __show_manual__ "$1"
             exit 0
             ;;
-        -h|--help)
+        -h | --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
@@ -176,7 +175,7 @@ HELP_FLAG="--help"      # If your scripts support a help flag, we pass this
 LAST_SCRIPT=""          # The last script run
 LAST_OUTPUT=""          # Truncated output of the last script
 SHOW_HEADER="false"
-CURRENT_BRANCH="main"   # Default branch
+CURRENT_BRANCH="main" # Default branch
 BRANCH_FILE="$BASE_DIR/.current_branch"
 
 # Configuration managed by ConfigManager.sh utility
@@ -188,7 +187,6 @@ BRANCH_FILE="$BASE_DIR/.current_branch"
 UTILITYPATH="./Utilities"
 source "${UTILITYPATH}/Colors.sh"
 source "${UTILITYPATH}/Communication.sh"
-source "${UTILITYPATH}/Logger.sh"
 source "${UTILITYPATH}/ManualViewer.sh"
 source "${UTILITYPATH}/Display.sh"
 source "${UTILITYPATH}/ConfigManager.sh"
@@ -205,7 +203,7 @@ fi
 # Configure logging for GUI
 export LOG_FILE="/tmp/gui_execution.log"
 export LOG_LEVEL="DEBUG"
-export LOG_CONSOLE=0  # Don't spam console, just log to file
+export LOG_CONSOLE=0 # Don't spam console, just log to file
 
 ###############################################################################
 # HEADER MANAGEMENT
@@ -241,15 +239,15 @@ show_ascii_art() {
     if [[ "$EXECUTION_MODE" != "local" ]]; then
         local log_level_color
         case "$REMOTE_LOG_LEVEL" in
-            DEBUG)   log_level_color="100 100 255" ;;
-            INFO)    log_level_color="0 255 0" ;;
-            WARN)    log_level_color="255 200 0" ;;
-            ERROR)   log_level_color="255 100 100" ;;
-            *)       log_level_color="150 150 150" ;;
+            DEBUG) log_level_color="100 100 255" ;;
+            INFO) log_level_color="0 255 0" ;;
+            WARN) log_level_color="255 200 0" ;;
+            ERROR) log_level_color="255 100 100" ;;
+            *) log_level_color="150 150 150" ;;
         esac
         __line_rgb__ "LOG LEVEL: $REMOTE_LOG_LEVEL" $log_level_color
     fi
-    
+
     # Show branch if not main
     if [[ "$CURRENT_BRANCH" != "main" ]]; then
         __line_rgb__ "BRANCH: $CURRENT_BRANCH" 255 200 100
@@ -298,14 +296,14 @@ display_path() {
 show_common_footer() {
     local back_option="${1:-b}"
     local exit_option="${2:-e}"
-    
+
     echo "Type 's' for settings (branch, updates)."
     echo "Type 'h' or '?' for manuals and help."
-    
+
     if [[ "$back_option" != "none" ]]; then
         echo "Type '$back_option' to go back."
     fi
-    
+
     if [[ "$exit_option" != "none" ]]; then
         echo "Type '$exit_option' to exit."
     fi
@@ -320,30 +318,30 @@ process_common_input() {
     local choice="$1"
     local back_option="${2:-b}"
     local exit_option="${3:-e}"
-    
+
     # Settings
     if [[ "$choice" == "s" ]]; then
         settings_menu
         return 0
     fi
-    
+
     # Help/Manual
     if [[ "$choice" == "h" ]] || [[ "$choice" == "?" ]]; then
         __manual_menu__
         return 0
     fi
-    
+
     # Back
     if [[ "$choice" == "$back_option" ]] && [[ "$back_option" != "none" ]]; then
-        return 0  # Caller should handle return/break
+        return 0 # Caller should handle return/break
     fi
-    
+
     # Exit
     if [[ "$choice" == "$exit_option" ]] && [[ "$exit_option" != "none" ]]; then
         echo "Exiting..."
         exit 0
     fi
-    
+
     # Not handled by common input
     return 1
 }
@@ -369,12 +367,12 @@ select_execution_mode() {
         echo
         echo "----------------------------------------"
         read -rp "Choice: " mode_choice
-        
+
         # Handle common inputs first
         if process_common_input "$mode_choice" "none" "e"; then
             continue
         fi
-        
+
         # Handle menu-specific inputs
         case "$mode_choice" in
             1)
@@ -409,67 +407,142 @@ configure_single_remote() {
         show_ascii_art
         echo "Available nodes from nodes.json:"
         echo "----------------------------------------"
-        
+
         local node_count
         node_count=$(__count_available_nodes__)
-        
+
         if [[ $node_count -eq 0 ]]; then
             echo "No nodes found in nodes.json"
             echo
             read -rp "Enter node IP manually: " manual_ip
             read -rp "Enter node name: " manual_name
+
+            # Check for SSH key auth automatically (test since not in nodes.json)
+            local has_keys=$(__has_ssh_keys__ "$manual_ip" "")
+            if [[ "$has_keys" == "true" ]]; then
+                echo
+                __line_rgb__ "SSH key authentication detected" 0 255 0
+                export USE_SSH_KEYS=true
+                __clear_remote_targets__
+                __add_remote_target__ "$manual_name" "$manual_ip" ""
+                __set_execution_mode__ "single-remote"
+                __success__ "Using SSH key authentication (no password needed)"
+                sleep 1
+                return 0
+            fi
+
+            echo
+            echo "SSH keys not detected, password required."
             read -rsp "Enter password: " manual_pass
             echo
-            
+
             __clear_remote_targets__
             __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass"
             __set_execution_mode__ "single-remote"
             return 0
         fi
-        
+
         local i=1
         declare -A node_menu=()
+        echo
         while IFS= read -r node_name; do
             local node_ip
             node_ip=$(__get_node_ip__ "$node_name")
-            __line_rgb__ "  $i) $node_name ($node_ip)" 0 200 200
+
+            # Check if SSH keys work for this node (use cache)
+            local key_indicator=""
+            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+            if [[ "$has_keys" == "true" ]]; then
+                key_indicator=" [SSH Key]"
+            else
+                key_indicator=" [No Key]"
+            fi
+
+            __line_rgb__ "  $i) $node_name ($node_ip) $key_indicator" 0 200 200
             node_menu[$i]="$node_name:$node_ip"
-            ((i++))
+            ((i += 1))
         done < <(__get_available_nodes__)
-        
+
+        echo
+        __line_rgb__ "[SSH Key] = SSH keys configured" 0 200 0
+        __line_rgb__ "[No Key]  = No SSH keys configured" 200 200 0
         echo
         echo "----------------------------------------"
         echo
         echo "Type 'm' to enter manually"
-        show_common_footer "b" "none"
+        echo "Type 'scan' to scan/update SSH key status"
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " node_choice
-        
+
         # Handle common inputs first
-        if process_common_input "$node_choice" "b" "none"; then
+        if process_common_input "$node_choice" "b" "e"; then
             if [[ "$node_choice" == "b" ]]; then
                 return 1
             fi
             continue
         fi
-        
+
+        # Handle scan request
+        if [[ "$node_choice" == "scan" ]]; then
+            clear
+            show_ascii_art
+            __scan_ssh_keys__
+            sleep 2
+            continue
+        fi
+
         # Handle menu-specific inputs
         if [[ "$node_choice" == "m" ]]; then
             read -rp "Enter node IP: " manual_ip
             read -rp "Enter node name: " manual_name
+
+            # Check for SSH key auth automatically (use cache)
+            local has_keys=$(__has_ssh_keys__ "$manual_ip" "")
+            if [[ "$has_keys" == "true" ]]; then
+                echo
+                __line_rgb__ "SSH key authentication detected" 0 255 0
+                export USE_SSH_KEYS=true
+                __clear_remote_targets__
+                __add_remote_target__ "$manual_name" "$manual_ip" ""
+                __set_execution_mode__ "single-remote"
+                __success__ "Using SSH key authentication (no password needed)"
+                sleep 1
+                return 0
+            fi
+
+            echo
+            echo "SSH keys not detected, password required."
             read -rsp "Enter password: " manual_pass
             echo
-            
+
             __clear_remote_targets__
             __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass"
             __set_execution_mode__ "single-remote"
             return 0
         elif [[ -n "$node_choice" && -n "${node_menu[$node_choice]:-}" ]]; then
-            IFS=':' read -r selected_name selected_ip <<< "${node_menu[$node_choice]}"
+            IFS=':' read -r selected_name selected_ip <<<"${node_menu[$node_choice]}"
+
+            # Check for SSH key auth automatically (use cache)
+            local has_keys=$(__has_ssh_keys__ "$selected_ip" "$selected_name")
+            if [[ "$has_keys" == "true" ]]; then
+                echo
+                __line_rgb__ "SSH key authentication detected" 0 255 0
+                export USE_SSH_KEYS=true
+                __clear_remote_targets__
+                __add_remote_target__ "$selected_name" "$selected_ip" ""
+                __set_execution_mode__ "single-remote"
+                __success__ "Using SSH key authentication (no password needed)"
+                sleep 1
+                return 0
+            fi
+
+            echo
+            echo "SSH keys not detected, password required."
             read -rsp "Enter password for $selected_name: " node_pass
             echo
-            
+
             __clear_remote_targets__
             __add_remote_target__ "$selected_name" "$selected_ip" "$node_pass"
             __set_execution_mode__ "single-remote"
@@ -488,24 +561,24 @@ configure_multi_remote() {
         echo "Multiple Remote Nodes Configuration:"
         echo "----------------------------------------"
         __line_rgb__ "1) Use saved nodes from nodes.json" 0 200 200
-        __line_rgb__ "2) IP range (e.g., 172.20.83.100-200)" 0 200 200
+        __line_rgb__ "2) IP range (e.g., 192.168.1.100-200)" 0 200 200
         __line_rgb__ "3) VMID range (queries Proxmox cluster)" 0 200 200
         echo
         echo "----------------------------------------"
         echo
-        show_common_footer "b" "none"
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " multi_choice
-        
+
         # Handle common inputs first
-        if process_common_input "$multi_choice" "b" "none"; then
+        if process_common_input "$multi_choice" "b" "e"; then
             if [[ "$multi_choice" == "b" ]]; then
                 return 1
             fi
             continue
         fi
-        
+
         case "$multi_choice" in
             1)
                 if configure_multi_saved; then
@@ -536,46 +609,68 @@ configure_multi_saved() {
         show_ascii_art
         echo "Available nodes from nodes.json:"
         echo "----------------------------------------"
-        echo
-        
+
         local node_count
         node_count=$(__count_available_nodes__)
-        
+
         if [[ $node_count -eq 0 ]]; then
             echo "No nodes configured. Add nodes first (option 'm')."
             sleep 2
             return 1
         fi
-        
+
         local i=1
         declare -A node_menu=()
+        echo
         while IFS= read -r node_name; do
             local node_ip
             node_ip=$(__get_node_ip__ "$node_name")
-            __line_rgb__ "  $i) $node_name ($node_ip)" 0 200 200
+
+            # Check if SSH keys work for this node (use cache)
+            local key_indicator=" [No Key]"
+            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+            if [[ "$has_keys" == "true" ]]; then
+                key_indicator=" [SSH Key]"
+            else
+                key_indicator=" [No Key]"
+            fi
+
+            __line_rgb__ "  $i) $node_name ($node_ip) $key_indicator" 0 200 200
             node_menu[$i]="$node_name:$node_ip"
-            ((i++))
+            ((i += 1))
         done < <(__get_available_nodes__)
-        
+
+        echo
+        __line_rgb__ "[SSH Key] = SSH keys configured" 0 200 0
+        __line_rgb__ "[No Key]  = No SSH keys configured" 200 200 0
         echo
         echo "----------------------------------------"
         echo
         echo "Enter node numbers (comma-separated, e.g., 1,3,5) or:"
-        echo "  'all' - select all nodes"
-        echo
-        show_common_footer "b" "none"
+        echo "Type 'all' to select all nodes"
+        echo "Type 'scan'   to scan/update SSH key status"
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
-        read -rp "Nodes: " node_selection
-        
+        read -rp "Selection: " node_selection
+
         # Handle common inputs first
-        if process_common_input "$node_selection" "b" "none"; then
+        if process_common_input "$node_selection" "b" "e"; then
             if [[ "$node_selection" == "b" ]]; then
                 return 1
             fi
             continue
         fi
-        
+
+        # Handle scan request
+        if [[ "$node_selection" == "scan" ]]; then
+            clear
+            show_ascii_art
+            __scan_ssh_keys__
+            sleep 2
+            continue
+        fi
+
         # Handle menu-specific inputs
         __clear_remote_targets__
         if [[ "$node_selection" == "all" ]]; then
@@ -585,7 +680,7 @@ configure_multi_saved() {
                 REMOTE_TARGETS+=("$node_name:$node_ip")
             done < <(__get_available_nodes__)
         else
-            IFS=',' read -ra selected_nodes <<< "$node_selection"
+            IFS=',' read -ra selected_nodes <<<"$node_selection"
             for num in "${selected_nodes[@]}"; do
                 num=$(echo "$num" | xargs)
                 if [[ -n "$num" && -n "${node_menu[$num]:-}" ]]; then
@@ -593,34 +688,88 @@ configure_multi_saved() {
                 fi
             done
         fi
-        
+
         if [[ ${#REMOTE_TARGETS[@]} -eq 0 ]]; then
             echo "No valid nodes selected!"
             sleep 2
-            continue  # Redisplay menu
+            continue # Redisplay menu
         fi
-        
+
         echo
         echo "Selected ${#REMOTE_TARGETS[@]} node(s)"
         echo
+
+        # Check if SSH keys are available (test first node)
+        if ssh -o BatchMode=yes -o ConnectTimeout=2 root@${REMOTE_TARGETS[0]##*:} echo "test" &>/dev/null 2>&1; then
+            # Verify all selected nodes have SSH keys configured
+            local all_have_keys=true
+            for target in "${REMOTE_TARGETS[@]}"; do
+                IFS=':' read -r node_name node_ip <<<"$target"
+                if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+                    all_have_keys=false
+                    break
+                fi
+            done
+
+            if [[ "$all_have_keys" == "true" ]]; then
+                echo
+                __line_rgb__ "SSH key authentication detected for all nodes" 0 255 0
+                export USE_SSH_KEYS=true
+                __success__ "Using SSH key authentication (no password needed)"
+                sleep 1
+                __set_execution_mode__ "multi-remote"
+                return 0
+            else
+                echo
+                __line_rgb__ "SSH keys work for some nodes, but not all" 255 165 0
+                echo
+                read -rp "Use SSH keys where available and passwords for others? [Y/n]: " use_mixed
+                if [[ ! "$use_mixed" =~ ^[Nn]$ ]]; then
+                    export USE_SSH_KEYS=true
+                    echo
+                    echo "Nodes needing passwords:"
+                    for target in "${REMOTE_TARGETS[@]}"; do
+                        IFS=':' read -r node_name node_ip <<<"$target"
+                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+                            echo "  - $node_name ($node_ip)"
+                        fi
+                    done
+                    echo
+                    for target in "${REMOTE_TARGETS[@]}"; do
+                        IFS=':' read -r node_name node_ip <<<"$target"
+                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+                            read -rsp "Enter password for $node_name: " node_pass
+                            echo
+                            NODE_PASSWORDS["$node_name"]="$node_pass"
+                        else
+                            NODE_PASSWORDS["$node_name"]="" # Empty = use SSH keys
+                        fi
+                    done
+                    __set_execution_mode__ "multi-remote"
+                    return 0
+                fi
+            fi
+        fi
+
+        # No SSH keys detected, use passwords
         read -rp "Same password for all nodes? [y/N]: " same_pass
-        
+
         if [[ "$same_pass" =~ ^[Yy]$ ]]; then
             read -rsp "Enter password for all nodes: " shared_pass
             echo
             for target in "${REMOTE_TARGETS[@]}"; do
-                IFS=':' read -r node_name node_ip <<< "$target"
+                IFS=':' read -r node_name node_ip <<<"$target"
                 NODE_PASSWORDS["$node_name"]="$shared_pass"
             done
         else
             for target in "${REMOTE_TARGETS[@]}"; do
-                IFS=':' read -r node_name node_ip <<< "$target"
+                IFS=':' read -r node_name node_ip <<<"$target"
                 read -rsp "Enter password for $node_name ($node_ip): " node_pass
                 echo
                 NODE_PASSWORDS["$node_name"]="$node_pass"
             done
         fi
-        
+
         __set_execution_mode__ "multi-remote"
         return 0
     done
@@ -632,50 +781,50 @@ configure_multi_ip_range() {
     echo "Temporary IP Range Configuration:"
     echo "----------------------------------------"
     echo
-    echo "Enter IP range in format: 172.20.83.100-200"
+    echo "Enter IP range in format: 192.168.1.100-200"
     echo "(Base IP with range of last octet)"
     echo
     read -rp "IP Range: " ip_range
-    
+
     if [[ -z "$ip_range" ]]; then
         return 1
     fi
-    
-    # Parse IP range (e.g., 172.20.83.100-200)
+
+    # Parse IP range (e.g., 192.168.1.100-200)
     if [[ ! "$ip_range" =~ ^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)([0-9]{1,3})-([0-9]{1,3})$ ]]; then
         echo "Error: Invalid IP range format"
-        echo "Expected format: 172.20.83.100-200"
+        echo "Expected format: 192.168.1.100-200"
         sleep 2
         return 1
     fi
-    
+
     local base_ip="${BASH_REMATCH[1]}"
     local start_octet="${BASH_REMATCH[2]}"
     local end_octet="${BASH_REMATCH[3]}"
-    
+
     if [[ $start_octet -gt $end_octet ]]; then
         echo "Error: Start IP must be less than or equal to end IP"
         sleep 2
         return 1
     fi
-    
+
     echo
     read -rsp "Enter password for all nodes in range: " shared_pass
     echo
-    
+
     # Build targets
     __clear_remote_targets__
-    for ((octet=start_octet; octet<=end_octet; octet++)); do
+    for ((octet = start_octet; octet <= end_octet; octet++)); do
         local ip="${base_ip}${octet}"
         local node_name="temp-${ip//\./-}"
         REMOTE_TARGETS+=("$node_name:$ip")
         NODE_PASSWORDS["$node_name"]="$shared_pass"
     done
-    
+
     echo
     echo "Configured ${#REMOTE_TARGETS[@]} temporary nodes"
     sleep 1
-    
+
     __set_execution_mode__ "multi-remote"
     return 0
 }
@@ -689,66 +838,66 @@ configure_multi_vmid_range() {
     echo "This will query a Proxmox host to find VM/LXC IPs by VMID range"
     echo
     read -rp "Proxmox host IP to query: " query_host
-    
+
     if [[ -z "$query_host" ]]; then
         return 1
     fi
-    
+
     read -rp "Start VMID: " start_vmid
     read -rp "End VMID: " end_vmid
-    
+
     if [[ ! "$start_vmid" =~ ^[0-9]+$ ]] || [[ ! "$end_vmid" =~ ^[0-9]+$ ]]; then
         echo "Error: VMIDs must be numbers"
         sleep 2
         return 1
     fi
-    
+
     if [[ $start_vmid -gt $end_vmid ]]; then
         echo "Error: Start VMID must be less than or equal to end VMID"
         sleep 2
         return 1
     fi
-    
+
     echo
     read -rsp "Enter password for query host: " query_pass
     echo
     read -rsp "Enter password for all target nodes: " shared_pass
     echo
-    
+
     echo
     echo "Querying Proxmox host for VMIDs ${start_vmid}-${end_vmid}..."
-    
+
     # Query the Proxmox host for IPs
     __clear_remote_targets__
     local found_count=0
-    
-    for ((vmid=start_vmid; vmid<=end_vmid; vmid++)); do
+
+    for ((vmid = start_vmid; vmid <= end_vmid; vmid++)); do
         # Query for VM/LXC IP address
         local ip=$(sshpass -p "$query_pass" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             root@"$query_host" \
             "pvesh get /nodes/\$(hostname)/qemu/$vmid/agent/network-get-interfaces 2>/dev/null | grep -oP '(?<=\"ip-address\":\")[^\"]*' | grep -v '^127\\.' | grep -v '^::' | head -n1 || \
              pvesh get /nodes/\$(hostname)/lxc/$vmid/interfaces 2>/dev/null | grep -oP '(?<=inet )[0-9.]+' | head -n1" 2>/dev/null)
-        
+
         if [[ -n "$ip" ]]; then
             local node_name="vmid-$vmid"
             REMOTE_TARGETS+=("$node_name:$ip")
             NODE_PASSWORDS["$node_name"]="$shared_pass"
             echo "  Found VMID $vmid: $ip"
-            ((found_count++))
+            ((found_count += 1))
         fi
     done
-    
+
     if [[ $found_count -eq 0 ]]; then
         echo
         echo "No VMs/LXCs found in VMID range $start_vmid-$end_vmid"
         sleep 2
         return 1
     fi
-    
+
     echo
     echo "Configured $found_count temporary nodes from VMIDs"
     sleep 2
-    
+
     __set_execution_mode__ "multi-remote"
     return 0
 }
@@ -762,22 +911,22 @@ manage_nodes_menu() {
         __line_rgb__ "1) List nodes" 0 200 200
         __line_rgb__ "2) Add node" 0 200 200
         __line_rgb__ "3) Remove node" 0 200 200
-        echo 
+        echo
         echo "----------------------------------------"
         echo
-        show_common_footer "b" "none"
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " mgmt_choice
-        
+
         # Handle common inputs first
-        if process_common_input "$mgmt_choice" "b" "none"; then
+        if process_common_input "$mgmt_choice" "b" "e"; then
             if [[ "$mgmt_choice" == "b" ]]; then
                 return 0
             fi
             continue
         fi
-        
+
         # Handle menu-specific inputs
         case "$mgmt_choice" in
             1)
@@ -797,12 +946,12 @@ manage_nodes_menu() {
                 echo
                 read -rp "Node name: " new_name
                 read -rp "Node IP: " new_ip
-                
+
                 if command -v jq &>/dev/null; then
                     jq --arg name "$new_name" --arg ip "$new_ip" \
                         '.nodes += [{"name": $name, "ip": $ip}]' \
-                        "$NODES_FILE" > "${NODES_FILE}.tmp" && \
-                        mv "${NODES_FILE}.tmp" "$NODES_FILE"
+                        "$NODES_FILE" >"${NODES_FILE}.tmp" \
+                        && mv "${NODES_FILE}.tmp" "$NODES_FILE"
                     AVAILABLE_NODES["$new_name"]="$new_ip"
                     echo "Added $new_name"
                 else
@@ -818,18 +967,18 @@ manage_nodes_menu() {
                 for node_name in "${!AVAILABLE_NODES[@]}"; do
                     echo "  $i) $node_name"
                     remove_menu[$i]="$node_name"
-                    ((i++))
+                    ((i += 1))
                 done
                 echo
                 read -rp "Remove node number: " remove_num
-                
+
                 if [[ -n "${remove_menu[$remove_num]}" ]]; then
                     remove_name="${remove_menu[$remove_num]}"
                     if command -v jq &>/dev/null; then
                         jq --arg name "$remove_name" \
                             '.nodes = [.nodes[] | select(.name != $name)]' \
-                            "$NODES_FILE" > "${NODES_FILE}.tmp" && \
-                            mv "${NODES_FILE}.tmp" "$NODES_FILE"
+                            "$NODES_FILE" >"${NODES_FILE}.tmp" \
+                            && mv "${NODES_FILE}.tmp" "$NODES_FILE"
                         unset AVAILABLE_NODES["$remove_name"]
                         echo "Removed $remove_name"
                     else
@@ -851,7 +1000,7 @@ manage_nodes_menu() {
 ###############################################################################
 run_script() {
     local script_path="$1"
-    
+
     if [[ "$EXECUTION_MODE" == "local" ]]; then
         run_script_local "$script_path"
     else
@@ -927,41 +1076,41 @@ run_script_local() {
 
 run_script_remote() {
     local script_path="$1"
-    
+
     clear
     show_ascii_art
-    
+
     local display_path_result
     display_path_result=$(display_path "$script_path") || {
         echo "Error: Failed to get display path"
         return 1
     }
-    
+
     set +e
     __display_script_info__ "$script_path" "$display_path_result"
     set -e
-    
+
     # Prompt for parameters
     local param_line=""
     if ! __prompt_for_params__ "$display_path_result"; then
         return
     fi
-    
+
     echo
     echo "Selected script: $(display_path "$script_path")"
     if [[ -n "$param_line" ]]; then
         echo "Parameters: $param_line"
     fi
     echo
-    
+
     # Get relative script path and directory
     local script_relative="${script_path#$BASE_DIR/}"
     local script_dir_relative
     script_dir_relative=$(dirname "$script_relative")
-    
+
     # Execute on remote target(s)
     __execute_remote_script__ "$script_path" "$display_path_result" "$script_relative" "$script_dir_relative" "$param_line"
-    
+
     echo
     __line_rgb__ "Press Enter to continue." 0 255 0
     read -r
@@ -983,19 +1132,19 @@ settings_menu() {
         echo
         echo "----------------------------------------"
         echo
-        show_common_footer "b" "none"
+        show_common_footer "b" "e"
         echo
         echo "----------------------------------------"
         read -rp "Choice: " settings_choice
-        
+
         # Handle common inputs first
-        if process_common_input "$settings_choice" "b" "none"; then
+        if process_common_input "$settings_choice" "b" "e"; then
             if [[ "$settings_choice" == "b" ]]; then
                 return 0
             fi
             continue
         fi
-        
+
         # Handle menu-specific inputs
         case "$settings_choice" in
             1)
@@ -1026,40 +1175,40 @@ update_scripts() {
     echo "Any local modifications will be overwritten."
     echo
     read -rp "Continue with update? [y/N]: " confirm
-    
+
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "Update cancelled."
         sleep 1
         return
     fi
-    
+
     echo
     echo "Checking dependencies..."
-    
+
     # Check for required tools
     local missing_tools=()
     command -v wget &>/dev/null || missing_tools+=("wget")
     command -v unzip &>/dev/null || missing_tools+=("unzip")
-    
+
     if [[ ${#missing_tools[@]} -gt 0 ]]; then
         echo "Missing required tools: ${missing_tools[*]}"
         echo "Please install them first."
         sleep 3
         return
     fi
-    
+
     echo "Downloading ProxmoxScripts (branch: $CURRENT_BRANCH)..."
-    
+
     local REPO_ZIP_URL="https://github.com/coelacant1/ProxmoxScripts/archive/refs/heads/${CURRENT_BRANCH}.zip"
     local TEMP_DIR=$(mktemp -d)
-    
+
     if ! wget -q -O "$TEMP_DIR/repo.zip" "$REPO_ZIP_URL"; then
         echo "Error: Failed to download from $REPO_ZIP_URL"
         rm -rf "$TEMP_DIR"
         sleep 3
         return
     fi
-    
+
     echo "Extracting..."
     if ! unzip -q "$TEMP_DIR/repo.zip" -d "$TEMP_DIR"; then
         echo "Error: Failed to extract repository"
@@ -1067,21 +1216,21 @@ update_scripts() {
         sleep 3
         return
     fi
-    
+
     local EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d ! -name ".*" | head -n1)
-    
+
     if [ -z "$EXTRACTED_DIR" ]; then
         echo "Error: No extracted content found"
         rm -rf "$TEMP_DIR"
         sleep 3
         return
     fi
-    
+
     echo "Updating files..."
-    
+
     # Remove old files but preserve .current_branch
     find "$BASE_DIR" -mindepth 1 ! -name ".current_branch" ! -name ".git" -delete 2>/dev/null || true
-    
+
     # Move new files
     if ! mv "$EXTRACTED_DIR"/* "$BASE_DIR/" 2>/dev/null; then
         echo "Error: Failed to move files"
@@ -1089,17 +1238,17 @@ update_scripts() {
         sleep 3
         return
     fi
-    
+
     # Move hidden files (ignore errors)
     mv "$EXTRACTED_DIR"/.[!.]* "$BASE_DIR/" 2>/dev/null || true
-    
+
     # Make scripts executable
     echo "Making scripts executable..."
     find "$BASE_DIR" -type f -name "*.sh" -exec chmod +x {} \;
-    
+
     # Cleanup
     rm -rf "$TEMP_DIR"
-    
+
     echo
     __line_rgb__ "Update completed successfully!" 0 255 0
     echo "Press Enter to continue..."
@@ -1119,21 +1268,21 @@ change_branch() {
     echo
     echo "Enter branch name (or 'b' to cancel):"
     read -r new_branch
-    
+
     if [[ "$new_branch" == "b" ]] || [[ -z "$new_branch" ]]; then
         return
     fi
-    
+
     # Save the branch preference
-    echo "$new_branch" > "$BRANCH_FILE"
+    echo "$new_branch" >"$BRANCH_FILE"
     CURRENT_BRANCH="$new_branch"
-    
+
     echo
     __line_rgb__ "Branch changed to: $CURRENT_BRANCH" 0 255 0
     echo
     echo "Would you like to update scripts to this branch now? [y/N]:"
     read -r update_now
-    
+
     if [[ "$update_now" =~ ^[Yy]$ ]]; then
         update_scripts
     else
@@ -1149,12 +1298,12 @@ view_branches() {
     echo "----------------------------------------"
     echo "Fetching branch information from GitHub..."
     echo
-    
+
     # Try to fetch branches using GitHub API
     if command -v curl &>/dev/null && command -v grep &>/dev/null; then
         local branches
         branches=$(curl -s "https://api.github.com/repos/coelacant1/ProxmoxScripts/branches" | grep '"name":' | cut -d'"' -f4)
-        
+
         if [[ -n "$branches" ]]; then
             echo "Available branches:"
             echo "$branches" | while read -r branch; do
@@ -1174,7 +1323,7 @@ view_branches() {
         echo "  - main (stable)"
         echo "  - testing (beta)"
     fi
-    
+
     echo
     echo "----------------------------------------"
     echo "Press Enter to continue..."
@@ -1207,7 +1356,7 @@ navigate() {
             local dname="$(basename "$d")"
             __line_rgb__ "$index) $dname/" 0 200 200
             menu_map[$index]="$d"
-            ((index++))
+            ((index += 1))
         done
 
         # List scripts
@@ -1216,7 +1365,7 @@ navigate() {
             sname="$(basename "$s")"
             __line_rgb__ "$index) $sname" 100 200 100
             menu_map[$index]="$s"
-            ((index++))
+            ((index += 1))
         done
 
         echo
@@ -1278,7 +1427,7 @@ navigate() {
                 echo "Note: All output is always saved to log files regardless of level"
                 echo
                 read -rp "Choice (1-4): " log_choice
-                
+
                 case "$log_choice" in
                     1) REMOTE_LOG_LEVEL="DEBUG" ;;
                     2) REMOTE_LOG_LEVEL="INFO" ;;
@@ -1289,7 +1438,7 @@ navigate() {
                         sleep 1
                         ;;
                 esac
-                
+
                 if [[ "$log_choice" =~ ^[1-4]$ ]]; then
                     __line_rgb__ "Log level set to: $REMOTE_LOG_LEVEL" 0 255 0
                     sleep 1
@@ -1349,7 +1498,7 @@ find . -type f -name "*.sh" -exec chmod +x {} \;
 while true; do
     # Select execution mode
     select_execution_mode
-    
+
     # Navigate scripts - loops back automatically when user presses 'b' at root
     navigate "$BASE_DIR"
 done

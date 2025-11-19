@@ -22,6 +22,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -48,7 +50,7 @@ main() {
 
     __warn__ "DESTRUCTIVE: This will remove cluster configuration from this node"
     __warn__ "This operation cannot be undone"
-    
+
     # Safety check: Require --force in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
         __err__ "Destructive operation requires --force flag in non-interactive mode"

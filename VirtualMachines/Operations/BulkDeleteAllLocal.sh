@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - delete_vm_callback
 #
 
 set -euo pipefail
@@ -54,7 +53,7 @@ main() {
 
     # Convert to array
     local -a vm_array
-    read -r -a vm_array <<< "$vm_ids"
+    read -r -a vm_array <<<"$vm_ids"
 
     __warn__ "This will permanently delete ${#vm_array[@]} VM(s) on this node:"
     echo "$vm_ids"
@@ -85,9 +84,9 @@ main() {
     BULK_OPERATION_NAME="Delete"
     for vmid in "${vm_array[@]}"; do
         if delete_vm_callback "$vmid"; then
-            ((BULK_SUCCESS++))
+            ((BULK_SUCCESS += 1))
         else
-            ((BULK_FAILED++))
+            ((BULK_FAILED += 1))
             BULK_FAILED_IDS+=("$vmid")
         fi
     done

@@ -44,21 +44,21 @@ __check_proxmox__
 # Usage
 ###############################################################################
 usage() {
-  cat <<-USAGE
-Usage: ${0##*/} <vmid> <cores> [--memory MB] [--verbose]
+    cat <<-USAGE
+		Usage: ${0##*/} <vmid> <cores> [--memory MB] [--verbose]
 
-Arguments:
-  vmid     - VM ID (numeric)
-  cores    - Number of CPU cores (numeric)
+		Arguments:
+		  vmid     - VM ID (numeric)
+		  cores    - Number of CPU cores (numeric)
 
-Options:
-  --memory MB    - Memory in MB (default: 2048)
-  --verbose      - Enable verbose output
+		Options:
+		  --memory MB    - Memory in MB (default: 2048)
+		  --verbose      - Enable verbose output
 
-Examples:
-  ${0##*/} 100 4
-  ${0##*/} 100 4 --memory 2048 --verbose
-USAGE
+		Examples:
+		  ${0##*/} 100 4
+		  ${0##*/} 100 4 --memory 2048 --verbose
+	USAGE
 }
 
 ###############################################################################
@@ -66,18 +66,18 @@ USAGE
 ###############################################################################
 # Method 1: Using positional parser for required args
 if [[ $# -lt 2 ]]; then
-  echo "Error: Missing required arguments." >&2
-  usage
-  exit 1
+    echo "Error: Missing required arguments." >&2
+    usage
+    exit 1
 fi
 
 # Parse positional arguments (vmid, cores)
 if ! __parse_positional_args__ \
     "VMID:numeric:required CORES:numeric:required" \
     "$1" "$2"; then
-  echo "Error: Invalid arguments." >&2
-  usage
-  exit 1
+    echo "Error: Invalid arguments." >&2
+    usage
+    exit 1
 fi
 shift 2
 
@@ -85,26 +85,26 @@ shift 2
 if ! __parse_named_args__ \
     "MEMORY:--memory:numeric:optional:2048 VERBOSE:--verbose:boolean:optional:false" \
     "$@"; then
-  echo "Error: Invalid options." >&2
-  usage
-  exit 1
+    echo "Error: Invalid options." >&2
+    usage
+    exit 1
 fi
 
 # Additional validation with range checking
 if ! __validate_range__ "$CORES" "1" "128" "cores"; then
-  exit 1
+    exit 1
 fi
 
 if ! __validate_range__ "$MEMORY" "512" "524288" "memory"; then
-  exit 1
+    exit 1
 fi
 
 ###############################################################################
 # Functions
 ###############################################################################
 cleanup() {
-  # called on exit to clean temporary files, stop spinners, etc.
-  __stop_spin__ 2>/dev/null || true
+    # called on exit to clean temporary files, stop spinners, etc.
+    __stop_spin__ 2>/dev/null || true
 }
 
 trap cleanup EXIT
@@ -113,30 +113,30 @@ trap cleanup EXIT
 # MAIN
 ###############################################################################
 main() {
-  __info__ "Starting: ${0##*/}"
+    __info__ "Starting: ${0##*/}"
 
-  if [[ "$VERBOSE" == "true" ]]; then
-    __update__ "Configuration: VMID=$VMID, Cores=$CORES, Memory=$MEMORY MB"
-  fi
+    if [[ "$VERBOSE" == "true" ]]; then
+        __update__ "Configuration: VMID=$VMID, Cores=$CORES, Memory=$MEMORY MB"
+    fi
 
-  # Example work with parsed arguments
-  __update__ "Configuring VM ${VMID} with ${CORES} cores and ${MEMORY}MB memory..."
-  sleep 1
+    # Example work with parsed arguments
+    __update__ "Configuring VM ${VMID} with ${CORES} cores and ${MEMORY}MB memory..."
+    sleep 1
 
-  # Simulated operation
-  if [[ "$VMID" -lt 100 ]]; then
-    __err__ "VMID must be 100 or greater"
-    exit 1
-  fi
+    # Simulated operation
+    if [[ "$VMID" -lt 100 ]]; then
+        __err__ "VMID must be 100 or greater"
+        exit 1
+    fi
 
-  # Example: Using qm to configure VM (uncomment in production)
-  # qm set "$VMID" --cores "$CORES" --memory "$MEMORY"
+    # Example: Using qm to configure VM (uncomment in production)
+    # qm set "$VMID" --cores "$CORES" --memory "$MEMORY"
 
-  if [[ "$VERBOSE" == "true" ]]; then
-    __update__ "Configuration applied successfully"
-  fi
+    if [[ "$VERBOSE" == "true" ]]; then
+        __update__ "Configuration applied successfully"
+    fi
 
-  __ok__ "Finished: ${0##*/}"
+    __ok__ "Finished: ${0##*/}"
 }
 
 main

@@ -41,6 +41,7 @@
 #     - log        -> log_file, log_path, log_level
 #
 # Function Index:
+#   - __argparser_log__
 #   - __parse_args__
 #   - __validate_value__
 #   - __generate_help__
@@ -72,8 +73,6 @@
 #   - __validate_email__
 #   - __validate_string__
 #
-
-set -euo pipefail
 
 # Source Logger for structured logging
 if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
@@ -159,7 +158,7 @@ __argparser_log__() {
 __parse_args__() {
     local spec="$1"
     shift
-    
+
     __argparser_log__ "DEBUG" "=== ArgumentParser Start ==="
     __argparser_log__ "DEBUG" "Spec: $spec"
     __argparser_log__ "DEBUG" "Arguments ($#): $*"
@@ -180,7 +179,7 @@ __parse_args__() {
     declare -A FLAG_DEFAULTS=()
 
     __argparser_log__ "DEBUG" "Parsing specification..."
-    
+
     # Parse specification
     for item in $spec; do
         local name type default optional
@@ -193,7 +192,7 @@ __parse_args__() {
 
             # Split name:type:default
             if [[ "$name" =~ : ]]; then
-                IFS=':' read -r name type default <<< "$name"
+                IFS=':' read -r name type default <<<"$name"
             else
                 type="flag"
                 default=""
@@ -212,7 +211,7 @@ __parse_args__() {
             FLAG_NAMES["--${name}"]="${name^^}"
             FLAG_TYPES["--${name}"]="$type"
             FLAG_DEFAULTS["--${name}"]="$default"
-            
+
             # Check for reserved variable name conflicts
             local var_name="${name^^}"
             for reserved in "${CRITICAL_RESERVED[@]}"; do
@@ -224,7 +223,7 @@ __parse_args__() {
                     return 1
                 fi
             done
-            
+
             __argparser_log__ "DEBUG" "Registered flag: --${name} -> ${name^^} (type: $type, optional: $optional)"
 
             # Initialize variable
@@ -240,7 +239,7 @@ __parse_args__() {
 
             # Split name:type:default
             if [[ "$name" =~ : ]]; then
-                IFS=':' read -r name type default <<< "$name"
+                IFS=':' read -r name type default <<<"$name"
             else
                 type="string"
                 default=""
@@ -259,7 +258,7 @@ __parse_args__() {
             POSITIONAL_NAMES+=("$name")
             POSITIONAL_TYPES+=("$type")
             POSITIONAL_DEFAULTS+=("$default")
-            
+
             # Check for reserved variable name conflicts
             local var_name="${name^^}"
             for reserved in "${CRITICAL_RESERVED[@]}"; do
@@ -271,11 +270,11 @@ __parse_args__() {
                     return 1
                 fi
             done
-            
+
             __argparser_log__ "DEBUG" "Registered positional: $name (type: $type, optional: $optional)"
         fi
     done
-    
+
     __argparser_log__ "DEBUG" "Spec parsing complete. Positionals: ${#POSITIONAL_NAMES[@]}, Flags: ${#FLAG_NAMES[@]}"
     __argparser_log__ "DEBUG" "Processing arguments..."
 
@@ -295,7 +294,7 @@ __parse_args__() {
         # Check if it's a flag
         if [[ "$arg" =~ ^-- ]]; then
             local flag_name="${FLAG_NAMES[$arg]:-}"
-            
+
             __argparser_log__ "DEBUG" "Detected flag: $arg"
 
             if [[ -z "$flag_name" ]]; then
@@ -336,7 +335,7 @@ __parse_args__() {
         else
             # Positional argument
             __argparser_log__ "DEBUG" "Detected positional argument at index $positional_index"
-            
+
             if [[ $positional_index -ge ${#POSITIONAL_NAMES[@]} ]]; then
                 __argparser_log__ "ERROR" "Too many positional arguments"
                 return 1
@@ -344,7 +343,7 @@ __parse_args__() {
 
             local pos_name="${POSITIONAL_NAMES[$positional_index]^^}"
             local pos_type="${POSITIONAL_TYPES[$positional_index]}"
-            
+
             __argparser_log__ "DEBUG" "Positional: ${POSITIONAL_NAMES[$positional_index]} -> $pos_name (type: $pos_type)"
             __argparser_log__ "DEBUG" "Value: '$arg'"
 
@@ -356,16 +355,16 @@ __parse_args__() {
 
             eval "${pos_name}='${arg}'"
             __argparser_log__ "DEBUG" "Set positional: $pos_name='$arg'"
-            ((positional_index++)) || true
+            ((positional_index += 1)) || true
             shift
         fi
     done
-    
+
     __argparser_log__ "DEBUG" "Argument processing complete"
     __argparser_log__ "DEBUG" "=== ArgumentParser Success ==="
 
     # Check if all required positional arguments were provided
-    for (( i=$positional_index; i<${#POSITIONAL_NAMES[@]}; i++ )); do
+    for ((i = $positional_index; i < ${#POSITIONAL_NAMES[@]}; i++)); do
         local default="${POSITIONAL_DEFAULTS[$i]}"
         if [[ -z "$default" && "$default" != "?" ]]; then
             echo "Error: Missing required argument: ${POSITIONAL_NAMES[$i]}" >&2
@@ -394,38 +393,41 @@ __validate_value__() {
     local value="$1"
     local type="$2"
     local field_name="${3:-value}"
-    
+
     __argparser_log__ "DEBUG" "Validating: $field_name='$value' as type '$type'"
 
     case "$type" in
-        number|num|numeric)
+        number | num | numeric)
             __validate_numeric__ "$value" "$field_name"
             ;;
-        int|integer)
+        int | integer)
             __validate_integer__ "$value" "$field_name"
             ;;
         vmid)
             __validate_vmid__ "$value" "$field_name"
             ;;
-        float|decimal)
+        ctid)
+            __validate_ctid__ "$value" "$field_name"
+            ;;
+        float | decimal)
             __validate_float__ "$value" "$field_name"
             ;;
-        ip|ipv4)
+        ip | ipv4)
             __validate_ip__ "$value" "$field_name"
             ;;
         ipv6)
             __validate_ipv6__ "$value" "$field_name"
             ;;
-        cidr|network)
+        cidr | network)
             __validate_cidr__ "$value" "$field_name"
             ;;
         gateway)
-            __validate_ip__ "$value" "$field_name"  # Gateway is just an IP
+            __validate_ip__ "$value" "$field_name" # Gateway is just an IP
             ;;
         port)
             __validate_port__ "$value" "$field_name"
             ;;
-        hostname|host)
+        hostname | host)
             __validate_hostname__ "$value" "$field_name"
             ;;
         fqdn)
@@ -434,7 +436,7 @@ __validate_value__() {
         mac)
             __validate_mac_address__ "$value" "$field_name"
             ;;
-        bool|boolean)
+        bool | boolean)
             __validate_boolean__ "$value" "$field_name"
             ;;
         storage)
@@ -446,19 +448,19 @@ __validate_value__() {
         vlan)
             __validate_vlan__ "$value" "$field_name"
             ;;
-        node|nodename)
+        node | nodename)
             __validate_node_name__ "$value" "$field_name"
             ;;
         pool)
             __validate_string__ "$value" "$field_name"
             ;;
-        cpu|cores)
+        cpu | cores)
             __validate_cpu_cores__ "$value" "$field_name"
             ;;
-        memory|ram)
+        memory | ram)
             __validate_memory__ "$value" "$field_name"
             ;;
-        disk|disksize)
+        disk | disksize)
             __validate_disk_size__ "$value" "$field_name"
             ;;
         onboot)
@@ -467,7 +469,7 @@ __validate_value__() {
         ostype)
             __validate_ostype__ "$value" "$field_name"
             ;;
-        path|file)
+        path | file)
             __validate_path__ "$value" "$field_name"
             ;;
         url)
@@ -476,7 +478,7 @@ __validate_value__() {
         email)
             __validate_email__ "$value" "$field_name"
             ;;
-        string|str)
+        string | str)
             # No validation needed for generic strings
             __argparser_log__ "DEBUG" "Validation passed: string type (no validation needed)"
             return 0
@@ -487,7 +489,7 @@ __validate_value__() {
             return 1
             ;;
     esac
-    
+
     local validation_result=$?
     if [[ $validation_result -eq 0 ]]; then
         __argparser_log__ "DEBUG" "Validation passed for $field_name"
@@ -513,7 +515,7 @@ __generate_help__() {
     for item in $spec; do
         if [[ ! "$item" =~ ^-- ]]; then
             local name type default
-            IFS=':' read -r name type default <<< "$item"
+            IFS=':' read -r name type default <<<"$item"
 
             if [[ -n "$default" && "$default" != "?" ]]; then
                 echo "  ${name}  (${type}, default: ${default})"
@@ -532,7 +534,7 @@ __generate_help__() {
         if [[ "$item" =~ ^-- ]]; then
             local name="${item#--}"
             local type default
-            IFS=':' read -r name type default <<< "$name"
+            IFS=':' read -r name type default <<<"$name"
 
             if [[ "$type" == "flag" || "$type" == "bool" ]]; then
                 echo "  --${name}  (flag)"
@@ -585,7 +587,7 @@ __validate_ip__() {
     local IFS='.'
     local -a octets=($ip)
     for octet in "${octets[@]}"; do
-        if (( octet > 255 )); then
+        if ((octet > 255)); then
             __argparser_log__ "DEBUG" "Validation failed: octet $octet exceeds 255"
             echo "Error: Invalid ${field_name} - octet value ${octet} exceeds 255" >&2
             return 1
@@ -614,14 +616,14 @@ __validate_cidr__() {
     local IFS='.'
     local -a octets=($ip)
     for octet in "${octets[@]}"; do
-        if (( octet > 255 )); then
+        if ((octet > 255)); then
             __argparser_log__ "DEBUG" "Validation failed: octet $octet exceeds 255"
             echo "Error: Invalid ${field_name} - octet value ${octet} exceeds 255" >&2
             return 1
         fi
     done
 
-    if (( mask > 32 )); then
+    if ((mask > 32)); then
         __argparser_log__ "DEBUG" "Validation failed: mask $mask exceeds 32"
         echo "Error: Invalid ${field_name} - CIDR mask ${mask} exceeds 32" >&2
         return 1
@@ -644,7 +646,7 @@ __validate_port__() {
         return 1
     fi
 
-    if (( port < 1 || port > 65535 )); then
+    if ((port < 1 || port > 65535)); then
         __argparser_log__ "DEBUG" "Validation failed: port $port out of range"
         echo "Error: ${field_name} must be between 1 and 65535 (got: ${port})" >&2
         return 1
@@ -667,7 +669,7 @@ __validate_range__() {
         return 1
     fi
 
-    if (( value < min || value > max )); then
+    if ((value < min || value > max)); then
         __argparser_log__ "DEBUG" "Validation failed: $value not in range [$min, $max]"
         echo "Error: ${field_name} must be between ${min} and ${max} (got: ${value})" >&2
         return 1
@@ -691,7 +693,7 @@ __validate_hostname__() {
         return 1
     fi
 
-    if (( ${#hostname} > 253 )); then
+    if ((${#hostname} > 253)); then
         __argparser_log__ "DEBUG" "Validation failed: hostname exceeds 253 characters"
         echo "Error: ${field_name} exceeds maximum length of 253 characters" >&2
         return 1
@@ -758,7 +760,7 @@ __validate_vmid_range__() {
         return 1
     fi
 
-    if (( start_id > end_id )); then
+    if ((start_id > end_id)); then
         __argparser_log__ "DEBUG" "Validation failed: start_id > end_id"
         echo "Error: start_id (${start_id}) must be <= end_id (${end_id})" >&2
         return 1
@@ -795,7 +797,7 @@ __validate_vmid__() {
         return 1
     fi
 
-    if (( value < 100 || value > 999999999 )); then
+    if ((value < 100 || value > 999999999)); then
         __argparser_log__ "DEBUG" "Validation failed: VMID out of range"
         echo "Error: ${field_name} must be between 100 and 999999999 (got: ${value})" >&2
         return 1
@@ -905,7 +907,7 @@ __validate_vlan__() {
         return 1
     fi
 
-    if (( vlan < 1 || vlan > 4094 )); then
+    if ((vlan < 1 || vlan > 4094)); then
         __argparser_log__ "DEBUG" "Validation failed: VLAN out of range"
         echo "Error: ${field_name} must be between 1 and 4094 (got: ${vlan})" >&2
         return 1
@@ -944,7 +946,7 @@ __validate_cpu_cores__() {
         return 1
     fi
 
-    if (( cores < 1 || cores > 512 )); then
+    if ((cores < 1 || cores > 512)); then
         __argparser_log__ "DEBUG" "Validation failed: cores out of range"
         echo "Error: ${field_name} must be between 1 and 512 (got: ${cores})" >&2
         return 1
@@ -965,7 +967,7 @@ __validate_memory__() {
         return 1
     fi
 
-    if (( memory < 16 )); then
+    if ((memory < 16)); then
         __argparser_log__ "DEBUG" "Validation failed: memory below minimum"
         echo "Error: ${field_name} must be at least 16 MB (got: ${memory})" >&2
         return 1
@@ -1049,19 +1051,16 @@ __validate_path__() {
 
     __argparser_log__ "TRACE" "Validating path: $field_name='$path'"
 
-    # Basic path validation - just check it's not empty and doesn't have invalid chars
+    # Basic path validation - just check it's not empty
     if [[ -z "$path" ]]; then
         __argparser_log__ "DEBUG" "Validation failed: path is empty"
         echo "Error: ${field_name} cannot be empty" >&2
         return 1
     fi
 
-    # Check for null bytes or other dangerous characters
-    if [[ "$path" =~ $'\0' ]]; then
-        __argparser_log__ "DEBUG" "Validation failed: path contains invalid characters"
-        echo "Error: ${field_name} contains invalid characters" >&2
-        return 1
-    fi
+    # Note: Bash cannot handle null bytes in strings (they terminate the string),
+    # so we don't need to explicitly check for them. Any path that makes it here
+    # as a string is already free of null bytes.
 
     __argparser_log__ "TRACE" "Validation passed: valid path"
     return 0

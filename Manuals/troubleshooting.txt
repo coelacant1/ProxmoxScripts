@@ -46,7 +46,7 @@ nodes.json Issues
 -----------------
 Error: "No nodes found"
 Fix:   - Auto-creates from nodes.json.template
-       - Add via GUI: 'm' → Manage Nodes → Add
+       - Add via GUI: 'm' -> Manage Nodes -> Add
        - Verify format: jq . nodes.json
 
 SSHPASS Issues
@@ -102,19 +102,19 @@ COMMON MISTAKES
 ================================================================================
 
 1. Running from wrong directory
-   → Always cd to ProxmoxScripts root
+   -> Always cd to ProxmoxScripts root
 
 2. Typing paths instead of navigating
-   → Use arrow keys/numbers to select
+   -> Use arrow keys/numbers to select
 
 3. Wrong parameter format
-   → Use --parameter value (double dash)
+   -> Use --parameter value (double dash)
 
 4. Not checking logs
-   → Always check /tmp/gui_execution.log
+   -> Always check /tmp/gui_execution.log
 
 5. Forgetting to set execution mode
-   → Choose Local/Remote before browsing
+   -> Choose Local/Remote before browsing
 
 ================================================================================
 

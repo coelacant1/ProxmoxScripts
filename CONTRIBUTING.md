@@ -127,6 +127,7 @@ See `Utilities/_Utilities.md` for a complete reference of which functions belong
 - Use `[[ ... ]]` for conditionals and `(( ... ))` for arithmetic.
 - Choose descriptive variable names; reserve UPPERCASE for environment-level knobs and use lower/mixed case for locals.
 - **Never duplicate logic that exists in utilities** - always import and use utility functions.
+- **Avoid `((var++))` and `((var--))` syntax** - use `var=$((var + 1))` or `var=$((var - 1))` instead for compatibility with `set -e` error handling.
 
 ### 3.8 Logging and User Feedback
 

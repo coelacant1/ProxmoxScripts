@@ -33,8 +33,6 @@
 
 set -euo pipefail
 
-# shellcheck source=Utilities/ArgumentParser.sh
-source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 
@@ -74,41 +72,41 @@ fi
 # Helper Functions
 ###############################################################################
 show_usage() {
-  echo "Usage:"
-  echo "  \"$0\" install [<min-temp> <max-temp> <min-pwm> <max-pwm>]"
-  echo "  \"$0\" uninstall"
-  echo
-  echo "Examples:"
-  echo "  \"$0\" install"
-  echo "  \"$0\" install 35 80 50 255"
-  echo "  \"$0\" uninstall"
+    echo "Usage:"
+    echo "  \"$0\" install [<min-temp> <max-temp> <min-pwm> <max-pwm>]"
+    echo "  \"$0\" uninstall"
+    echo
+    echo "Examples:"
+    echo "  \"$0\" install"
+    echo "  \"$0\" install 35 80 50 255"
+    echo "  \"$0\" uninstall"
 }
 
 install_fancontrol() {
-  local minTemp="$1"
-  local maxTemp="$2"
-  local minPwm="$3"
-  local maxPwm="$4"
+    local minTemp="$1"
+    local maxTemp="$2"
+    local minPwm="$3"
+    local maxPwm="$4"
 
-  __install_or_prompt__ "fancontrol"
+    __install_or_prompt__ "fancontrol"
 
-  local hwmonDevice
-  hwmonDevice="$(ls /sys/class/hwmon/ | head -n1)"
-  if [[ -z "$hwmonDevice" ]]; then
-    echo "Error: No hwmon device found. Ensure your system supports PWM fan control."
-    exit 3
-  fi
+    local hwmonDevice
+    hwmonDevice="$(ls /sys/class/hwmon/ | head -n1)"
+    if [[ -z "$hwmonDevice" ]]; then
+        echo "Error: No hwmon device found. Ensure your system supports PWM fan control."
+        exit 3
+    fi
 
-  local FANCONTROL_CONF="/etc/fancontrol"
+    local FANCONTROL_CONF="/etc/fancontrol"
 
-  echo "Generating \"$FANCONTROL_CONF\" with:"
-  echo "  Min Temp : \"$minTemp\""
-  echo "  Max Temp : \"$maxTemp\""
-  echo "  Min PWM  : \"$minPwm\""
-  echo "  Max PWM  : \"$maxPwm\""
-  echo "  HwmonDev : \"$hwmonDevice\""
+    echo "Generating \"$FANCONTROL_CONF\" with:"
+    echo "  Min Temp : \"$minTemp\""
+    echo "  Max Temp : \"$maxTemp\""
+    echo "  Min PWM  : \"$minPwm\""
+    echo "  Max PWM  : \"$maxPwm\""
+    echo "  HwmonDev : \"$hwmonDevice\""
 
-  cat <<EOF > "$FANCONTROL_CONF"
+    cat <<EOF >"$FANCONTROL_CONF"
 #------------------------------------------------------------------------------
 # /etc/fancontrol
 # Created by EnablePWMFanControl.sh
@@ -127,41 +125,41 @@ MINSTOP=hwmon0/pwm1=$minPwm
 MINSTART=hwmon0/pwm1=$(($minPwm + 10))
 EOF
 
-  systemctl enable fancontrol
-  systemctl restart fancontrol
+    systemctl enable fancontrol
+    systemctl restart fancontrol
 
-  echo "fancontrol installation and configuration complete."
-  __prompt_keep_installed_packages__
+    echo "fancontrol installation and configuration complete."
+    __prompt_keep_installed_packages__
 }
 
 uninstall_fancontrol() {
-  echo "Stopping and disabling fancontrol..."
-  systemctl stop fancontrol || true
-  systemctl disable fancontrol || true
+    echo "Stopping and disabling fancontrol..."
+    systemctl stop fancontrol || true
+    systemctl disable fancontrol || true
 
-  echo "Removing fancontrol package..."
-  apt-get remove -y --purge fancontrol
-  apt-get autoremove -y
+    echo "Removing fancontrol package..."
+    apt-get remove -y --purge fancontrol
+    apt-get autoremove -y
 
-  local FANCONTROL_CONF="/etc/fancontrol"
-  if [[ -f "$FANCONTROL_CONF" ]]; then
-    echo "Removing \"$FANCONTROL_CONF\"..."
-    rm -f "$FANCONTROL_CONF"
-  fi
+    local FANCONTROL_CONF="/etc/fancontrol"
+    if [[ -f "$FANCONTROL_CONF" ]]; then
+        echo "Removing \"$FANCONTROL_CONF\"..."
+        rm -f "$FANCONTROL_CONF"
+    fi
 
-  echo "fancontrol uninstalled. System fans reverted to default."
+    echo "fancontrol uninstalled. System fans reverted to default."
 }
 
 ###############################################################################
 # Main
 ###############################################################################
 case "$ACTION" in
-  install)
-    install_fancontrol "$MIN_TEMP" "$MAX_TEMP" "$MIN_PWM" "$MAX_PWM"
-    ;;
-  uninstall)
-    uninstall_fancontrol
-    ;;
+    install)
+        install_fancontrol "$MIN_TEMP" "$MAX_TEMP" "$MIN_PWM" "$MAX_PWM"
+        ;;
+    uninstall)
+        uninstall_fancontrol
+        ;;
 esac
 
 # Testing status:

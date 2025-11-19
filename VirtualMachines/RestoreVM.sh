@@ -14,7 +14,7 @@
 #   target_storage - Storage for restored VM/CT
 #
 # Examples:
-#   RestoreVM.sh 101 IHKBackup local
+#   RestoreVM.sh 101 Storage local
 #   RestoreVM.sh 113 PBS-Backup local-lvm
 #
 # Function Index:
@@ -59,10 +59,10 @@ main() {
     local idx=0
     for line in "${backup_lines[@]}"; do
         local backup_path
-        backup_path=$(awk '{print $1}' <<< "$line")
+        backup_path=$(awk '{print $1}' <<<"$line")
         backups+=("$backup_path")
         echo "$idx) $backup_path"
-        ((idx++))
+        ((idx += 1))
     done
     echo
 
@@ -78,7 +78,7 @@ main() {
 
     local selected_backup="${backups[$sel_index]}"
     local backup_type
-    backup_type=$(awk '{print $2}' <<< "${backup_lines[$sel_index]}")
+    backup_type=$(awk '{print $2}' <<<"${backup_lines[$sel_index]}")
 
     __info__ "Selected: ${selected_backup}"
 

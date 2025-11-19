@@ -65,9 +65,9 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 # @description Validates network-specific configuration options not covered by ArgumentParser.
 validate_custom_options() {
     # Check that at least one network option is specified
-    if [[ -z "$BRIDGE" && -z "$VLAN" && -z "$FIREWALL" && -z "$LINK_DOWN" && \
-          -z "$MTU" && -z "$RATE" && -z "$QUEUES" && -z "$MAC" && \
-          -z "$MAC_PREFIX" && -z "$MODEL" ]]; then
+    if [[ -z "$BRIDGE" && -z "$VLAN" && -z "$FIREWALL" && -z "$LINK_DOWN" &&
+        -z "$MTU" && -z "$RATE" && -z "$QUEUES" && -z "$MAC" &&
+        -z "$MAC_PREFIX" && -z "$MODEL" ]]; then
         __err__ "At least one network option must be specified"
         exit 64
     fi

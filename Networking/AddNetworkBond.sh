@@ -61,7 +61,7 @@ insert_sorted_config() {
         next
       }
       { print }
-    ' RS= ORS='\n\n' "$config_file" > "${config_file}.tmp"
+    ' RS= ORS='\n\n' "$config_file" >"${config_file}.tmp"
 
     mv "${config_file}.tmp" "$config_file"
     return 0

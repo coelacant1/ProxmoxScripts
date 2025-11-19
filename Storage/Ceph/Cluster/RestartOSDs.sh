@@ -22,6 +22,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -74,7 +76,7 @@ main() {
     fi
 
     local -a osd_array
-    read -r -a osd_array <<< "$osd_ids"
+    read -r -a osd_array <<<"$osd_ids"
     local total_osds=${#osd_array[@]}
 
     __info__ "Found ${total_osds} Ceph OSD(s). Restarting them one at a time."
@@ -90,7 +92,7 @@ main() {
         local osd_json
         if ! osd_json=$(ceph osd find "${osd_id}" 2>/dev/null) || [[ -z "$osd_json" ]]; then
             __err__ "Failed to retrieve details for ceph-osd@${osd_id}"
-            ((current_osd++))
+            ((current_osd += 1))
             continue
         fi
 
@@ -100,7 +102,7 @@ main() {
 
         if [[ -z "$osd_host" ]] || [[ "$osd_host" == "null" ]]; then
             __err__ "Host information for ceph-osd@${osd_id} not found"
-            ((current_osd++))
+            ((current_osd += 1))
             continue
         fi
 
@@ -112,7 +114,7 @@ main() {
             target_host=$(__get_ip_from_name__ "$osd_host")
             if [[ -z "$target_host" ]]; then
                 __err__ "Failed to resolve IP for host '${osd_host}'"
-                ((current_osd++))
+                ((current_osd += 1))
                 continue
             fi
         fi
@@ -137,7 +139,7 @@ main() {
 
         # Pause briefly before processing the next OSD
         sleep 5
-        ((current_osd++))
+        ((current_osd += 1))
     done
 
     __ok__ "All Ceph OSDs processed"

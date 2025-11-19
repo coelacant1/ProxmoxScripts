@@ -54,10 +54,10 @@ main() {
         __update__ "Setting timezone on ${node_ip}"
         if ssh "root@${node_ip}" "timedatectl set-timezone \"${TIMEZONE}\"" 2>&1; then
             __ok__ "Timezone set on ${node_ip}"
-            ((success++))
+            ((success += 1))
         else
             __warn__ "Failed to set timezone on ${node_ip}"
-            ((failed++))
+            ((failed += 1))
         fi
     done
 
@@ -65,10 +65,10 @@ main() {
     __update__ "Setting timezone on local node"
     if timedatectl set-timezone "${TIMEZONE}" 2>&1; then
         __ok__ "Timezone set on local node"
-        ((success++))
+        ((success += 1))
     else
         __warn__ "Failed to set timezone on local node"
-        ((failed++))
+        ((failed += 1))
     fi
 
     echo

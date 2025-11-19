@@ -36,7 +36,7 @@ main() {
     __check_proxmox__
 
     __update__ "Setting min_size=1 for pool '$POOL_NAME'"
-    if ceph osd pool set "$POOL_NAME" min_size 1 --yes-i-really-mean-it &>/dev/null; then
+    if ceph osd pool set "$POOL_NAME" min_size 1 --yes-i-really-mean-it 2>&1; then
         __ok__ "min_size set to 1 for pool '$POOL_NAME'"
     else
         __err__ "Failed to set min_size for pool '$POOL_NAME'"

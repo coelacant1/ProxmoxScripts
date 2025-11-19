@@ -19,7 +19,6 @@
 #
 # Function Index:
 #   - main
-#   - toggle_protection_callback
 #
 
 set -euo pipefail

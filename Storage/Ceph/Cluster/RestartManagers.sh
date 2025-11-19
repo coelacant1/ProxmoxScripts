@@ -21,6 +21,8 @@ set -euo pipefail
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -34,7 +36,7 @@ __check_proxmox__
 __install_or_prompt__ "jq"
 
 # --- wait_for_mgr_active -----------------------------------------------------
-wait_for_mgr_active(){
+wait_for_mgr_active() {
     local targetHost="$1"
     local mgrName="$2"
     local timeout=120
@@ -53,7 +55,7 @@ wait_for_mgr_active(){
         fi
 
         sleep 5
-        elapsed=$((elapsed+5))
+        elapsed=$((elapsed + 5))
 
         if [[ $elapsed -ge $timeout ]]; then
             __err__ "Manager ceph-mgr@${mgrName} did not become active after restart on ${targetHost}"
@@ -135,7 +137,7 @@ main() {
             targetHost="$(__get_ip_from_name__ "$mgrName")"
             if [[ -z "$targetHost" ]]; then
                 __err__ "Failed to resolve IP for manager '$mgrName' - skipping"
-                ((currentMgr++))
+                ((currentMgr += 1))
                 continue
             fi
         fi
@@ -159,7 +161,7 @@ main() {
         wait_for_mgr_active "${targetHost}" "${mgrName}"
 
         sleep 5
-        ((currentMgr++))
+        ((currentMgr += 1))
     done
 
     __ok__ "All Ceph managers processed!"

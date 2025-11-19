@@ -17,7 +17,6 @@
 #
 # Function Index:
 #   - main
-#   - delete_ct_callback
 #
 
 set -euo pipefail
@@ -54,7 +53,7 @@ main() {
 
     # Convert to array
     local -a ct_array
-    read -r -a ct_array <<< "$ct_ids"
+    read -r -a ct_array <<<"$ct_ids"
 
     __warn__ "This will permanently delete ${#ct_array[@]} container(s) on this node:"
     echo "$ct_ids"
@@ -85,9 +84,9 @@ main() {
     BULK_OPERATION_NAME="Delete"
     for vmid in "${ct_array[@]}"; do
         if delete_ct_callback "$vmid"; then
-            ((BULK_SUCCESS++))
+            ((BULK_SUCCESS += 1))
         else
-            ((BULK_FAILED++))
+            ((BULK_FAILED += 1))
             BULK_FAILED_IDS+=("$vmid")
         fi
     done

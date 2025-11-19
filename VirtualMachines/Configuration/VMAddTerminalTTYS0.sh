@@ -37,7 +37,7 @@ main() {
 
     # Create ttyS0 configuration
     __info__ "Creating /etc/init/ttyS0.conf"
-    cat <<'EOF' > /etc/init/ttyS0.conf
+    cat <<'EOF' >/etc/init/ttyS0.conf
 # ttyS0 - getty
 #
 # This service maintains a getty on ttyS0 from the point the system is

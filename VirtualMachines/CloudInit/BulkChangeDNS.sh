@@ -19,7 +19,6 @@
 #
 # Function Index:
 #   - main
-#   - change_dns_callback
 #
 
 set -euo pipefail

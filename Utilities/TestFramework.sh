@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Function Index:
+#   - __test_log__
 #   - test_framework_init
 #   - test_framework_cleanup
 #   - run_test_suite
@@ -82,7 +83,15 @@ set -euo pipefail
 
 # Source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/Colors.sh" 2>/dev/null || true
+
+# Define color variables for TestFramework (avoid circular dependency with Colors.sh)
+BOLD="\033[1m"
+DIM="\033[2m"
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+NC="\033[0m"
 
 # Source Logger for structured logging
 if [[ -f "${SCRIPT_DIR}/Logger.sh" ]]; then
@@ -218,7 +227,7 @@ run_test() {
     TEST_OUTPUT=""
     ASSERT_COUNT=0
 
-    ((TEST_TOTAL++))
+    ((TEST_TOTAL += 1))
 
     # Print test header
     if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -246,12 +255,12 @@ run_test() {
     local test_time=$(($(date +%s) - TEST_START_TIME))
 
     if [[ $test_result -eq 0 ]]; then
-        ((TEST_PASSED++))
+        ((TEST_PASSED += 1))
         echo "${GREEN}✓${NC} ${test_func} ${DIM}(${test_time}s, ${ASSERT_COUNT} assertions)${NC}"
         TEST_RESULTS+=("PASS:$test_func:${test_time}:${ASSERT_COUNT}")
         __test_log__ "INFO" "Test PASSED: $test_func (${test_time}s, ${ASSERT_COUNT} assertions)"
     else
-        ((TEST_FAILED++))
+        ((TEST_FAILED += 1))
         echo "${RED}✗${NC} ${BOLD}${test_func}${NC} ${DIM}(${test_time}s)${NC}"
         FAILED_TESTS+=("$test_func")
         TEST_RESULTS+=("FAIL:$test_func:${test_time}:${ASSERT_COUNT}")
@@ -271,7 +280,7 @@ run_test() {
 skip_test() {
     local reason=${1:-"No reason provided"}
     __test_log__ "INFO" "Test skipped: $CURRENT_TEST (reason: $reason)"
-    ((TEST_SKIPPED++))
+    ((TEST_SKIPPED += 1))
     echo "${YELLOW}⊘${NC} ${CURRENT_TEST} ${DIM}(skipped: $reason)${NC}"
     exit 0
 }
@@ -310,7 +319,7 @@ assert_equals() {
     local actual=$2
     local message=${3:-"Values should be equal"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
     __test_log__ "TRACE" "assert_equals: '$expected' == '$actual'"
 
     if [[ "$expected" == "$actual" ]]; then
@@ -334,7 +343,7 @@ assert_not_equals() {
     local actual=$2
     local message=${3:-"Values should not be equal"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
     __test_log__ "TRACE" "assert_not_equals: '$expected' != '$actual'"
 
     if [[ "$expected" != "$actual" ]]; then
@@ -357,7 +366,7 @@ assert_contains() {
     local needle=$2
     local message=${3:-"String should contain substring"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
     __test_log__ "TRACE" "assert_contains: checking if '$haystack' contains '$needle'"
 
     if [[ "$haystack" == *"$needle"* ]]; then
@@ -381,7 +390,7 @@ assert_not_contains() {
     local needle=$2
     local message=${3:-"String should not contain substring"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
     __test_log__ "TRACE" "assert_not_contains: checking if '$haystack' does not contain '$needle'"
 
     if [[ "$haystack" != *"$needle"* ]]; then
@@ -405,7 +414,7 @@ assert_matches() {
     local pattern=$2
     local message=${3:-"Value should match pattern"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ "$value" =~ $pattern ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -425,7 +434,7 @@ assert_true() {
     local value=$1
     local message=${2:-"Value should be true"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ -n "$value" ]] && [[ "$value" != "false" ]] && [[ "$value" != "0" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -444,7 +453,7 @@ assert_false() {
     local value=$1
     local message=${2:-"Value should be false"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ -z "$value" ]] || [[ "$value" == "false" ]] || [[ "$value" == "0" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -463,7 +472,7 @@ assert_file_exists() {
     local filepath=$1
     local message=${2:-"File should exist"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ -f "$filepath" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -482,7 +491,7 @@ assert_file_not_exists() {
     local filepath=$1
     local message=${2:-"File should not exist"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ ! -f "$filepath" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -501,7 +510,7 @@ assert_dir_exists() {
     local dirpath=$1
     local message=${2:-"Directory should exist"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ -d "$dirpath" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -521,7 +530,7 @@ assert_exit_code() {
     local actual_code=$2
     local message=${3:-"Exit code should match"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ "$expected_code" -eq "$actual_code" ]]; then
         if [[ "$VERBOSE_TESTS" == true ]]; then
@@ -540,7 +549,7 @@ assert_exit_code() {
 assert_success() {
     local message=${1:-"Command should succeed"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     if [[ "$VERBOSE_TESTS" == true ]]; then
         echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
@@ -552,7 +561,7 @@ assert_success() {
 assert_failure() {
     local message=${1:-"Command should fail"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
     echo "  ${RED}FAILED:${NC} $message"
     echo "    ${DIM}Command succeeded when it should have failed${NC}"
@@ -565,9 +574,9 @@ assert_greater_than() {
     local threshold=$2
     local message=${3:-"Value should be greater than threshold"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
-    if (( $(echo "$value > $threshold" | bc -l 2>/dev/null || echo "0") )); then
+    if ((value > threshold)); then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
@@ -586,9 +595,9 @@ assert_less_than() {
     local threshold=$2
     local message=${3:-"Value should be less than threshold"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
-    if (( $(echo "$value < $threshold" | bc -l 2>/dev/null || echo "0") )); then
+    if ((value < threshold)); then
         if [[ "$VERBOSE_TESTS" == true ]]; then
             echo "  ${GREEN}✓${NC} ${DIM}$message${NC}"
         fi
@@ -613,23 +622,39 @@ mock_command() {
 
     __test_log__ "DEBUG" "Mocking command: $command (exit: $mock_exit_code)"
 
-    # Create mock script
+    # Create mock script with call tracking
     local mock_script="${MOCK_DIR}/${command}"
-    cat > "$mock_script" << EOF
+    local count_file="${MOCK_DIR}/.${command}_count"
+    cat >"$mock_script" <<'MOCK_SCRIPT_EOF'
 #!/bin/bash
-echo "$mock_output"
-exit $mock_exit_code
-EOF
+COUNT_FILE="__COUNT_FILE_PLACEHOLDER__"
+# Increment call count
+if [[ -f "$COUNT_FILE" ]]; then
+    COUNT=$(<"$COUNT_FILE")
+    COUNT=$((COUNT + 1))
+else
+    COUNT=1
+fi
+echo "$COUNT" > "$COUNT_FILE"
+# Output mock response
+echo "__MOCK_OUTPUT_PLACEHOLDER__"
+exit __MOCK_EXIT_CODE__
+MOCK_SCRIPT_EOF
+
+    # Replace placeholders
+    sed -i "s|__COUNT_FILE_PLACEHOLDER__|${count_file}|g" "$mock_script"
+    sed -i "s|__MOCK_OUTPUT_PLACEHOLDER__|${mock_output}|g" "$mock_script"
+    sed -i "s|__MOCK_EXIT_CODE__|${mock_exit_code}|g" "$mock_script"
     chmod +x "$mock_script"
 
     # Store original PATH and prepend mock directory
-    if [[ -z "${MOCKED_COMMANDS[$command]}" ]]; then
+    if [[ ! -v MOCKED_COMMANDS[$command] ]]; then
         MOCKED_COMMANDS[$command]="$PATH"
     fi
     export PATH="${MOCK_DIR}:${PATH}"
 
-    # Initialize call count
-    MOCK_CALL_COUNT[$command]=0
+    # Initialize call count file
+    echo "0" >"${count_file}"
     __test_log__ "DEBUG" "Mock created for: $command"
 }
 
@@ -648,9 +673,14 @@ assert_mock_called() {
     local expected_count=${2:-1}
     local message=${3:-"Mock should be called $expected_count time(s)"}
 
-    ((ASSERT_COUNT++))
+    ((ASSERT_COUNT += 1))
 
-    local actual_count=${MOCK_CALL_COUNT[$command]:-0}
+    # Read actual count from file
+    local count_file="${MOCK_DIR}/.${command}_count"
+    local actual_count=0
+    if [[ -f "$count_file" ]]; then
+        actual_count=$(<"$count_file")
+    fi
     __test_log__ "TRACE" "assert_mock_called: $command (expected: $expected_count, actual: $actual_count)"
 
     if [[ "$actual_count" -eq "$expected_count" ]]; then
@@ -673,6 +703,9 @@ restore_all_mocks() {
     __test_log__ "DEBUG" "Restoring all mocks (${#MOCKED_COMMANDS[@]} commands)"
     for command in "${!MOCKED_COMMANDS[@]}"; do
         export PATH="${MOCKED_COMMANDS[$command]}"
+        # Clean up count file
+        local count_file="${MOCK_DIR}/.${command}_count"
+        rm -f "$count_file"
     done
     MOCKED_COMMANDS=()
     MOCK_CALL_COUNT=()
@@ -686,7 +719,7 @@ restore_all_mocks() {
 # Print test suite summary
 print_suite_summary() {
     local suite_time=$(($(date +%s) - SUITE_START_TIME))
-    
+
     __test_log__ "INFO" "Printing test summary (Total: $TEST_TOTAL, Passed: $TEST_PASSED, Failed: $TEST_FAILED, Skipped: $TEST_SKIPPED)"
 
     echo ""
@@ -764,24 +797,24 @@ generate_test_report() {
 generate_junit_report() {
     local output_file=${1:-"test-results.xml"}
 
-    cat > "$output_file" << EOF
+    cat >"$output_file" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="${CURRENT_SUITE}" tests="${TEST_TOTAL}" failures="${TEST_FAILED}" skipped="${TEST_SKIPPED}" time="${suite_time}">
 EOF
 
     for result in "${TEST_RESULTS[@]}"; do
-        IFS=':' read -r status name time assertions <<< "$result"
+        IFS=':' read -r status name time assertions <<<"$result"
 
-        echo "  <testcase name=\"$name\" time=\"$time\" assertions=\"$assertions\">" >> "$output_file"
+        echo "  <testcase name=\"$name\" time=\"$time\" assertions=\"$assertions\">" >>"$output_file"
 
         if [[ "$status" == "FAIL" ]]; then
-            echo "    <failure message=\"Test failed\"/>" >> "$output_file"
+            echo "    <failure message=\"Test failed\"/>" >>"$output_file"
         fi
 
-        echo "  </testcase>" >> "$output_file"
+        echo "  </testcase>" >>"$output_file"
     done
 
-    echo "</testsuite>" >> "$output_file"
+    echo "</testsuite>" >>"$output_file"
 
     echo "${GREEN}✓${NC} JUnit report generated: $output_file"
 }
@@ -790,7 +823,7 @@ EOF
 generate_json_report() {
     local output_file=${1:-"test-results.json"}
 
-    cat > "$output_file" << EOF
+    cat >"$output_file" <<EOF
 {
   "suite": "${CURRENT_SUITE}",
   "total": ${TEST_TOTAL},
@@ -803,14 +836,14 @@ EOF
 
     local first=true
     for result in "${TEST_RESULTS[@]}"; do
-        IFS=':' read -r status name time assertions <<< "$result"
+        IFS=':' read -r status name time assertions <<<"$result"
 
         if [[ "$first" == false ]]; then
-            echo "," >> "$output_file"
+            echo "," >>"$output_file"
         fi
         first=false
 
-        cat >> "$output_file" << EOF
+        cat >>"$output_file" <<EOF
     {
       "name": "$name",
       "status": "$status",
@@ -820,7 +853,7 @@ EOF
 EOF
     done
 
-    cat >> "$output_file" << EOF
+    cat >>"$output_file" <<EOF
 
   ]
 }
@@ -833,7 +866,7 @@ EOF
 generate_markdown_report() {
     local output_file=${1:-"test-results.md"}
 
-    cat > "$output_file" << EOF
+    cat >"$output_file" <<EOF
 # Test Report: ${CURRENT_SUITE}
 
 ## Summary
@@ -851,14 +884,14 @@ generate_markdown_report() {
 EOF
 
     for result in "${TEST_RESULTS[@]}"; do
-        IFS=':' read -r status name time assertions <<< "$result"
+        IFS=':' read -r status name time assertions <<<"$result"
 
         local status_icon="✓"
         if [[ "$status" == "FAIL" ]]; then
             status_icon="✗"
         fi
 
-        echo "| $name | $status_icon | ${time}s | $assertions |" >> "$output_file"
+        echo "| $name | $status_icon | ${time}s | $assertions |" >>"$output_file"
     done
 
     echo "${GREEN}✓${NC} Markdown report generated: $output_file"
@@ -874,7 +907,7 @@ create_temp_file() {
     local temp_file="${TEST_TEMP_DIR}/test_file_$(date +%s%N)"
 
     __test_log__ "DEBUG" "Creating temp file: $temp_file"
-    echo "$content" > "$temp_file"
+    echo "$content" >"$temp_file"
     echo "$temp_file"
 }
 

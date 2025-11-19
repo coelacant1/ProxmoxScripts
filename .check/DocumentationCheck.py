@@ -264,7 +264,11 @@ def main():
             issues.append("Missing description in header")
             issues_summary['no_description'] += 1
         
-        if not metadata['has_usage']:
+        # Skip usage section check for utility libraries and test files
+        is_utility = '/Utilities/' in file_path and not file_path.endswith('RunAllTests.sh') and not file_path.endswith('RemoteRunAllTests.sh')
+        is_test = os.path.basename(file_path).startswith('_Test')
+        
+        if not metadata['has_usage'] and not is_utility and not is_test:
             issues.append("Missing usage section")
             issues_summary['no_usage'] += 1
         
