@@ -106,3 +106,19 @@ run_test_suite "SSH Functions" \
     test_ssh_test_connection
 
 exit $?
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

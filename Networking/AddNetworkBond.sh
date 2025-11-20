@@ -78,6 +78,16 @@ main() {
     local vmbr_name="vmbr${VLAN_ID}"
     local config_file="/etc/network/interfaces"
 
+    # Ensure 8021q kernel module is loaded for VLAN support
+    if ! lsmod | grep -q "^8021q"; then
+        __update__ "Loading 8021q kernel module for VLAN support"
+        if modprobe 8021q 2>&1; then
+            __ok__ "8021q module loaded"
+        else
+            __warn__ "Failed to load 8021q module (may not be required)"
+        fi
+    fi
+
     if [[ ! -f "$config_file" ]]; then
         __err__ "Network interfaces file not found: $config_file"
         exit 1
@@ -134,7 +144,24 @@ iface $vmbr_name inet manual
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+# - Script manages traditional network interfaces, not SDN features
+# - Note: vlan package not required in Proxmox (8021q module handles VLANs)
+#
+# Fixes:
+# - Fixed: Ensure 8021q module is loaded (usually automatic in Proxmox)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -3,7 +3,7 @@
 # UpdateAll.sh
 #
 # Updates packages (apt-get update && upgrade) for all LXC containers across the entire cluster.
-# Containers must be running for updates to work.
+# Containers must be running for updates to work. Supports Debian/Ubuntu (apt-get), Alpine (apk), and Fedora (dnf) distributions.
 #
 # Usage:
 #   UpdateAll.sh
@@ -54,10 +54,10 @@ main() {
         __update__ "Updating container ${vmid}..."
 
         if __ct_update_packages__ "$vmid"; then
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to update container ${vmid}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -66,7 +66,11 @@ main() {
     __info__ "Update Summary:"
     __info__ "  Total: ${#all_cts[@]}"
     __info__ "  Success: ${success}"
-    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+    if [[ $failed -gt 0 ]]; then
+        __warn__ "  Failed: ${failed}"
+    else
+        __info__ "  Failed: ${failed}"
+    fi
 
     if [[ $failed -gt 0 ]]; then
         __err__ "Some updates failed. Check the messages above for details."
@@ -78,6 +82,22 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide v9.1-1 and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed arithmetic increment syntax per CONTRIBUTING.md Section 3.7
+# - Fixed if-then-else pattern per shellcheck SC2015
+#
+# Known issues:
+# - Containers must be running for updates to work
+# - Pending validation
+#
+

@@ -2031,7 +2031,8 @@ __ct_add_ip_to_note__() {
     local new_note="IP: $ip"
 
     if [[ -n "$current_note" ]]; then
-        new_note="$current_note\n$new_note"
+        new_note="${current_note}
+${new_note}"
     fi
 
     if pct set "$ctid" --description "$new_note" 2>/dev/null; then
@@ -2086,3 +2087,19 @@ __vm_add_ip_to_note__() {
         return 1
     fi
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -154,7 +154,22 @@ done
 
 echo "Completed updating drive redirection parameters for all matching connections."
 
-# Testing status:
-#   - ArgumentParser.sh sourced
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: ArgumentParser.sh sourced
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -76,14 +76,18 @@ main() {
     fi
 
     __info__ "Stopping cluster services"
-    systemctl stop corosync || true
     systemctl stop pve-cluster || true
+    systemctl stop corosync || true
+
+    __info__ "Starting cluster file system in local mode"
+    pmxcfs -l
 
     __info__ "Removing Corosync configuration"
     rm -f "/etc/pve/corosync.conf" 2>/dev/null || true
     rm -rf "/etc/corosync/"* 2>/dev/null || true
 
     __info__ "Restarting pve-cluster in standalone mode"
+    killall pmxcfs
     systemctl start pve-cluster
 
     __info__ "Disabling corosync service"
@@ -96,6 +100,20 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-19: Added pmxcfs -l step for cluster file system check
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

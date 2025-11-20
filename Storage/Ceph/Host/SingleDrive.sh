@@ -120,3 +120,19 @@ case "$STEP" in
         clear_local_lvm
         ;;
 esac
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

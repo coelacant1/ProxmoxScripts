@@ -108,7 +108,7 @@ __argparser_log__() {
 # Types:
 #   number, num, numeric   - Numeric value (0-9+)
 #   int, integer          - Integer (can be negative)
-#   vmid                  - VM/CT ID (100-999999999)
+#   vmid, ctid            - VM/CT ID (100-999999999)
 #   float, decimal        - Decimal number (e.g., 1.5)
 #
 #   ip, ipv4              - IPv4 address (192.168.1.100)
@@ -403,11 +403,8 @@ __validate_value__() {
         int | integer)
             __validate_integer__ "$value" "$field_name"
             ;;
-        vmid)
+        vmid | ctid)
             __validate_vmid__ "$value" "$field_name"
-            ;;
-        ctid)
-            __validate_ctid__ "$value" "$field_name"
             ;;
         float | decimal)
             __validate_float__ "$value" "$field_name"
@@ -1119,3 +1116,19 @@ __validate_string__() {
     __argparser_log__ "TRACE" "Validation passed: valid string"
     return 0
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

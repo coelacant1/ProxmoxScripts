@@ -103,3 +103,19 @@ run_test_suite "Queries Functions" \
     test_get_server_vms
 
 exit $?
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

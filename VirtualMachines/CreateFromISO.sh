@@ -607,3 +607,19 @@ qm set "$VM_ID" --agent enabled=1,fstrim_cloned_disks=1
 
 qm start "$VM_ID"
 echo >&2 "VM '$VM_NAME' (ID: $VM_ID) created and started."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

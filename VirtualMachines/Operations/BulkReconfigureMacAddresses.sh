@@ -193,3 +193,19 @@ for ((VMID = START_VMID; VMID <= END_VMID; VMID++)); do
 done
 
 echo "All done."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

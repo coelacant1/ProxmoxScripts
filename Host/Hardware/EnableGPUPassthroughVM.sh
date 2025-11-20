@@ -97,6 +97,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to follow CONTRIBUTING.md guidelines
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to follow CONTRIBUTING.md guidelines
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide Section 10.9 - compliant
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

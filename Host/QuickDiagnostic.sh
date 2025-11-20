@@ -42,7 +42,7 @@ check_storage_errors() {
         if [[ -n "$zpool_status" ]]; then
             __warn__ "ZFS issues detected:"
             echo "$zpool_status"
-            ((issues += 1))
+            issues=$((issues + 1))
         fi
     fi
 
@@ -53,7 +53,7 @@ check_storage_errors() {
         if [[ -n "$ceph_status" ]]; then
             __warn__ "Ceph issues detected:"
             echo "$ceph_status"
-            ((issues += 1))
+            issues=$((issues + 1))
         fi
     fi
 
@@ -63,7 +63,7 @@ check_storage_errors() {
     if [[ -n "$storage_usage" ]]; then
         __warn__ "High storage usage:"
         echo "$storage_usage"
-        ((issues += 1))
+        issues=$((issues + 1))
     fi
 
     # Check LVM locks
@@ -73,7 +73,7 @@ check_storage_errors() {
         if [[ -n "$locked_storage" ]]; then
             __warn__ "Locked storage detected:"
             echo "$locked_storage"
-            ((issues += 1))
+            issues=$((issues + 1))
         fi
     fi
 
@@ -91,7 +91,7 @@ check_memory_errors() {
     memory_errors=$(dmesg | grep -iE 'memory error|out of memory|oom-killer' || true)
     if [[ -n "$memory_errors" ]]; then
         __warn__ "Memory errors detected in dmesg"
-        ((issues += 1))
+        issues=$((issues + 1))
     fi
 
     # Check memory usage
@@ -101,7 +101,7 @@ check_memory_errors() {
         __warn__ "High memory usage:"
         echo "$memory_usage"
         ps -eo pid,cmd,%mem --sort=-%mem | head -n 6
-        ((issues += 1))
+        issues=$((issues + 1))
     fi
 
     [[ $issues -eq 0 ]] && __ok__ "Memory: OK"
@@ -118,7 +118,7 @@ check_cpu_errors() {
     cpu_errors=$(dmesg | grep -iE 'cpu error|thermal throttling|overheating' || true)
     if [[ -n "$cpu_errors" ]]; then
         __warn__ "CPU errors detected in dmesg"
-        ((issues += 1))
+        issues=$((issues + 1))
     fi
 
     # Check CPU usage
@@ -128,7 +128,7 @@ check_cpu_errors() {
         __warn__ "High CPU usage:"
         echo "$cpu_usage"
         ps -eo pid,cmd,%cpu --sort=-%cpu | head -n 6
-        ((issues += 1))
+        issues=$((issues + 1))
     fi
 
     [[ $issues -eq 0 ]] && __ok__ "CPU: OK"
@@ -186,6 +186,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

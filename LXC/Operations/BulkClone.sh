@@ -45,7 +45,7 @@ source "${UTILITYPATH}/Cluster.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "source_vmid:ctid base_name:string start_vmid:int count:number start_ip_cidr:string bridge:string gateway:string:? --pool:string:?" "$@"
+__parse_args__ "source_vmid:vmid base_name:string start_vmid:vmid count:number start_ip_cidr:cidr bridge:bridge gateway:gateway:? --pool:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -104,14 +104,14 @@ main() {
             [[ -n "${GATEWAY:-}" ]] && net_cmd+=",gw=${GATEWAY}"
 
             if __node_exec__ "$source_node" "$net_cmd" &>/dev/null; then
-                ((success += 1))
+                success=$((success + 1))
             else
                 __warn__ "Cloned container ${target_vmid} but failed to set network configuration"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         else
             __warn__ "Failed to clone container ${target_vmid}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -132,6 +132,22 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and utility functions
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid, cidr, bridge, gateway)
+# - Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

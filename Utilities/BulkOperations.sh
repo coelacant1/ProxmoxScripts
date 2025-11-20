@@ -725,3 +725,19 @@ __bulk_validate_range__() {
 # # Parallel execution (experimental)
 # __bulk_parallel__ 5 100 110 __vm_start__
 #
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

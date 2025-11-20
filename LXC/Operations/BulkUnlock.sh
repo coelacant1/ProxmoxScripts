@@ -36,7 +36,7 @@ source "${UTILITYPATH}/Operations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:int end_vmid:int" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -63,6 +63,22 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Uses __ct_unlock__ utility function per Section 11.12 (line 988)
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid instead of int)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

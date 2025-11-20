@@ -65,7 +65,7 @@ main() {
 
                 [[ -z "$macs" ]] && macs="None"
                 echo "$node_name,$vm_id,VM,$macs"
-                ((total_entries += 1))
+                total_entries=$((total_entries + 1))
             done
         fi
 
@@ -88,7 +88,7 @@ main() {
 
                 [[ -z "$macs" ]] && macs="None"
                 echo "$node_name,$ct_id,CT,$macs"
-                ((total_entries += 1))
+                total_entries=$((total_entries + 1))
             done
         fi
     done
@@ -98,6 +98,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+#
+# Fixes:
+# - Fixed arithmetic increment syntax (line 68, 91)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

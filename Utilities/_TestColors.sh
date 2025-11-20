@@ -100,3 +100,19 @@ run_test_suite "Colors - Line Gradient" \
     test_line_gradient_output
 
 exit $?
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

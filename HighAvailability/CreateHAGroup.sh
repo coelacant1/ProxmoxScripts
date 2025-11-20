@@ -53,22 +53,36 @@ main() {
         echo "${NODES[*]}"
     )
 
+    __warn__ "HA Groups are deprecated since Proxmox VE 9.0 - use 'ha-manager rules add node-affinity' instead"
     __info__ "Creating HA group '${GROUP_NAME}' with nodes: ${nodes_string}"
 
-    if pvesh create /cluster/ha/groups \
-        --group "${GROUP_NAME}" \
-        --nodes "${nodes_string}" \
-        --comment "HA group created by script" 2>&1; then
+    if ha-manager groupadd "${GROUP_NAME}" --nodes "${nodes_string}" --comment "HA group created by script" 2>&1; then
         __ok__ "HA group '${GROUP_NAME}' created successfully!"
     else
-        __err__ "Failed to create HA group '${group_name}'"
+        __err__ "Failed to create HA group '${GROUP_NAME}'"
         exit 1
     fi
 }
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - ArgumentParser.sh sourced (hybrid for variable args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Added deprecation warning for HA groups per PVE Guide Section 15.6.2
+#
+# Fixes:
+# - 2025-11-20: Fixed ha-manager groupadd command per PVE Guide Section 15.6.2
+# - 2025-11-20: Fixed variable name typo (group_name -> GROUP_NAME)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

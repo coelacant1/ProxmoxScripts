@@ -92,6 +92,20 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Note: Package auto-upgrade may require custom Cloud-Init configuration on some Proxmox versions
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Note: Package auto-upgrade may require custom Cloud-Init configuration on some Proxmox versions
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

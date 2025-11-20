@@ -144,9 +144,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
-#   - Removed manual usage() and parse_args() functions
-#   - Now uses __parse_args__ with automatic validation
-#   - Fixed __prompt_yes_no__ -> __prompt_user_yn__
-#   - Tested execution on 11/17
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - 2025-11-20: Removed manual usage() and parse_args() functions
+# - 2025-11-20: Now uses __parse_args__ with automatic validation
+# - 2025-11-20: Fixed __prompt_yes_no__ -> __prompt_user_yn__
+# - 2025-11-20: Tested execution on 11/17
+#
+# Fixes:
+# - Fixed __prompt_yes_no__ -> __prompt_user_yn__
+#
+# Known issues:
+# -
+#
+

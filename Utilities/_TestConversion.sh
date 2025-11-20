@@ -116,3 +116,19 @@ run_test_suite "Conversion Functions" \
     test_vmid_to_mac_long
 
 exit $?
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

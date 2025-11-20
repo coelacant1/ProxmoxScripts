@@ -313,3 +313,19 @@ __require_root_and_proxmox__() {
     __check_proxmox__
     __prompt_log__ "DEBUG" "All requirements met"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

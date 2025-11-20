@@ -42,7 +42,7 @@ source "${UTILITYPATH}/Operations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:int end_vmid:int start_ip_cidr:string bridge:string gateway:string:?" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid start_ip_cidr:cidr bridge:bridge gateway:gateway:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -82,6 +82,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against PVE Guide v9.1-1 (Chapter 11) and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed: Changed ArgumentParser types (vmid, cidr, bridge, gateway) for proper validation
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

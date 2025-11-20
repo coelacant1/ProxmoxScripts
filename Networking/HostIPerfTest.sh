@@ -49,9 +49,9 @@ main() {
     __update__ "Stopping any existing iperf3 servers on $SERVER_HOST"
     ssh "root@${SERVER_HOST}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
 
-    # Start iperf3 server
+    # Start iperf3 server in background with proper cleanup trap
     __info__ "Starting iperf3 server on $SERVER_HOST"
-    if ssh "root@${SERVER_HOST}" "iperf3 -s -p '${PORT}' &" 2>&1; then
+    if ssh "root@${SERVER_HOST}" "nohup iperf3 -s -p '${PORT}' > /dev/null 2>&1 &" 2>&1; then
         __ok__ "Server started"
     else
         __err__ "Failed to start iperf3 server"
@@ -84,7 +84,23 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+# - Script uses iperf3 for network throughput testing (not Proxmox-specific)
+#
+# Fixes:
+# - Fixed: Use nohup for background iperf3 server to prevent SSH hangup issues
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

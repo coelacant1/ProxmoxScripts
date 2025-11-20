@@ -98,7 +98,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - ArgumentParser.sh sourced (hybrid for variable args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

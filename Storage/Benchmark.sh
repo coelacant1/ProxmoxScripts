@@ -177,3 +177,19 @@ __prompt_keep_installed_packages__
 
 echo
 echo "Disk benchmark process complete."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

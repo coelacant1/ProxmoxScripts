@@ -1183,3 +1183,19 @@ __net_migrate_network__() {
 # # Test connectivity from CT
 # __net_test_connectivity__ 200 "8.8.8.8"
 #
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

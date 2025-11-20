@@ -209,3 +209,19 @@ __manual_menu__() {
 __quick_help__() {
     __show_manual__ "getting-started"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

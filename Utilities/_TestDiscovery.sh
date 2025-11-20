@@ -207,3 +207,19 @@ run_test_suite "Discovery.sh Tests" \
     test_discovery_with_missing_mac
 
 exit $?
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

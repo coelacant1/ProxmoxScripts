@@ -35,6 +35,10 @@ set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Preliminary Checks
@@ -162,7 +166,24 @@ case "$ACTION" in
         ;;
 esac
 
-# Testing status:
-#   - ArgumentParser.sh sourced
-#   - Action validation added
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: ArgumentParser.sh sourced
+# - 2025-11-20: Action validation added
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md - added Communication.sh source and error trap
+# - Script manages PWM-based fan control using fancontrol package
+# - Configures /etc/fancontrol for temperature-based fan speed control
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -184,3 +184,19 @@ echo "Done. All relevant TRIM operations have been attempted."
 ###############################################################################
 # Tested single-node
 # Tested multi-node
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

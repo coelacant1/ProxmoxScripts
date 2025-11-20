@@ -201,7 +201,7 @@ echo "Processing VMs ${START} to ${END}"
 
 | Category | Types | Validation |
 |----------|-------|------------|
-| **IDs** | `vmid`, `number`, `integer` | Numeric validation, range checks |
+| **IDs** | `vmid`, `ctid`, `number`, `integer` | Numeric validation, range checks |
 | **Network** | `ip`, `ipv4`, `ipv6`, `cidr`, `gateway`, `mac`, `port` | Format validation |
 | **DNS** | `hostname`, `fqdn`, `url`, `email` | RFC compliance |
 | **Proxmox** | `storage`, `bridge`, `vlan`, `node`, `pool`, `ostype` | Proxmox-specific |
@@ -553,9 +553,74 @@ main() {
 - `NON_INTERACTIVE_STANDARD.md` - Complete specification
 - `Utilities/Prompts.sh` - Functions that auto-detect mode
 
-### 3.12 Testing Notes
+### 3.12 Script Notes
 
-- Add a `# Testing status` comment near the end of the script describing how you validated it (environments, scenarios, known limitations).
+All scripts should include a "Script notes" section at the end of the file to document validation status, dependencies, and complete change history.
+
+**Format:**
+```bash
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Description of change
+# - YYYY-MM-DD: Description of older change
+#
+# Fixes:
+# - YYYY-MM-DD: Bug fix description
+#
+# Known issues:
+# - Description of known issue (if any)
+#
+```
+
+**What to include:**
+- **Last checked**: Date of most recent validation against CONTRIBUTING.md
+- **Changes**: All significant changes in chronological order (newest first)
+  - Feature additions
+  - Migrations to new frameworks
+  - Breaking changes
+  - Deprecations
+  - Configuration updates
+- **Fixes**: Bug fixes (especially critical ones)
+  - Critical bugs should be clearly marked
+  - Include what the bug was and what it would cause
+- **Known issues**: Current limitations or known problems
+  - Leave empty with just "-" if no known issues
+
+**Example script notes:**
+```bash
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Deep technical analysis performed
+# - 2025-11-19: Migrated to ArgumentParser framework
+# - 2025-11-15: Added --dry-run flag for testing
+# - 2025-11-10: Added backup creation before modifications
+# - 2025-11-01: Refactored to use utility functions
+# - 2025-10-20: Added cluster-wide support
+# - 2025-10-01: Initial version
+#
+# Fixes:
+# - 2025-11-20: FIXED CRITICAL BUG: MAC regex only matched 3 octets instead of
+#   6, which would create invalid MAC addresses and break all VM/CT networking
+# - 2025-10-15: FIXED CRITICAL BUG: Cluster detection logic was causing node
+#   failures during network splits
+# - 2025-11-10: Fixed race condition in backup creation
+# - 2025-11-05: Fixed incorrect error messages
+#
+# Known issues:
+# -
+#
+```
+
+**Testing Requirements:**
+
 - Run [ShellCheck](https://www.shellcheck.net/) or equivalent linters and address warnings where practical.
 - **Test both interactive and CLI modes** to ensure full functionality in both scenarios.
 - **When creating tests for utility functions**, use the TestFramework.sh located in `Utilities/`:

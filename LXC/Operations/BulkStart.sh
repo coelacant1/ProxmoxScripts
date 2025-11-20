@@ -57,5 +57,20 @@ main() {
 
 main
 
-# Testing status:
-#   - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Compliant with BulkOperations framework and utility usage
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -53,7 +53,8 @@ main() {
     __check_proxmox__
     __check_cluster_membership__
 
-    __info__ "Adding ${#RESOURCE_IDS[@]} resource(s) to HA group '${GROUP_NAME}'"
+    __warn__ "HA Groups are deprecated since Proxmox VE 9.0 - use 'ha-manager rules add node-affinity' instead"
+    __info__ "Adding ${#RESOURCE_IDS[@]} resource(s) to HA configuration"
 
     # Get all cluster resources
     local -a all_cluster_lxc
@@ -74,17 +75,17 @@ main() {
             resource_type="vm"
         else
             __warn__ "Resource ${resource_id} not found in cluster"
-            ((failed += 1))
+            failed=$((failed + 1))
             continue
         fi
 
-        __update__ "Adding ${resource_type}:${resource_id} to HA group ${GROUP_NAME}"
-        if pvesh create /cluster/ha/resources --sid "${resource_type}:${resource_id}" --group "${GROUP_NAME}" 2>&1; then
+        __update__ "Adding ${resource_type}:${resource_id} to HA"
+        if ha-manager add "${resource_type}:${resource_id}" --group "${GROUP_NAME}" 2>&1; then
             __ok__ "Added ${resource_type}:${resource_id}"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to add ${resource_type}:${resource_id}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -99,7 +100,23 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - ArgumentParser.sh sourced (hybrid for variable args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Added deprecation warning for HA groups per PVE Guide Section 15.6.2
+#
+# Fixes:
+# - 2025-11-20: Fixed ha-manager command usage per PVE Guide Section 15.3
+# - 2025-11-20: Fixed arithmetic operations for set -e compatibility
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

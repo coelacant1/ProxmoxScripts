@@ -148,3 +148,19 @@ echo "$connectionsJson" | jq -r '
       | select(.protocol == "rdp")
       | { id: .identifier, name: .name, protocol: .protocol } ]
 ' | jq '.'
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

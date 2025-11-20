@@ -3,7 +3,7 @@
 # ExpandEXT4Partition.sh
 #
 # Expands a GPT partition and ext4 filesystem to use available disk space.
-# Non-interactive operation using sgdisk and sfdisk.
+# Uses parted for safe in-place partition resizing without destroying metadata.
 #
 # Usage:
 #   ExpandEXT4Partition.sh <device>
@@ -46,9 +46,14 @@ main() {
     __install_or_prompt__ "parted"
     __install_or_prompt__ "util-linux"
     __install_or_prompt__ "e2fsprogs"
-    __install_or_prompt__ "uuid-runtime"
 
-    local partition="${DEVICE}1"
+    # Construct partition device name (handle nvme/mmcblk naming)
+    local partition
+    if [[ "$DEVICE" =~ (nvme|mmcblk|loop) ]]; then
+        partition="${DEVICE}p1"
+    else
+        partition="${DEVICE}1"
+    fi
 
     __warn__ "This will resize partition ${partition} to use all available space"
     __warn__ "Ensure you have backups before proceeding"
@@ -64,11 +69,12 @@ main() {
     partprobe "$DEVICE" 2>&1 || true
     sleep 2
 
-    # Verify exactly one partition
+    # Verify exactly one partition exists
     local part_count
-    part_count=$(lsblk -no NAME "$DEVICE" | grep -c "^$(basename "$DEVICE")" || echo 0)
+    part_count=$(lsblk -no NAME "$DEVICE" | grep -c "[0-9]$" || echo 0)
     if [[ "$part_count" -ne 1 ]]; then
-        __err__ "Expected exactly 1 partition, found $part_count"
+        __err__ "Expected exactly 1 partition on device, found $part_count"
+        __err__ "This script only supports single-partition devices"
         exit 1
     fi
 
@@ -85,71 +91,18 @@ main() {
         fi
     fi
 
-    # Get last usable sector
-    __info__ "Determining disk geometry"
-    local sgdisk_out
-    sgdisk_out=$(sgdisk -p "$DEVICE" 2>&1 || true)
-    local last_usable
-    last_usable=$(echo "$sgdisk_out" | sed -nE 's/.*last usable sector is ([0-9]+).*/\1/p')
-
-    if [[ -z "$last_usable" ]]; then
-        __err__ "Could not determine last usable sector"
-        exit 1
-    fi
-
-    __info__ "Last usable sector: $last_usable"
-
-    # Get partition start sector
-    local sf_out
-    sf_out=$(sfdisk --dump "$DEVICE" 2>&1)
-    local part_info
-    part_info=$(echo "$sf_out" | grep -E "^${partition} :")
-
-    if [[ -z "$part_info" ]]; then
-        __err__ "Could not find partition info"
-        exit 1
-    fi
-
-    local start_sector
-    start_sector=$(echo "$part_info" | sed -nE 's/.*start= *([0-9]+).*/\1/p')
-
-    if [[ -z "$start_sector" ]]; then
-        __err__ "Could not determine start sector"
-        exit 1
-    fi
-
-    __info__ "Start sector: $start_sector"
-
-    # Calculate new size
-    local new_size=$((last_usable - start_sector + 1))
-    if ((new_size < 1)); then
-        __err__ "Invalid partition size calculated"
-        exit 1
-    fi
-
-    __info__ "New partition size: $new_size sectors"
-
-    # Create sfdisk input
-    local tmpfile
-    tmpfile=$(mktemp)
-    cat <<EOF >"$tmpfile"
-label: gpt
-label-id: $(uuidgen)
-device: $DEVICE
-unit: sectors
-
-${partition} : start=${start_sector}, size=${new_size}, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+    # Use parted to resize partition in-place (safer than recreating table)
+    __info__ "Resizing partition to use all available space"
+    if parted "$DEVICE" ---pretend-input-tty <<EOF 2>&1
+resizepart 1 100%
+Yes
 EOF
-
-    __info__ "Applying new partition layout"
-    if sfdisk --no-reread --force "$DEVICE" <"$tmpfile" 2>&1; then
-        __ok__ "Partition table updated"
+    then
+        __ok__ "Partition resized successfully"
     else
-        __err__ "Failed to update partition table"
-        rm -f "$tmpfile"
+        __err__ "Failed to resize partition"
         exit 1
     fi
-    rm -f "$tmpfile"
 
     partprobe "$DEVICE" 2>&1 || true
     sleep 2
@@ -191,7 +144,24 @@ EOF
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Added proper nvme/mmcblk partition naming support
+# - 2025-11-20: Validated against CONTRIBUTING.md
+# - Non-interactive operation using sgdisk and sfdisk (note: now uses parted)
+#
+# Fixes:
+# - 2025-11-20: Fixed partition count logic (was counting device + partitions)
+# - 2025-11-20: Fixed to use parted resizepart instead of recreating partition table
+#
+# Known issues:
+# - Pending validation
+#
+

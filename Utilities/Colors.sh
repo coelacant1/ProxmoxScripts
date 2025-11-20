@@ -258,3 +258,19 @@ __simulate_blink_async__() {
         echo -e "${RESET}${text}"
     ) &
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.4] - 2025-11-20
+
+Partial script validation against PVE documentation
+
+### Added
+- **Script Notes Standard** - All scripts now include standardized notes section tracking validation status, change history, fixes, and known issues
+
+### Changed
+- **Errors/Issues fixed across scripts** - Scripts in Cluster, Firewall, HighAvailability, Host, LXC, Manuals, Networking, and Resources directories validated against V9.1.1 Proxmox VE documentation  - Security through VirtualMachines pending
+- **CONTRIBUTING.md Section 3.12** - Replaced "Testing Notes" with "Script Notes" standard including format requirements and examples
+
 ## [2.1.3] - 2025-11-19
 
 Script fixes, documentation updates, and function standardization

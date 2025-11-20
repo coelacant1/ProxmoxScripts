@@ -140,3 +140,19 @@ echo "$matchingConnections" | jq -c '.[]' | while read -r conn; do
 done
 
 echo "Completed removal of SFTP parameters for all matching connections."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

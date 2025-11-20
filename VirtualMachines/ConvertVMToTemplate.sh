@@ -225,7 +225,22 @@ main() {
 ###############################################################################
 main "$@"
 
-# Testing status:
-#   - Uses utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Uses utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

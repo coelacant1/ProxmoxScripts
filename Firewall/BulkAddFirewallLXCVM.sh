@@ -58,8 +58,6 @@ enable_firewall_lxc() {
             pct set "$vmid" -net"${nic_index}" "$net_line" &>/dev/null
         fi
     done <<<"$config_lines"
-
-    pct set "$vmid" --features "firewall=1" &>/dev/null
 }
 
 # --- enable_firewall_vm ------------------------------------------------------
@@ -144,6 +142,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - Firewall enabled via network interface settings only
+#
+# Fixes:
+# - 2025-11-20: Fixed invalid --features "firewall=1" usage per PVE Guide
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

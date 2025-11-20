@@ -432,3 +432,19 @@ __execute_remote_script__() {
     LAST_SCRIPT="$display_path_result"
     LAST_OUTPUT="Remote execution on ${#REMOTE_TARGETS[@]} node(s): $success_count OK, $fail_count FAIL"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

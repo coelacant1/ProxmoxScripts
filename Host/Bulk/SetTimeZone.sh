@@ -54,10 +54,10 @@ main() {
         __update__ "Setting timezone on ${node_ip}"
         if ssh "root@${node_ip}" "timedatectl set-timezone \"${TIMEZONE}\"" 2>&1; then
             __ok__ "Timezone set on ${node_ip}"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to set timezone on ${node_ip}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -65,10 +65,10 @@ main() {
     __update__ "Setting timezone on local node"
     if timedatectl set-timezone "${TIMEZONE}" 2>&1; then
         __ok__ "Timezone set on local node"
-        ((success += 1))
+        success=$((success + 1))
     else
         __warn__ "Failed to set timezone on local node"
-        ((failed += 1))
+        failed=$((failed + 1))
     fi
 
     echo
@@ -82,7 +82,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

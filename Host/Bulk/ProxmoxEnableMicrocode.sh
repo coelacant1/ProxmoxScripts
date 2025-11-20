@@ -45,10 +45,10 @@ main() {
         __update__ "Enabling microcode on ${node_ip}"
         if ssh "root@${node_ip}" "apt-get update -qq && apt-get install -y -qq intel-microcode amd64-microcode" 2>&1; then
             __ok__ "Microcode enabled on ${node_ip}"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to enable microcode on ${node_ip}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -56,10 +56,10 @@ main() {
     __update__ "Enabling microcode on local node"
     if apt-get update -qq && apt-get install -y -qq intel-microcode amd64-microcode 2>&1; then
         __ok__ "Microcode enabled on local node"
-        ((success += 1))
+        success=$((success + 1))
     else
         __warn__ "Failed to enable microcode on local node"
-        ((failed += 1))
+        failed=$((failed + 1))
     fi
 
     echo
@@ -75,6 +75,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -28,8 +28,14 @@
 
 set -euo pipefail
 
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Preliminary Checks
@@ -61,11 +67,11 @@ setup_repositories() {
     fi
 
     # Attempt to detect the codename from /etc/os-release
-    local codename="bookworm"
+    local codename="trixie"
     if [[ -f "/etc/os-release" ]]; then
         # shellcheck source=/dev/null
         . "/etc/os-release"
-        codename="${VERSION_CODENAME:-bookworm}"
+        codename="${VERSION_CODENAME:-trixie}"
     else
         echo " - /etc/os-release not found. Defaulting to \"${codename}\"."
     fi
@@ -81,7 +87,7 @@ setup_repositories() {
     fi
 
     # Check if the no-subscription repo is already in /etc/apt/sources.list.d/ceph.list
-    if ! grep -q "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" "/etc/apt/sources.list.d/ceph.list"; then
+    if [[ ! -f "/etc/apt/sources.list.d/ceph.list" ]] || ! grep -q "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" "/etc/apt/sources.list.d/ceph.list"; then
         echo "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" >>"/etc/apt/sources.list.d/ceph.list"
         echo " - Added Ceph no-subscription repository for \"${codename}\"."
     else
@@ -137,3 +143,19 @@ __prompt_keep_installed_packages__
 ###############################################################################
 # Tested single-node
 # Tested multi-node
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

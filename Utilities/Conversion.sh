@@ -194,3 +194,19 @@ __vmid_to_mac_prefix__() {
     __convert_log__ "INFO" "VMID $vmid -> MAC prefix $result"
     echo "$result"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

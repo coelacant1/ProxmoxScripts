@@ -127,9 +127,8 @@ main() {
     create_rule_once \
         "Allow all traffic within Proxmox nodes IP set" \
         --action ACCEPT \
-        --type ipset \
-        --source proxmox-nodes \
-        --dest proxmox-nodes \
+        --source +proxmox-nodes \
+        --dest +proxmox-nodes \
         --enable 1
 
     create_rule_once \
@@ -174,7 +173,7 @@ main() {
             "Allow Ceph MON 6789 from ${ip_addr}" \
             --action ACCEPT \
             --source "${ip_addr}/32" \
-            --dest proxmox-nodes \
+            --dest +proxmox-nodes \
             --proto tcp \
             --dport 6789 \
             --enable 1
@@ -183,7 +182,7 @@ main() {
             "Allow Ceph MON 3300 from ${ip_addr}" \
             --action ACCEPT \
             --source "${ip_addr}/32" \
-            --dest proxmox-nodes \
+            --dest +proxmox-nodes \
             --proto tcp \
             --dport 3300 \
             --enable 1
@@ -192,7 +191,7 @@ main() {
             "Allow Ceph OSD 6800-7300 from ${ip_addr}" \
             --action ACCEPT \
             --source "${ip_addr}/32" \
-            --dest proxmox-nodes \
+            --dest +proxmox-nodes \
             --proto tcp \
             --dport 6800:7300 \
             --enable 1
@@ -217,6 +216,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions and ArgumentParser
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions and ArgumentParser
+# - 2025-11-20: Pending validation
+# - Utility function parameters verified correct
+#
+# Fixes:
+# - 2025-11-20: Fixed ipset reference syntax to use +ipsetname format per PVE Guide 13.3
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -92,10 +92,12 @@ main() {
     for node_ip in "${nodes[@]}"; do
         __update__ "Adding node ${node_ip} ($((counter + 1))/${#nodes[@]})"
 
-        local cmd="pvecm add \"${CLUSTER_IP}\" --link0 \"${node_ip}\""
+        local cmd="pvecm add \"${CLUSTER_IP}\""
         if $use_link1; then
-            cmd+=" --link1 \"${link1[$counter]}\""
-            __info__ "  Using link1: ${link1[$counter]}"
+            cmd+=" --link0 \"${node_ip}\" --link1 \"${link1[$counter]}\""
+            __info__ "  Using link0: ${node_ip}, link1: ${link1[$counter]}"
+        else
+            cmd+=" --link0 \"${node_ip}\""
         fi
 
         if ssh -t -o StrictHostKeyChecking=no "root@${node_ip}" "$cmd" 2>&1; then
@@ -120,7 +122,20 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh (hybrid for complex args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Updated to use ArgumentParser.sh (hybrid for complex args)
+# - 2025-11-20: Pending validation
+#
+# Fixes:
+# - 2025-11-19: Fixed link parameter ordering
+#
+# Known issues:
+# -
+#
+

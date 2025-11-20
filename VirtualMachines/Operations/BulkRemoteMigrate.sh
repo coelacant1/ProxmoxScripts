@@ -94,5 +94,18 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -1502,3 +1502,19 @@ while true; do
     # Navigate scripts - loops back automatically when user presses 'b' at root
     navigate "$BASE_DIR"
 done
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

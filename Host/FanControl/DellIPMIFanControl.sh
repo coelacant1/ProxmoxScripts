@@ -1,21 +1,21 @@
 #!/bin/bash
 #
-# DellServerFanControl.sh
+# DellIPMIFanControl.sh
 #
 # Installs or removes a systemd service to control Dell server fans via IPMI.
 # By default, it will prompt for IPMI credentials and temperature/fan thresholds,
 # store them in /etc/dell_fan_control.conf, and create a background control script.
 #
 # Usage:
-#   DellServerFanControl.sh install
-#   DellServerFanControl.sh remove
+#   DellIPMIFanControl.sh install
+#   DellIPMIFanControl.sh remove
 #
 # Examples:
 #   # Install all components and enable the service
-#   DellServerFanControl.sh install
+#   DellIPMIFanControl.sh install
 #
 #   # Remove everything (service, config, run script)
-#   DellServerFanControl.sh remove
+#   DellIPMIFanControl.sh remove
 #
 # This script requires IPMI utilities, which will be installed if missing.
 #
@@ -37,6 +37,12 @@ set -euo pipefail
 
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse action argument
 if [[ $# -lt 1 ]]; then
@@ -309,7 +315,29 @@ case "$ACTION" in
         ;;
 esac
 
-# Testing status:
-#   - ArgumentParser.sh sourced
-#   - Action validation added
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: ArgumentParser.sh sourced
+# - 2025-11-20: Action validation added
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md - added Communication.sh source and error trap
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - Removed manual usage() function
+# - Removed manual argument parsing in main
+# - Now uses __parse_args__ with automatic validation
+# - Handles subcommand pattern (install/remove/configure)
+# - ArgumentParser.sh sourced, Action validation added
+# - Script controls Dell server fans via IPMI using ipmitool
+# - Creates systemd service for continuous fan speed adjustment based on CPU temperatures
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+#
+

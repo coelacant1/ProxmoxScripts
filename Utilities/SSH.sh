@@ -995,3 +995,19 @@ __ssh_exec_function__() {
     __ssh_log__ "DEBUG" "Function execution completed with exit code: $rc"
     return "$rc"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

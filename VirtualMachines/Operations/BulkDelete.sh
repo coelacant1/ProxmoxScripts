@@ -101,6 +101,19 @@ main() {
 
 main
 
-# Testing status:
-#   - 2025-10-14: Converted to cluster-wide with safety features
-#   - 2025-10-27: Updated to follow contributing guide with proper BulkOperations framework usage
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-14: Converted to cluster-wide with safety features
+# - 2025-10-27: Updated to follow contributing guide with proper BulkOperations framework usage
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

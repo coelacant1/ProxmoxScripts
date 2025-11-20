@@ -150,6 +150,23 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions and ArgumentParser standards
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions and ArgumentParser standards
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+# - Script uses speedtest-cli for internet speed testing (not Proxmox-specific)
+# - Does not use ArgumentParser (variadic arguments with special handling)
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

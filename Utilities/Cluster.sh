@@ -771,3 +771,19 @@ __get_pool_vms__() {
     pvesh get "/pools/$pool_name" --output-format json 2>/dev/null \
         | jq -r '.members[]? | select(.type == "qemu") | .vmid' | sort -n
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

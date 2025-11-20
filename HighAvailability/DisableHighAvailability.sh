@@ -41,7 +41,6 @@ main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
-    __install_or_prompt__ "jq"
 
     __info__ "Disabling HA on node: ${TARGET_NODE_NAME}"
 
@@ -53,14 +52,13 @@ main() {
     fi
     __info__ "Node ${TARGET_NODE_NAME} resolved to IP: ${node_ip}"
 
-    # Find HA resources referencing this node
+    # Find HA resources currently running on this node
     __info__ "Checking for HA resources on node ${TARGET_NODE_NAME}"
     local ha_resources
-    ha_resources=$(pvesh get /cluster/ha/resources --output-format json 2>/dev/null \
-        | jq -r '.[] | select(.statePath | contains("'"$TARGET_NODE_NAME"'")) | .sid')
+    ha_resources=$(ha-manager status 2>/dev/null | awk -v node="$TARGET_NODE_NAME" '$1 == "service" && $2 ~ /^(vm|ct):/ && $3 == "("node"," {print $2}')
 
     if [[ -z "$ha_resources" ]]; then
-        __info__ "No HA resources found for node ${TARGET_NODE_NAME}"
+        __info__ "No HA resources found on node ${TARGET_NODE_NAME}"
     else
         __info__ "Removing HA resources:"
         local removed=0
@@ -68,12 +66,12 @@ main() {
 
         while IFS= read -r res; do
             __update__ "Removing HA resource: ${res}"
-            if pvesh delete "/cluster/ha/resources/${res}" 2>&1; then
+            if ha-manager remove "${res}" 2>&1; then
                 __ok__ "Removed ${res}"
-                ((removed += 1))
+                removed=$((removed + 1))
             else
                 __warn__ "Failed to remove ${res}"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         done <<<"$ha_resources"
 
@@ -98,6 +96,22 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions and ArgumentParser
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions and ArgumentParser
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Removed jq dependency - using ha-manager status instead
+#
+# Fixes:
+# - 2025-11-20: Fixed ha-manager command usage per PVE Guide Section 15.3 and 15.4.1
+# - 2025-11-20: Fixed arithmetic operations for set -e compatibility
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

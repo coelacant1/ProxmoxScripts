@@ -65,11 +65,16 @@ main() {
     delete_ct_callback() {
         local ctid="$1"
 
+        # Disable protection
+        __ct_set_protection__ "$ctid" 0
+
+        # Stop container if running
         if __ct_is_running__ "$ctid"; then
             __ct_stop__ "$ctid" --force 2>/dev/null || true
         fi
 
-        __ct_node_exec__ "$ctid" "pct destroy {ctid}"
+        # Delete container with purge flag
+        __ct_node_exec__ "$ctid" "pct destroy {ctid} --purge"
     }
 
     __bulk_ct_operation__ --name "Delete Containers" --report "$START_CTID" "$END_CTID" delete_ct_callback
@@ -82,5 +87,21 @@ main() {
 
 main
 
-# Testing status:
-#   - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Added protection disable and --purge flag per Section 11.9.1 (line 641)
+# - Uses --yes flag pattern per CONTRIBUTING.md Section 3.11
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

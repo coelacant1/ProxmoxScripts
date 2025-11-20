@@ -162,8 +162,21 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
-#   - Removed manual usage() function
-#   - Removed manual argument parsing
-#   - Now uses __parse_args__ with automatic validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - 2025-11-20: Removed manual usage() function
+# - 2025-11-20: Removed manual argument parsing
+# - 2025-11-20: Now uses __parse_args__ with automatic validation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

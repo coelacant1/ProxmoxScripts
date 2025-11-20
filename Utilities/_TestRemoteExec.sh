@@ -511,3 +511,19 @@ run_test_suite "Remote Execution Utilities" \
     test_error_handling_connection_timeout \
     test_error_handling_command_failure \
     test_file_transfer_validation
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

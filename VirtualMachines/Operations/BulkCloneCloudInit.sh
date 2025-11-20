@@ -151,5 +151,20 @@ main() {
 
 main
 
-# Testing status:
-#   - Pending validation on Proxmox VE cluster
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation on Proxmox VE cluster
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation on Proxmox VE cluster
+# -
+#
+

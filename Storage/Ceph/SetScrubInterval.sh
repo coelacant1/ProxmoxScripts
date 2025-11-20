@@ -513,12 +513,25 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - 2025-11-04: Fully refactored to match BulkConfigureCPU.sh standards
-#   - Follows CONTRIBUTING.md Section 3.10 patterns
-#   - Uses Communication.sh functions (__info__, __ok__, __err__)
-#   - Uses __prompt_user_yn__ for confirmations
-#   - Proper function documentation with @function, @description, @param
-#   - Readonly constants for configuration
-#   - Consistent spacing and structure
-#   - Better user feedback with detailed status messages
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Fully refactored to match BulkConfigureCPU.sh standards
+# - 2025-11-20: Follows CONTRIBUTING.md Section 3.10 patterns
+# - 2025-11-20: Uses Communication.sh functions (__info__, __ok__, __err__)
+# - 2025-11-20: Uses __prompt_user_yn__ for confirmations
+# - 2025-11-20: Proper function documentation with @function, @description, @param
+# - 2025-11-20: Readonly constants for configuration
+# - 2025-11-20: Consistent spacing and structure
+# - 2025-11-20: Better user feedback with detailed status messages
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -38,15 +38,12 @@ source "${UTILITYPATH}/Operations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:int end_vmid:int memory_mb:int swap_mb:int:?" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid memory_mb:memory swap_mb:memory:0" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
-
-    # Set default swap
-    SWAP_MB="${SWAP_MB:-0}"
 
     __info__ "Bulk set memory config: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
     __info__ "Memory: ${MEMORY_MB} MB, Swap: ${SWAP_MB} MB"
@@ -69,6 +66,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide Chapter 11, Section 22.11
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

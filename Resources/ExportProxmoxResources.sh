@@ -64,13 +64,15 @@ parse_config_files() {
 
                 local disk_gb
                 disk_gb="$(grep -Po 'size=\K[0-9]+[A-Z]?' "$config_file" | awk '
+                  BEGIN { sum = 0 }
                   {
-                    if ($1 ~ /G$/) sum += substr($1, 1, length($1)-1)
-                    else if ($1 ~ /M$/) sum += substr($1, 1, length($1)-1) / 1024
-                    else if ($1 ~ /K$/) sum += substr($1, 1, length($1)-1) / (1024 * 1024)
-                    else sum += $1 / (1024 * 1024 * 1024)
+                    size = $1
+                    if (size ~ /G$/) sum += substr(size, 1, length(size)-1)
+                    else if (size ~ /M$/) sum += substr(size, 1, length(size)-1) / 1024
+                    else if (size ~ /K$/) sum += substr(size, 1, length(size)-1) / (1024 * 1024)
+                    else sum += size / (1024 * 1024 * 1024)
                   }
-                  END {print sum}
+                  END { print sum }
                 ' || echo "0")"
 
                 echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
@@ -97,13 +99,15 @@ parse_config_files() {
 
                 local disk_gb
                 disk_gb="$(grep -Po 'size=\K[0-9]+[A-Z]?' "$config_file" | awk '
+                  BEGIN { sum = 0 }
                   {
-                    if ($1 ~ /G$/) sum += substr($1, 1, length($1)-1)
-                    else if ($1 ~ /M$/) sum += substr($1, 1, length($1)-1) / 1024
-                    else if ($1 ~ /K$/) sum += substr($1, 1, length($1)-1) / (1024 * 1024)
-                    else sum += $1 / (1024 * 1024 * 1024)
+                    size = $1
+                    if (size ~ /G$/) sum += substr(size, 1, length(size)-1)
+                    else if (size ~ /M$/) sum += substr(size, 1, length(size)-1) / 1024
+                    else if (size ~ /K$/) sum += substr(size, 1, length(size)-1) / (1024 * 1024)
+                    else sum += size / (1024 * 1024 * 1024)
                   }
-                  END {print sum}
+                  END { print sum }
                 ' || echo "0")"
 
                 echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
@@ -156,7 +160,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

@@ -25,6 +25,7 @@
 #   1. Convert line endings (CRLF -> LF)
 #   2. Update function indices in scripts
 #   2b. Update utility documentation
+#   2c. Validate script notes format
 #   3. Verify source calls are correct
 #   4. Format check (shfmt or basic)
 #   5. Security check (shellharden or basic patterns)
@@ -146,6 +147,55 @@ if python3 .check/UpdateUtilityDocumentation.py >/dev/null 2>&1; then
 else
     echo "- FAILED: Utility documentation update"
     CHECKS_FAILED=$((CHECKS_FAILED + 1))
+fi
+CHECKS_RUN=$((CHECKS_RUN + 1))
+echo ""
+
+# Check 2c: Validate script notes format
+echo "2c. Validating script notes format..."
+if [ "$NO_FIX" = true ]; then
+    # Dry-run mode
+    set +e
+    TEMP_OUTPUT=$(mktemp)
+    python3 .check/ValidateScriptNotes.py ./ > "$TEMP_OUTPUT" 2>&1
+    EXIT_CODE=$?
+    set -e
+    
+    if [ "$VERBOSE" = true ]; then
+        cat "$TEMP_OUTPUT"
+    else
+        # Show summary only
+        sed -n '/^====/p; /^Scripts found:/p; /^Summary/,/^====/p' "$TEMP_OUTPUT"
+    fi
+    
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "- Script notes validated"
+        CHECKS_PASSED=$((CHECKS_PASSED + 1))
+    else
+        echo "- Script notes issues found (run without --no-fix to auto-fix)"
+        CHECKS_FAILED=$((CHECKS_FAILED + 1))
+    fi
+    
+    rm -f "$TEMP_OUTPUT"
+else
+    # Fix mode
+    set +e
+    TEMP_OUTPUT=$(mktemp)
+    python3 .check/ValidateScriptNotes.py ./ --fix > "$TEMP_OUTPUT" 2>&1
+    EXIT_CODE=$?
+    set -e
+    
+    if [ "$VERBOSE" = true ]; then
+        cat "$TEMP_OUTPUT"
+    else
+        # Show fixed files and summary
+        grep -E "^✓|^===|^Scripts found:|^Summary|^  ✓|^  ✗" "$TEMP_OUTPUT" || true
+    fi
+    
+    echo "- Script notes validated and fixed"
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
+    
+    rm -f "$TEMP_OUTPUT"
 fi
 CHECKS_RUN=$((CHECKS_RUN + 1))
 echo ""

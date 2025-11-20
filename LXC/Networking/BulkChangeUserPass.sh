@@ -38,7 +38,7 @@ source "${UTILITYPATH}/Operations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:int end_vmid:int username:string new_password:string" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid username:string new_password:string" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -64,6 +64,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against PVE Guide v9.1-1 (Chapter 11) and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed: Changed ArgumentParser types from int to vmid for container ID validation
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

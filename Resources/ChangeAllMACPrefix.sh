@@ -42,12 +42,13 @@ rewrite_file_mac_prefix() {
     local backup_dir="$3"
     local dry_run="$4"
 
-    local tmp="$backup_dir/$(basename "$file")"
+    local tmp
+    tmp="$backup_dir/$(basename "$file")"
     cp -a "$file" "$tmp"
 
     sed -E \
-        -e "s/(net[0-9]+:[[:space:]]*[^=]+=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
-        -e "s/(hwaddr=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/\1${prefix_upper}:/g" \
+        -e "s/(net[0-9]+:[[:space:]]*[^=]+=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}/\1${prefix_upper}:\3:\4:\5/g" \
+        -e "s/(hwaddr=)[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}/\1${prefix_upper}:\3:\4:\5/g" \
         "$tmp" >"$tmp".new
 
     if ! cmp -s "$file" "$tmp".new; then
@@ -107,10 +108,11 @@ main() {
     fi
 
     # Setup backup directory
-    local backup_dir="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
+    local backup_dir
+    backup_dir="/root/mac_prefix_backups/$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
 
-    if [[ "$DRY_RUN" == "true" ]]; then
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
         __warn__ "DRY-RUN MODE - No changes will be applied"
     fi
 
@@ -179,7 +181,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

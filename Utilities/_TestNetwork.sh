@@ -163,3 +163,19 @@ run_test_suite "Network - MAC Validation" \
     test_validate_mac_invalid
 
 test_framework_cleanup
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

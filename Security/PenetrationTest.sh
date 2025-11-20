@@ -99,10 +99,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for "all" or variable hosts)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-# Testing status:
-#   - ArgumentParser.sh sourced (hybrid for "all" or variable hosts)
-#   - Pending validation

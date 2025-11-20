@@ -214,3 +214,19 @@ __set_remote_log_level__() {
 __get_remote_log_level__() {
     echo "$REMOTE_LOG_LEVEL"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

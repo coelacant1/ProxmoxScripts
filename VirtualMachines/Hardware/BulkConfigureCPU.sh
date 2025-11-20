@@ -218,9 +218,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
-#   - Removed manual parse_args and validate_options functions
-#   - Now uses __parse_args__ with automatic validation
-#   - Fixed __prompt_yes_no__ -> __prompt_user_yn__
-#   - Added missing Cluster.sh source for __get_vm_node__
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - 2025-11-20: Removed manual parse_args and validate_options functions
+# - 2025-11-20: Now uses __parse_args__ with automatic validation
+# - 2025-11-20: Fixed __prompt_yes_no__ -> __prompt_user_yn__
+# - 2025-11-20: Added missing Cluster.sh source for __get_vm_node__
+#
+# Fixes:
+# - Fixed __prompt_yes_no__ -> __prompt_user_yn__
+#
+# Known issues:
+# -
+#
+

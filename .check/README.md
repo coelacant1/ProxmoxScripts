@@ -462,3 +462,56 @@ To add a new check:
 | ShellCheck | Shell linting | No | shellcheck (opt) | No |
 
 \* Requires shellharden for auto-fix
+
+## ValidateScriptNotes.py
+
+**Purpose:** Validates and fixes script notes format in all shell scripts.
+
+**What it checks:**
+- Presence of script notes block with `###` separators
+- Required sections: Changes, Fixes, Known issues
+- Proper format with "Last checked:" field
+
+**What it fixes:**
+- Adds missing script notes block (with template)
+- Adds missing sections (Changes, Fixes, Known issues)
+- Does NOT update dates (must be manual)
+
+**Usage:**
+```bash
+# Dry-run (show issues)
+python3 ValidateScriptNotes.py
+
+# Fix all issues
+python3 ValidateScriptNotes.py --fix
+
+# Fix specific directory
+python3 ValidateScriptNotes.py --fix Resources/
+
+# Verbose output
+python3 ValidateScriptNotes.py --verbose
+```
+
+**Integration:**
+- Called by `_RunChecks.sh` as check 2c
+- Runs in fix mode by default (unless --no-fix specified)
+- Validates all .sh files in repository
+
+**Template added for missing blocks:**
+```bash
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+```
+

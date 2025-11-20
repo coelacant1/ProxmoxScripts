@@ -407,3 +407,19 @@ __display_script_info__() {
 
     __comm_log__ "DEBUG" "Script info display complete"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

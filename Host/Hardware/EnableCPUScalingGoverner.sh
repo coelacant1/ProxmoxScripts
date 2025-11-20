@@ -30,6 +30,7 @@
 #   - cpupower (recommended) or sysfs-based access to CPU freq scaling.
 #
 # Function Index:
+#   - convert_freq_to_khz
 #   - set_governor
 #   - do_install
 #   - do_remove
@@ -43,6 +44,10 @@ set -euo pipefail
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Globals / Defaults
@@ -67,6 +72,59 @@ __check_root__
 __check_proxmox__
 
 ###############################################################################
+# convert_freq_to_khz
+###############################################################################
+# Convert frequency from human-readable format to kHz integer
+# Usage: convert_freq_to_khz <freq>
+# Examples: 
+#   "1.2GHz" -> "1200000"
+#   "800MHz" -> "800000"
+#   "1200000" -> "1200000" (already in kHz)
+convert_freq_to_khz() {
+    local freq="$1"
+    local khz_value
+    
+    # If already a plain integer (assumed kHz), return as-is
+    if [[ "$freq" =~ ^[0-9]+$ ]]; then
+        echo "$freq"
+        return
+    fi
+    
+    # Parse value and unit
+    if [[ "$freq" =~ ^([0-9.]+)([GMk]?Hz)$ ]]; then
+        local value="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+        
+        case "$unit" in
+            GHz)
+                # Convert GHz to kHz: multiply by 1,000,000
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value * 1000000}")
+                ;;
+            MHz)
+                # Convert MHz to kHz: multiply by 1,000
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value * 1000}")
+                ;;
+            kHz)
+                # kHz stays as-is
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value}")
+                ;;
+            Hz)
+                # Hz converted to kHz (divide by 1000)
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value / 1000}")
+                ;;
+            *)
+                echo "Error: Unknown frequency unit in '$freq'" >&2
+                return 1
+                ;;
+        esac
+        echo "$khz_value"
+    else
+        echo "Error: Invalid frequency format '$freq'" >&2
+        return 1
+    fi
+}
+
+###############################################################################
 # set_governor
 ###############################################################################
 # Usage: set_governor <governor> [min_freq] [max_freq]
@@ -84,6 +142,22 @@ set_governor() {
         [[ -n "${maxFreq}" ]] && cpupower frequency-set -u "${maxFreq}" >/dev/null 2>&1
     else
         echo "Warning: cpupower not found, using sysfs fallback..."
+        
+        # Convert frequencies to kHz for sysfs
+        local minFreqKhz maxFreqKhz
+        if [[ -n "${minFreq}" ]]; then
+            minFreqKhz=$(convert_freq_to_khz "${minFreq}") || {
+                echo "Error: Failed to convert min frequency '${minFreq}'"
+                exit 1
+            }
+        fi
+        if [[ -n "${maxFreq}" ]]; then
+            maxFreqKhz=$(convert_freq_to_khz "${maxFreq}") || {
+                echo "Error: Failed to convert max frequency '${maxFreq}'"
+                exit 1
+            }
+        fi
+        
         for cpuDir in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
             if [[ -w "${cpuDir}/scaling_governor" ]]; then
                 echo "${gov}" >"${cpuDir}/scaling_governor" 2>/dev/null || {
@@ -91,11 +165,11 @@ set_governor() {
                     exit 1
                 }
             fi
-            if [[ -n "${minFreq}" && -w "${cpuDir}/scaling_min_freq" ]]; then
-                echo "${minFreq}" >"${cpuDir}/scaling_min_freq"
+            if [[ -n "${minFreqKhz}" && -w "${cpuDir}/scaling_min_freq" ]]; then
+                echo "${minFreqKhz}" >"${cpuDir}/scaling_min_freq"
             fi
-            if [[ -n "${maxFreq}" && -w "${cpuDir}/scaling_max_freq" ]]; then
-                echo "${maxFreq}" >"${cpuDir}/scaling_max_freq"
+            if [[ -n "${maxFreqKhz}" && -w "${cpuDir}/scaling_max_freq" ]]; then
+                echo "${maxFreqKhz}" >"${cpuDir}/scaling_max_freq"
             fi
         done
     fi
@@ -210,9 +284,24 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
-#   - Removed manual usage() function
-#   - Removed manual argument parsing in main
-#   - Now uses __parse_args__ with automatic validation
-#   - Handles subcommand pattern (install/remove/configure)
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - 2025-11-20: Removed manual usage() function
+# - 2025-11-20: Removed manual argument parsing in main
+# - 2025-11-20: Now uses __parse_args__ with automatic validation
+# - 2025-11-20: Handles subcommand pattern (install/remove/configure)
+# - 2025-11-20: Added frequency conversion for sysfs fallback (kHz integer format)
+# - 2025-11-20: Added Communication.sh and error trap per CONTRIBUTING.md Section 3.9
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -2,7 +2,7 @@
 #
 # UpgradeAllServers.sh
 #
-# Updates all servers in the Proxmox cluster with apt-get upgrade.
+# Updates all servers in the Proxmox cluster with apt-get dist-upgrade.
 #
 # Usage:
 #   UpgradeAllServers.sh
@@ -49,20 +49,20 @@ main() {
         __update__ "Upgrading node ${node_ip}"
 
         if [[ "${node_ip}" == "${local_node_ip}" ]]; then
-            if apt-get update -qq && apt-get -y upgrade 2>&1; then
+            if apt-get update -qq && apt-get -y dist-upgrade 2>&1; then
                 __ok__ "Local node upgraded"
-                ((success += 1))
+                success=$((success + 1))
             else
                 __warn__ "Failed to upgrade local node"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         else
-            if ssh "root@${node_ip}" "apt-get update -qq && apt-get -y upgrade" 2>&1; then
+            if ssh "root@${node_ip}" "apt-get update -qq && apt-get -y dist-upgrade" 2>&1; then
                 __ok__ "Node ${node_ip} upgraded"
-                ((success += 1))
+                success=$((success + 1))
             else
                 __warn__ "Failed to upgrade node ${node_ip}"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         fi
     done
@@ -78,6 +78,19 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+#
+

@@ -1038,3 +1038,19 @@ __state_validate__() {
 # # Compare states
 # __state_diff__ vm 100 "before" "after"
 #
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

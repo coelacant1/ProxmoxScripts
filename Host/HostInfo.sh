@@ -29,10 +29,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export UTILITYPATH="${UTILITYPATH:-$REPO_ROOT/Utilities}"
 
-source "$UTILITYPATH/Communication.sh" 2>/dev/null || {
+# shellcheck source=Utilities/ArgumentParser.sh
+source "$UTILITYPATH/ArgumentParser.sh" 2>/dev/null || {
+    echo "Error: Cannot find ArgumentParser.sh"
+    exit 1
+}
     echo "Error: Cannot find Communication.sh"
     exit 1
 }
+# shellcheck source=Utilities/Prompts.sh
 source "$UTILITYPATH/Prompts.sh" 2>/dev/null || {
     echo "Error: Cannot find Prompts.sh"
     exit 1
@@ -52,7 +57,8 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-OUTPUT_JSON=0
+# Parse arguments with ArgumentParser
+__parse_args__ "--json:flag" "$@"
 
 # --- get_cpu_info -------------------------------------------------------------
 # @function get_cpu_info
@@ -505,22 +511,7 @@ main() {
     __check_root__
     __check_proxmox__
 
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --json)
-                OUTPUT_JSON=1
-                shift
-                ;;
-            *)
-                __err__ "Unknown option: $1"
-                __info__ "Usage: $0 [--json]"
-                exit 1
-                ;;
-        esac
-    done
-
-    if [[ $OUTPUT_JSON -eq 1 ]]; then
+    if [[ "$JSON" == "true" ]]; then
         display_json
     else
         display_info
@@ -531,3 +522,20 @@ main "$@"
 
 # Testing Status:
 #   - Tested execution on 11/17
+#   - Updated to use ArgumentParser.sh
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

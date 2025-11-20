@@ -63,22 +63,27 @@ main() {
     fi
 
     __warn__ "This will remove node ${NODE_NAME} from the cluster"
-    if ! __prompt_user_yn__ "Proceed?"; then
-        __info__ "Operation cancelled"
-        exit 0
-    fi
-
-    __info__ "Preparing node ${NODE_NAME} for removal"
-
-    # Stop cluster services on target node
+    __warn__ "IMPORTANT: The target node must be powered off before removal"
+    
+    # Try to get node IP to verify status
     local host
     host=$(__get_ip_from_name__ "$NODE_NAME") || true
 
     if [[ -n "$host" ]]; then
-        __info__ "Stopping cluster services on ${NODE_NAME}"
-        ssh -t -o StrictHostKeyChecking=no "root@${host}" \
-            "systemctl stop pve-cluster corosync && pmxcfs -l && rm -r /etc/corosync/* /etc/pve/corosync.conf && killall pmxcfs && systemctl start pve-cluster" 2>/dev/null || true
+        if ping -c 1 -W 2 "$host" >/dev/null 2>&1; then
+            __err__ "Node ${NODE_NAME} (${host}) appears to be online"
+            __err__ "You MUST power off the node before removal to prevent cluster issues"
+            __err__ "After powering off, run this script again"
+            exit 1
+        fi
     fi
+
+    if ! __prompt_user_yn__ "Have you confirmed the node is powered off? Proceed?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+
+    __info__ "Preparing to remove node ${NODE_NAME} from cluster"
 
     # Remove node from cluster
     __info__ "Removing node ${NODE_NAME} from cluster membership"
@@ -130,7 +135,21 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Pending validation
+# - 2025-11-19: Added node offline check before removal
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

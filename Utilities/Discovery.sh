@@ -466,3 +466,19 @@ __get_name_from_ip__() {
     __discovery_log__ "DEBUG" "Resolved $node_ip -> $name"
     echo "$name"
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

@@ -220,3 +220,19 @@ if [[ ! -f "$LOG_FILE" ]]; then
     touch "$LOG_FILE"
     __log__ "INFO" "Log initialized" "LOGGER"
 fi
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

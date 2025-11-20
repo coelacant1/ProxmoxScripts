@@ -49,7 +49,7 @@ main() {
     __info__ "Creating new Proxmox cluster: ${CLUSTER_NAME}"
     __info__ "Using link0 address: ${MON_IP}"
 
-    if pvecm create "${CLUSTER_NAME}" --link0 "address=${MON_IP}" 2>&1; then
+    if pvecm create "${CLUSTER_NAME}" --link0 "${MON_IP}" 2>&1; then
         __ok__ "Cluster ${CLUSTER_NAME} created successfully!"
         echo
         __info__ "Verify with: pvecm status"
@@ -62,7 +62,20 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Pending validation
+#
+# Fixes:
+# - 2025-11-19: Fixed --link0 parameter format
+#
+# Known issues:
+# -
+#
+

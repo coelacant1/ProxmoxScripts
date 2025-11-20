@@ -41,6 +41,11 @@ main() {
     __check_proxmox__
     __check_cluster_membership__
 
+    __warn__ "This script modifies /etc/resolv.conf directly"
+    __warn__ "If systemd-resolved is active, changes may be overwritten"
+    __info__ "To disable systemd-resolved: systemctl disable --now systemd-resolved"
+    echo
+
     __info__ "Setting DNS cluster-wide"
     __info__ "  DNS1: $DNS1"
     __info__ "  DNS2: $DNS2"
@@ -59,10 +64,10 @@ main() {
         if ssh -o StrictHostKeyChecking=no "root@${node_ip}" \
             "echo -e 'search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}' > /etc/resolv.conf" 2>&1; then
             __ok__ "DNS configured on $node_ip"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to configure DNS on $node_ip"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -70,10 +75,10 @@ main() {
     __update__ "Setting DNS on local node"
     if echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" >/etc/resolv.conf 2>&1; then
         __ok__ "DNS configured on local node"
-        ((success += 1))
+        success=$((success + 1))
     else
         __warn__ "Failed to configure DNS on local node"
-        ((failed += 1))
+        failed=$((failed + 1))
     fi
 
     echo
@@ -87,7 +92,24 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Updated to use ArgumentParser.sh
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+#
+# Fixes:
+# - Fixed arithmetic increment syntax (lines 62, 65, 73, 76)
+# - Fixed: Added warning about systemd-resolved conflicts
+# - Note: Direct /etc/resolv.conf modification may be overwritten by systemd-resolved
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

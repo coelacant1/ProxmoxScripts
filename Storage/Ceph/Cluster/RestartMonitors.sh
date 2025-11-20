@@ -153,3 +153,19 @@ for index in "${!monNames[@]}"; do
 done
 
 __ok__ "All Ceph monitors processed."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

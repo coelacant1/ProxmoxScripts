@@ -92,3 +92,19 @@ for ((i = 0; i < instanceCount; i++)); do
     # Increment IP by 1 for the next clone
     ipInt=$((ipInt + 1))
 done
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

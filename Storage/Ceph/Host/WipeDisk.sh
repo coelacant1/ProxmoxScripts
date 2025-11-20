@@ -127,3 +127,19 @@ fi
 # Prompt to keep newly installed packages
 ###############################################################################
 __prompt_keep_installed_packages__
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

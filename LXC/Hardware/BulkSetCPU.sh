@@ -38,15 +38,12 @@ source "${UTILITYPATH}/Operations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:int end_vmid:int core_count:int sockets:int:?" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid core_count:cpu sockets:number:1" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
     __check_root__
     __check_proxmox__
-
-    # Set default socket count
-    SOCKETS="${SOCKETS:-1}"
 
     __info__ "Bulk set CPU config: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
     __info__ "Cores: ${CORE_COUNT}, Sockets: ${SOCKETS}"
@@ -69,6 +66,21 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide Chapter 11, Section 22.11
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

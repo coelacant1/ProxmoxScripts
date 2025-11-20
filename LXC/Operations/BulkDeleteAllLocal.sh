@@ -29,8 +29,6 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Operations.sh
 source "${UTILITYPATH}/Operations.sh"
-# shellcheck source=Utilities/BulkOperations.sh
-source "${UTILITYPATH}/BulkOperations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -58,48 +56,87 @@ main() {
     __warn__ "This will permanently delete ${#ct_array[@]} container(s) on this node:"
     echo "$ct_ids"
 
-    # Confirm unless --force
-    if [[ -z "${FORCE:-}" ]]; then
-        if ! __prompt_user_yn__ "Are you sure you want to delete all containers?"; then
-            __info__ "Operation canceled"
-            exit 0
-        fi
+    # Safety check: Require --force in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "${FORCE}" != "true" ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: BulkDeleteAllLocal.sh --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
     fi
 
-    # Local callback for bulk operation
+    # Prompt for confirmation (unless --force provided)
+    if [[ "${FORCE}" == "true" ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Are you sure you want to delete all containers?"; then
+        __info__ "Operation canceled"
+        exit 0
+    fi
+
+    # Local callback for deletion
     delete_ct_callback() {
         local vmid="$1"
 
         # Disable protection
         __ct_set_protection__ "$vmid" 0
 
-        # Stop container
-        __ct_stop__ "$vmid"
+        # Stop container if running
+        if __ct_is_running__ "$vmid"; then
+            __ct_stop__ "$vmid" --force 2>/dev/null || true
+        fi
 
-        # Delete container
-        __ct_delete__ "$vmid" --purge
+        # Delete container with purge
+        __ct_node_exec__ "$vmid" "pct destroy {ctid} --purge"
     }
 
+    # Track results
+    local success=0
+    local failed=0
+
     # Process each container
-    BULK_OPERATION_NAME="Delete"
     for vmid in "${ct_array[@]}"; do
+        __update__ "Deleting container ${vmid}..."
         if delete_ct_callback "$vmid"; then
-            ((BULK_SUCCESS += 1))
+            success=$((success + 1))
         else
-            ((BULK_FAILED += 1))
-            BULK_FAILED_IDS+=("$vmid")
+            __warn__ "Failed to delete container ${vmid}"
+            failed=$((failed + 1))
         fi
     done
 
     # Display summary
-    __bulk_summary__
+    echo ""
+    __info__ "Deletion Summary:"
+    __info__ "  Total: ${#ct_array[@]}"
+    __info__ "  Success: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
 
-    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    if [[ $failed -gt 0 ]]; then
+        __err__ "Some deletions failed"
+        exit 1
+    fi
+
     __ok__ "All containers deleted successfully!"
 }
 
 main
 
-# Testing status:
-#   - Updated to use ArgumentParser and BulkOperations framework
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Added proper non-interactive mode handling
+# - Simplified loop logic (doesn't use BulkOperations framework as it processes local-only containers)
+#
+# Fixes:
+# - Fixed --force flag safety check per Section 3.11
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

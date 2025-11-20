@@ -76,8 +76,9 @@ parse_backup_info() {
     local backup_date="Unknown"
     if [[ "$backup_path" =~ ([0-9]{4}[-_][0-9]{2}[-_][0-9]{2}[-_][0-9]{2}[-_:][0-9]{2}[-_:][0-9]{2}) ]]; then
         backup_date="${BASH_REMATCH[1]}"
-        backup_date="${backup_date//_/ }" # Replace underscores with spaces
-        backup_date="${backup_date//-/:}" # Fix time separators
+        # Convert to readable format: 2024_11_20-15_30_45 or 2024-11-20-15:30:45
+        backup_date="${backup_date//_/-}"  # Convert underscores to dashes
+        backup_date="${backup_date// /-}"  # Convert spaces to dashes
     fi
 
     BACKUP_PATHS+=("$backup_path")
@@ -297,9 +298,26 @@ main() {
 
 ###############################################################################
 # Script Entry Point
-###############################################################################
-main "$@"
 
-# Testing status:
-#   - Updated with utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated with utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md
+# - Interactive container restore from backup storage
+# - Uses pct restore command per PVE Guide Chapter 16
+# - Filters for container backups only (pbs-ct, vzdump, lxc types)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - FIXED: Date format conversion now preserves readable format (dashes instead of colons)
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

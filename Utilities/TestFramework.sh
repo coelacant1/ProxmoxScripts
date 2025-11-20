@@ -945,3 +945,19 @@ test_framework_init
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "${GREEN}Test Framework initialized${NC}"
 fi
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

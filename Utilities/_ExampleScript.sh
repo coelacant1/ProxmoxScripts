@@ -162,6 +162,23 @@ main
 #
 
 ###############################################################################
-# Testing status
+# Script notes:
 ###############################################################################
-# Tested: ArgumentParser validation functions
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Created comprehensive example script
+# - 2025-11-20: Added examples for all utility functions
+# - 2025-11-20: Demonstrated ArgumentParser usage patterns
+# - 2025-11-20: Added error handling examples
+# - 2025-11-20: Included NON_INTERACTIVE_STANDARD compliance
+# - Tested: ArgumentParser validation functions
+# - This is an example script for demonstration purposes only
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

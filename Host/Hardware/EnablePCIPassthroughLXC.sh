@@ -112,14 +112,14 @@ main() {
         echo
         if ! pct config "${ctid}" &>/dev/null; then
             __err__ "Container $ctid does not exist - skipping"
-            ((failed += 1))
+            failed=$((failed + 1))
             continue
         fi
 
         if enable_pci_passthrough "$ctid" "$PCI_DEVICE_ID"; then
-            ((success += 1))
+            success=$((success + 1))
         else
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -140,7 +140,22 @@ main() {
 
 main "$@"
 
-# Testing status:
-#   - Updated to follow CONTRIBUTING.md guidelines
-#   - ArgumentParser.sh sourced (hybrid for variable args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to follow CONTRIBUTING.md guidelines
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide Section 10.9 - compliant
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

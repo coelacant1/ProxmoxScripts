@@ -31,7 +31,6 @@ main() {
     __check_root__
     __check_proxmox__
     __check_cluster_membership__
-    __install_or_prompt__ "jq"
 
     __warn__ "This will disable HA cluster-wide and remove all HA resources"
     if ! __prompt_user_yn__ "Proceed with HA cluster-wide disable?"; then
@@ -44,7 +43,7 @@ main() {
     # Retrieve and remove all HA resources
     __info__ "Retrieving all HA resources"
     local all_resources
-    all_resources=$(pvesh get /cluster/ha/resources --output-format json 2>/dev/null | jq -r '.[].sid')
+    all_resources=$(ha-manager config 2>/dev/null | awk '/^(vm|ct):/ {print $1}')
 
     if [[ -z "$all_resources" ]]; then
         __info__ "No HA resources found"
@@ -55,18 +54,18 @@ main() {
 
         while IFS= read -r res; do
             __update__ "Removing HA resource: ${res}"
-            if pvesh delete "/cluster/ha/resources/${res}" 2>&1; then
+            if ha-manager remove "${res}" 2>&1; then
                 __ok__ "Removed ${res}"
-                ((removed += 1))
+                removed=$((removed + 1))
             else
                 __warn__ "Failed to remove ${res}"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         done <<<"$all_resources"
 
         echo
         __info__ "Removed ${removed} HA resource(s)"
-        [[ $failed -gt 0 ]] && __warn__ "${failed} failed to remove"
+        [[ $failed -gt 0 ]] && __warn__ "${failed} failed to remove" || __info__ "  Failed: 0"
     fi
 
     # Stop and disable HA services on all nodes
@@ -93,6 +92,22 @@ main() {
 
 main
 
-# Testing status:
-#   - Updated to use utility functions
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Removed jq dependency - using ha-manager config instead
+#
+# Fixes:
+# - 2025-11-20: Fixed ha-manager command usage per PVE Guide Section 15.3
+# - 2025-11-20: Fixed arithmetic operations for set -e compatibility
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

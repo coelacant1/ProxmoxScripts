@@ -234,6 +234,21 @@ fi
 
 __prompt_keep_installed_packages__
 
-# Testing status:
-#   - ArgumentParser.sh sourced (hybrid for complex dual-mode args)
-#   - Pending validation
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for complex dual-mode args)
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+
