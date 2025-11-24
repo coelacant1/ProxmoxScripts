@@ -104,7 +104,8 @@ list_test_suites() {
     echo "${BOLD}${GREEN}Unit Tests (Always Safe):${NC}"
     for test_file in "${UNIT_TESTS[@]}"; do
         if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
-            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
+            local suite_name
+            suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
             echo "  ${GREEN}✓${NC} ${test_file} - ${suite_name}"
         else
             echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
@@ -114,7 +115,8 @@ list_test_suites() {
     echo "${BOLD}${YELLOW}Integration Tests (Need Proxmox or Mocks):${NC}"
     for test_file in "${INTEGRATION_TESTS[@]}"; do
         if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
-            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
+            local suite_name
+            suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
             echo "  ${YELLOW}⚠${NC} ${test_file} - ${suite_name}"
         else
             echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
@@ -124,7 +126,8 @@ list_test_suites() {
     echo "${BOLD}${RED}Special Environment Tests:${NC}"
     for test_file in "${SPECIAL_TESTS[@]}"; do
         if [[ -f "${SCRIPT_DIR}/${test_file}" ]]; then
-            local suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
+            local suite_name
+            suite_name=$(grep -m 1 "run_test_suite" "${SCRIPT_DIR}/${test_file}" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || echo "No suite name")
             echo "  ${RED}!${NC} ${test_file} - ${suite_name}"
         else
             echo "  ${RED}✗${NC} ${test_file} - ${DIM}Not found${NC}"
@@ -142,7 +145,7 @@ RUN_MODE="default" # default, unit-only, integration-only, all
 while [[ $# -gt 0 ]]; do
     case $1 in
         -v | --verbose)
-            VERBOSE_TESTS=true
+            export VERBOSE_TESTS=true
             export LOG_LEVEL="INFO"
             shift
             ;;
@@ -267,15 +270,7 @@ for test_file in "${TESTS_TO_RUN[@]}"; do
 
     ((TOTAL_SUITES += 1))
 
-    # Reset test counters for this suite
-    TEST_TOTAL=0
-    TEST_PASSED=0
-    TEST_FAILED=0
-    TEST_SKIPPED=0
-    TEST_RESULTS=()
-    FAILED_TESTS=()
-
-    # Run the test file
+    # Run the test file (TestFramework.sh manages test counters internally)
     if bash "$test_path"; then
         ((PASSED_SUITES += 1))
     else
@@ -289,7 +284,7 @@ for test_file in "${TESTS_TO_RUN[@]}"; do
 
     # Generate report if requested
     if [[ "$GENERATE_REPORTS" == true ]]; then
-        local report_name=$(basename "$test_file" .sh)
+        report_name=$(basename "$test_file" .sh)
         generate_test_report "$REPORT_FORMAT" "${REPORT_DIR}/${report_name}.${REPORT_FORMAT}"
     fi
 done
@@ -336,13 +331,20 @@ fi
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155, SC2034, SC2168)
+# - 2025-11-24: Validation against CONTRIBUTING.md and PVE docs
+# - Initial creation: Test suite runner for Proxmox Scripts utilities
 #
 # Fixes:
-# -
+# - 2025-11-24: Separated variable declaration/assignment in list_test_suites
+#   (SC2155) for proper error handling
+# - 2025-11-24: Changed VERBOSE_TESTS to export for TestFramework.sh consumption
+# - 2025-11-24: Removed unused local variable resets (TestFramework.sh manages
+#   these globals internally)
+# - 2025-11-24: Fixed 'local' outside function (SC2168) in report generation
 #
 # Known issues:
 # -

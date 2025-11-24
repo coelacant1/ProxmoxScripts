@@ -342,7 +342,8 @@ __bulk_ct_operation__() {
 # @usage __bulk_summary__
 # @return 0 always
 __bulk_summary__() {
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local duration=$((end_time - BULK_START_TIME))
 
     __bulk_log__ "INFO" "Bulk summary: total=$BULK_TOTAL, success=$BULK_SUCCESS, failed=$BULK_FAILED, skipped=$BULK_SKIPPED, duration=${duration}s"
@@ -587,7 +588,8 @@ __bulk_parallel__() {
     # Collect results
     for ((id = start_id; id <= end_id; id++)); do
         if [[ -f "$tmpdir/$id" ]]; then
-            local result=$(cat "$tmpdir/$id")
+            local result
+            result=$(cat "$tmpdir/$id")
             if [[ "$result" == "success" ]]; then
                 ((BULK_SUCCESS += 1))
                 BULK_SUCCESS_IDS[$id]=1
@@ -630,8 +632,8 @@ __bulk_save_state__() {
         echo "BULK_SUCCESS=$BULK_SUCCESS"
         echo "BULK_FAILED=$BULK_FAILED"
         echo "BULK_SKIPPED=$BULK_SKIPPED"
-        echo "BULK_FAILED_IDS=(${!BULK_FAILED_IDS[@]})"
-        echo "BULK_SUCCESS_IDS=(${!BULK_SUCCESS_IDS[@]})"
+        echo "BULK_FAILED_IDS=(${!BULK_FAILED_IDS[*]})"
+        echo "BULK_SUCCESS_IDS=(${!BULK_SUCCESS_IDS[*]})"
     } >"$filename"
 
     __bulk_log__ "INFO" "Bulk state saved successfully"
@@ -654,6 +656,7 @@ __bulk_load_state__() {
         return 1
     fi
 
+    # shellcheck source=/dev/null
     source "$filename"
     __bulk_log__ "INFO" "Bulk state loaded successfully"
 }
@@ -729,13 +732,16 @@ __bulk_validate_range__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155, SC2145, SC1090)
+# - Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Separated declaration and assignment for date/result variables
+# - 2025-11-24: Changed array expansion from [@] to [*] in state save
+# - 2025-11-24: Added shellcheck directive for dynamic source
 #
 # Known issues:
 # -

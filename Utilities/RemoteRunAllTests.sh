@@ -146,9 +146,12 @@ run_tests_on_all_nodes() {
 
     # Iterate through nodes
     for ((i = 0; i < nodes_count; i++)); do
-        local node_name=$(jq -r ".nodes[${i}].name" "${NODES_FILE}")
-        local node_ip=$(jq -r ".nodes[${i}].ip" "${NODES_FILE}")
-        local node_password=$(jq -r ".nodes[${i}].password // empty" "${NODES_FILE}")
+        local node_name
+        local node_ip
+        local node_password
+        node_name=$(jq -r ".nodes[${i}].name" "${NODES_FILE}")
+        node_ip=$(jq -r ".nodes[${i}].ip" "${NODES_FILE}")
+        node_password=$(jq -r ".nodes[${i}].password // empty" "${NODES_FILE}")
 
         # Validate connection first
         if ! validate_node_connection "${node_name}" "${node_ip}"; then
@@ -301,13 +304,14 @@ fi
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md standards
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155)
 #
 # Fixes:
-# -
+# - 2025-11-24: Separated variable declaration and assignment (SC2155)
 #
 # Known issues:
 # -

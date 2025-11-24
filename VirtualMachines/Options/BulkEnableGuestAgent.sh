@@ -51,7 +51,7 @@ main() {
 
         if [[ "$RESTART" == "true" ]]; then
             if __vm_is_running__ "$vmid"; then
-                __vm_reset__ "$vmid"
+                __vm_restart__ "$vmid"
             fi
         fi
     }
@@ -69,13 +69,14 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed __vm_reset__ to __vm_restart__ for graceful restart (PVE Guide
+#   10.2.11 requires "fresh start" - graceful shutdown+start is safer than hard reset)
 #
 # Known issues:
 # -

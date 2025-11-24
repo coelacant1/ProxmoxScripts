@@ -144,9 +144,10 @@ echo "Completed removal of SFTP parameters for all matching connections."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - confirmed compliant
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

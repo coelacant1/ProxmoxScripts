@@ -44,7 +44,7 @@ source "${UTILITYPATH}/Cluster.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid target_host target_token fingerprint target_storage:storage vm_offset:int target_network" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid target_host:string target_token:string fingerprint:string target_storage:storage vm_offset:number target_network:bridge" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -97,9 +97,11 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed ArgumentParser type from 'int' to 'number' for vm_offset
+# - 2025-11-24: Added missing string types for target parameters
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 #
 # Fixes:

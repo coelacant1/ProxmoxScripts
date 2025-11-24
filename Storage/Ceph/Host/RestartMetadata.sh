@@ -43,7 +43,8 @@ function _find_mds_units() {
 # Restart every ceph-mds unit found
 ###############################################################################
 function restartMds() {
-    local units=($(_find_mds_units))
+    local units
+    mapfile -t units < <(_find_mds_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mds units found on this host."
         exit 0
@@ -61,7 +62,8 @@ function restartMds() {
 # Display status for every ceph-mds unit
 ###############################################################################
 function statusMds() {
-    local units=($(_find_mds_units))
+    local units
+    mapfile -t units < <(_find_mds_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mds units found on this host."
         exit 0
@@ -89,13 +91,14 @@ esac
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Fixed array assignment to use mapfile (SC2207)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Changed array assignment from `units=($(...))` to `mapfile -t units < <(...)`
 #
 # Known issues:
 # -

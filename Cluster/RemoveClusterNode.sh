@@ -64,7 +64,7 @@ main() {
 
     __warn__ "This will remove node ${NODE_NAME} from the cluster"
     __warn__ "IMPORTANT: The target node must be powered off before removal"
-    
+
     # Try to get node IP to verify status
     local host
     host=$(__get_ip_from_name__ "$NODE_NAME") || true
@@ -138,12 +138,11 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-21
 #
 # Changes:
 # - 2025-11-20: Updated to use utility functions
 # - 2025-11-20: Updated to use ArgumentParser.sh
-# - 2025-11-20: Pending validation
 # - 2025-11-19: Added node offline check before removal
 #
 # Fixes:

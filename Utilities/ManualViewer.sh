@@ -80,7 +80,7 @@ __show_manual__() {
         # Fallback to cat
         cat "$manual_path"
         echo ""
-        read -p "Press Enter to continue..."
+        read -r -p "Press Enter to continue..."
     fi
 }
 
@@ -108,7 +108,7 @@ __manual_menu__() {
         echo "Please ensure you're running GUI.sh from the"
         echo "ProxmoxScripts repository root directory."
         echo ""
-        read -p "Press Enter to continue..."
+        read -r -p "Press Enter to continue..."
         return 1
     fi
 
@@ -137,9 +137,9 @@ __manual_menu__() {
             echo "Searching for: *.txt files in $manual_dir"
             echo ""
             echo "Contents of manual directory:"
-            ls -la "$manual_dir" 2>&1 | head -10
+            find "$manual_dir" -maxdepth 1 -type f -printf "%p\n" 2>&1 | head -10
             echo ""
-            read -p "Press Enter to continue..." || return 1
+            read -r -p "Press Enter to continue..." || return 1
             return 1
         fi
 
@@ -213,13 +213,15 @@ __quick_help__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validation against CONTRIBUTING.md and fixed ShellCheck warnings
+# - Initial creation: Manual viewer utility for Manuals/ directory
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed SC2162 warnings by adding -r flag to all read commands
+# - 2025-11-24: Fixed SC2012 by replacing ls with find for file listing
 #
 # Known issues:
 # -

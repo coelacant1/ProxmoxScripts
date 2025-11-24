@@ -68,14 +68,11 @@ main() {
 
         __update__ "Setting automatic package upgrade to '${ACTION}' for VM ${vmid}..."
 
-        # Note: Cloud-Init package upgrade is typically set via --cicustom or snippets
-        # The direct qm set with packages_auto_upgrade may not work on all versions
-        # This attempts to set it, but may require custom Cloud-Init configuration
-        if qm set "$vmid" --ciuser root --set "packages_auto_upgrade=${AUTO_UPGRADE_SETTING}" --node "$node" 2>/dev/null; then
-            qm cloudinit dump "$vmid" --node "$node" 2>/dev/null || true
+        if qm set "$vmid" --ciupgrade "$AUTO_UPGRADE_SETTING" --node "$node" 2>/dev/null; then
+            qm cloudinit update "$vmid" --node "$node" 2>/dev/null || true
             return 0
         else
-            __update__ "Failed to set package upgrade for VM ${vmid} (may require custom Cloud-Init config)"
+            __update__ "Failed to set package upgrade for VM ${vmid}"
             return 1
         fi
     }
@@ -95,15 +92,18 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
-# - 2025-11-20: Note: Package auto-upgrade may require custom Cloud-Init configuration on some Proxmox versions
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed incorrect qm command - changed '--set "packages_auto_upgrade="'
+#   to '--ciupgrade' per PVE Guide documentation
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
+# - 2025-11-24: Removed incorrect '--ciuser root' parameter
 #
 # Known issues:
 # -

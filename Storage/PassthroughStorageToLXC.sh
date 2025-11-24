@@ -83,7 +83,7 @@ process_container() {
     # Find next available mount point index
     local next_mp_index=0
     while pct config "$ctid" | grep -q "^mp${next_mp_index}:"; do
-        ((next_mp_index += 1))
+        next_mp_index=$((next_mp_index + 1))
     done
 
     local mount_point="/mnt/$(basename "$host_dir")"
@@ -121,9 +121,9 @@ main() {
 
     for ctid in "${CTIDS[@]}"; do
         if process_container "$ctid" "$HOST_DIR" "$ro_flag"; then
-            ((mounted += 1))
+            mounted=$((mounted + 1))
         else
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -141,19 +141,18 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
 # - 2025-11-20: Updated to use utility functions
-# - 2025-11-20: Pending validation
 # - 2025-11-20: Updated to use ArgumentParser.sh
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed ((var += 1)) to var=$((var + 1)) for set -e compatibility
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

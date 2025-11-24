@@ -160,14 +160,14 @@ if [ "$NO_FIX" = true ]; then
     python3 .check/ValidateScriptNotes.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         cat "$TEMP_OUTPUT"
     else
         # Show summary only
         sed -n '/^====/p; /^Scripts found:/p; /^Summary/,/^====/p' "$TEMP_OUTPUT"
     fi
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- Script notes validated"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))
@@ -175,7 +175,7 @@ if [ "$NO_FIX" = true ]; then
         echo "- Script notes issues found (run without --no-fix to auto-fix)"
         CHECKS_FAILED=$((CHECKS_FAILED + 1))
     fi
-    
+
     rm -f "$TEMP_OUTPUT"
 else
     # Fix mode
@@ -184,17 +184,17 @@ else
     python3 .check/ValidateScriptNotes.py ./ --fix > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         cat "$TEMP_OUTPUT"
     else
         # Show fixed files and summary
         grep -E "^✓|^===|^Scripts found:|^Summary|^  ✓|^  ✗" "$TEMP_OUTPUT" || true
     fi
-    
+
     echo "- Script notes validated and fixed"
     CHECKS_PASSED=$((CHECKS_PASSED + 1))
-    
+
     rm -f "$TEMP_OUTPUT"
 fi
 CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -219,7 +219,7 @@ else
     # Re-enable errexit and pipefail
     set -e
     set -o pipefail
-    
+
     echo "- Source calls verified and fixed"
     CHECKS_PASSED=$((CHECKS_PASSED + 1))
 fi
@@ -234,7 +234,7 @@ if [ "$SKIP_FORMAT" = false ]; then
     python3 .check/FormatCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
         cat "$TEMP_OUTPUT"
@@ -243,7 +243,7 @@ if [ "$SKIP_FORMAT" = false ]; then
         grep -E "^(WARNING:|Total files checked:|Files with formatting issues:|All files are properly formatted)" "$TEMP_OUTPUT" || true
     fi
     rm -f "$TEMP_OUTPUT"
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- Code formatting verified"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))
@@ -253,6 +253,8 @@ if [ "$SKIP_FORMAT" = false ]; then
             CHECKS_FAILED=$((CHECKS_FAILED + 1))
         else
             echo "- Formatting issues found (run with --fix to auto-fix)"
+            CHECKS_PASSED=$((CHECKS_PASSED + 1))
+            CHECKS_RECOMMENDATIONS=$((CHECKS_RECOMMENDATIONS + 1))
         fi
     fi
     CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -267,7 +269,7 @@ if [ "$SKIP_SECURITY" = false ]; then
     echo "5. Running security analysis..."
     # Clean Python cache to ensure latest version runs
     rm -rf .check/__pycache__ 2>/dev/null || true
-    
+
     # Use temp file to avoid hanging with large output capture
     # Temporarily disable errexit to capture exit code
     set +e
@@ -275,7 +277,7 @@ if [ "$SKIP_SECURITY" = false ]; then
     python3 .check/SecurityCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     # Show summary only, hide individual file checks
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
@@ -284,7 +286,7 @@ if [ "$SKIP_SECURITY" = false ]; then
         # Show summary only
         sed -n '/^NOTE:/p; /^Note:/p; /^Scanning/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     fi
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         # Check if there are recommendations
         if grep -q "Files with security issues: 0" "$TEMP_OUTPUT"; then
@@ -304,7 +306,7 @@ if [ "$SKIP_SECURITY" = false ]; then
             CHECKS_FAILED=$((CHECKS_FAILED + 1))
         fi
     fi
-    
+
     rm -f "$TEMP_OUTPUT"
     CHECKS_RUN=$((CHECKS_RUN + 1))
     echo ""
@@ -321,7 +323,7 @@ if [ "$SKIP_DEADCODE" = false ]; then
     python3 .check/DeadCodeCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
         cat "$TEMP_OUTPUT"
@@ -330,7 +332,7 @@ if [ "$SKIP_DEADCODE" = false ]; then
         sed -n '/^Building/p; /^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     fi
     rm -f "$TEMP_OUTPUT"
-    
+
     echo "- Dead code check completed"
     CHECKS_PASSED=$((CHECKS_PASSED + 1))
     CHECKS_RUN=$((CHECKS_RUN + 1))
@@ -348,7 +350,7 @@ if [ "$SKIP_CYCLES" = false ]; then
     python3 .check/DependencyCycleCheck.py ./ > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
         cat "$TEMP_OUTPUT"
@@ -357,7 +359,7 @@ if [ "$SKIP_CYCLES" = false ]; then
         sed -n '/^Building/p; /^Analyzed/p; /^\[OK\]/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     fi
     rm -f "$TEMP_OUTPUT"
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- No dependency cycles found"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))
@@ -379,16 +381,16 @@ if [ "$SKIP_DOCS" = false ]; then
     if [ "$STRICT_MODE" = true ]; then
         DOCS_CMD="$DOCS_CMD --strict"
     fi
-    
+
     set +e
     TEMP_OUTPUT=$(mktemp)
     $DOCS_CMD > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
-    
+
     # Show summary only (hide individual file issues unless there are few or verbose)
     FILE_COUNT=$(grep "^\[DOC\]" "$TEMP_OUTPUT" 2>/dev/null | wc -l)
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
         cat "$TEMP_OUTPUT"
@@ -400,7 +402,7 @@ if [ "$SKIP_DOCS" = false ]; then
         sed -n '/^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     fi
     rm -f "$TEMP_OUTPUT"
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- Documentation verified"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))
@@ -428,13 +430,13 @@ if [ "$SKIP_ERRORS" = false ]; then
     if [ "$STRICT_MODE" = true ]; then
         ERROR_CMD="$ERROR_CMD --strict"
     fi
-    
+
     set +e
     TEMP_OUTPUT=$(mktemp)
     $ERROR_CMD > "$TEMP_OUTPUT" 2>&1
     EXIT_CODE=$?
     set -e
-    
+
     if [ "$VERBOSE" = true ]; then
         # Show full output in verbose mode
         cat "$TEMP_OUTPUT"
@@ -443,7 +445,7 @@ if [ "$SKIP_ERRORS" = false ]; then
         sed -n '/^Analyzing/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     fi
     rm -f "$TEMP_OUTPUT"
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- Error handling verified"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))
@@ -475,7 +477,7 @@ if [ "$SKIP_SHELLCHECK" = false ]; then
     # Show summary only
     sed -n '/^Checking/p; /^=.*SUMMARY/,/^$/p' "$TEMP_OUTPUT"
     rm -f "$TEMP_OUTPUT"
-    
+
     if [ $EXIT_CODE -eq 0 ]; then
         echo "- ShellCheck completed"
         CHECKS_PASSED=$((CHECKS_PASSED + 1))

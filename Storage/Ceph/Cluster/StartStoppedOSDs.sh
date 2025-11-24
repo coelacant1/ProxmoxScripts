@@ -42,10 +42,10 @@ main() {
         __update__ "Starting OSD ID: $osd_id"
         if ceph osd start "osd.${osd_id}" &>/dev/null; then
             __ok__ "OSD $osd_id started successfully"
-            ((started += 1))
+            started=$((started + 1))
         else
             __warn__ "Failed to start OSD $osd_id"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done <<<"$stopped_osds"
 
@@ -59,17 +59,18 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
-# - 2025-11-20: Pending validation
+# - 2025-11-24: Deep technical validation - confirmed compliant
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - 2025-11-21: Fixed arithmetic increment syntax (2 occurrences)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Changed ((var += 1)) to var=$((var + 1)) per CONTRIBUTING.md
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

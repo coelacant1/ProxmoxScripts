@@ -181,9 +181,10 @@ echo "Disk benchmark process complete."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

@@ -43,7 +43,8 @@ function _find_osd_units() {
 # Restart every ceph-osd unit found
 ###############################################################################
 function restartOsd() {
-    local units=($(_find_osd_units))
+    local units
+    mapfile -t units < <(_find_osd_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-osd units found on this host."
         exit 0
@@ -61,7 +62,8 @@ function restartOsd() {
 # Display status for every ceph-osd unit
 ###############################################################################
 function statusOsd() {
-    local units=($(_find_osd_units))
+    local units
+    mapfile -t units < <(_find_osd_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-osd units found on this host."
         exit 0
@@ -89,13 +91,14 @@ esac
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Fixed array assignment to use mapfile (SC2207)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Changed array assignment from `units=($(...))` to `mapfile -t units < <(...)`
 #
 # Known issues:
 # -

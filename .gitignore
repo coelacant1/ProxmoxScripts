@@ -4,3 +4,8 @@
 nodes.json
 TestConnectionInfo.json
 .d/
+
+# Downloaded Proxmox documentation (keep scripts, ignore generated content)
+.docs/*.html
+.docs/V*_PVEGuide/
+.docs/pve-admin-guide-temp.html

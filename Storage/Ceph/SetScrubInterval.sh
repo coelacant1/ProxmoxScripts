@@ -79,7 +79,6 @@ source "${UTILITYPATH}/Discovery.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Configuration constants
-readonly DISABLE_SCRUB_SECONDS=2592000 # 30 days
 readonly SCRUB_SCRIPT_DIR="/usr/local/bin"
 readonly SYSTEMD_DIR="/etc/systemd/system"
 
@@ -465,7 +464,7 @@ main() {
                     VM_HOST="$(__get_ip_from_name__ "${NODE_NAME}")"
 
                     # Verify node is in cluster
-                    if [[ ! " ${REMOTE_NODE_IPS[*]} " =~ " ${VM_HOST} " ]]; then
+                    if [[ ! " ${REMOTE_NODE_IPS[*]} " =~ \ ${VM_HOST}\  ]]; then
                         __err__ "Node '${NODE_NAME}' not found in cluster"
                         exit 1
                     fi
@@ -489,7 +488,7 @@ main() {
                     VM_HOST="$(__get_ip_from_name__ "${NODE_NAME}")"
 
                     # Verify node is in cluster
-                    if [[ ! " ${REMOTE_NODE_IPS[*]} " =~ " ${VM_HOST} " ]]; then
+                    if [[ ! " ${REMOTE_NODE_IPS[*]} " =~ \ ${VM_HOST}\  ]]; then
                         __err__ "Node '${NODE_NAME}' not found in cluster"
                         exit 1
                     fi
@@ -516,7 +515,7 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-21
 #
 # Changes:
 # - 2025-11-04: Fully refactored to match BulkConfigureCPU.sh standards
@@ -527,6 +526,8 @@ main "$@"
 # - 2025-11-20: Readonly constants for configuration
 # - 2025-11-20: Consistent spacing and structure
 # - 2025-11-20: Better user feedback with detailed status messages
+# - 2025-11-21: Removed unused DISABLE_SCRUB_SECONDS constant
+# - 2025-11-21: Fixed regex quotes in IP address matching (SC2076)
 #
 # Fixes:
 # -

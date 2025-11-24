@@ -50,10 +50,10 @@ main() {
     add_ssh_key_callback() {
         local vmid="$1"
 
-        if __vm_node_exec__ "$vmid" "qm cloudinit get {vmid} ssh-authorized-keys" >"$temp_file" 2>/dev/null; then
+        if __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid} user" >"$temp_file" 2>/dev/null; then
             echo "$SSH_PUBLIC_KEY" >>"$temp_file"
             __vm_set_config__ "$vmid" --sshkeys "$temp_file"
-            __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid}" >/dev/null 2>&1 || true
+            __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
         else
             return 1
         fi
@@ -72,13 +72,15 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed incorrect qm cloudinit command - changed 'qm cloudinit get'
+#   to 'qm cloudinit dump user' and 'qm cloudinit dump' to 'qm cloudinit update'
+#   per PVE Guide documentation
 #
 # Known issues:
 # -

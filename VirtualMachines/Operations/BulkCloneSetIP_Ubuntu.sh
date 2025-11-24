@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# BulkCloneSetIPUbuntu.sh
+# BulkCloneSetIP_Ubuntu.sh
 #
 # Clones a VM multiple times on a Proxmox server, updates each clone's IP address
 # (including CIDR notation), sets a new default gateway, and restarts networking
@@ -31,6 +31,9 @@
 #
 # Another Example:
 #   BulkCloneSetIPUbuntu.sh 192.168.10.50 192.168.10.100/24 192.168.10.1 3 800 810
+#
+# Function Index:
+#   - main
 #
 
 # Function Index:
@@ -67,14 +70,15 @@ ipInt="$(__ip_to_int__ "$startIpAddrOnly")"
 ###############################################################################
 # Main logic
 ###############################################################################
-for ((i = 0; i < instanceCount; i++)); do
-    currentVmId=$((baseVmId + i))
-    currentIp="$(__int_to_ip__ "$ipInt")"
-    currentIpCidr="$currentIp/$startMask"
+main() {
+    for ((i = 0; i < COUNT; i++)); do
+        currentVmId=$((BASE_VM_ID + i))
+        currentIp="$(__int_to_ip__ "$ipInt")"
+        currentIpCidr="$currentIp/$startMask"
 
-    echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
-    qm clone "$TEMPLATE_ID" "$currentVmId" --name "cloned-$currentVmId"
-    qm start "$currentVmId"
+        echo "Cloning VM ID \"$TEMPLATE_ID\" to new VM ID \"$currentVmId\" with IP \"$currentIpCidr\"..."
+        qm clone "$TEMPLATE_ID" "$currentVmId" --name "cloned-$currentVmId"
+        qm start "$currentVmId"
 
     echo "Configuring VM ID \"$currentVmId\" to use IP \"$currentIpCidr\" and gateway \"$NEW_GATEWAY\"..."
     # Over SSH to the template VM:
@@ -89,22 +93,30 @@ for ((i = 0; i < instanceCount; i++)); do
     netplan apply
   '"
 
-    # Increment IP by 1 for the next clone
-    ipInt=$((ipInt + 1))
-done
+        # Increment IP by 1 for the next clone
+        ipInt=$((ipInt + 1))
+    done
+}
+
+main
 
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed script name in header to match filename
+# - 2025-11-24: Refactored main logic into main() function
+# - 2025-11-24: Fixed variable name mismatches (COUNT, BASE_VM_ID)
+# - 2025-11-20: Pending validation on Proxmox VE cluster
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
 # -
 #
 # Known issues:
+# - Pending validation on Proxmox VE cluster
 # -
 #
 

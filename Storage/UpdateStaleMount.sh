@@ -72,10 +72,10 @@ main() {
 
         if ssh root@"${node_ip}" "umount -f '${MOUNT_PATH}' 2>/dev/null && rm -rf '${MOUNT_PATH}' 2>/dev/null"; then
             __ok__ "Cleaned up: $node_ip"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Cleanup issues on: $node_ip"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done
 
@@ -101,19 +101,18 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
 # - 2025-11-20: Updated to use utility functions
-# - 2025-11-20: Pending validation
 # - 2025-11-20: Updated to use ArgumentParser.sh
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed ((var += 1)) to var=$((var + 1)) for set -e compatibility
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

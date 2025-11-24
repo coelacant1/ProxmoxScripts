@@ -72,8 +72,7 @@ main() {
 
     # Retrieve Ceph manager information
     local mgrJSON
-    mgrJSON=$(ceph mgr dump --format json 2>/dev/null)
-    if [[ $? -ne 0 ]] || [[ -z "$mgrJSON" ]]; then
+    if ! mgrJSON=$(ceph mgr dump --format json 2>/dev/null) || [[ -z "$mgrJSON" ]]; then
         __err__ "Failed to retrieve Ceph mgr dump"
         exit 1
     fi
@@ -137,7 +136,7 @@ main() {
             targetHost="$(__get_ip_from_name__ "$mgrName")"
             if [[ -z "$targetHost" ]]; then
                 __err__ "Failed to resolve IP for manager '$mgrName' - skipping"
-                ((currentMgr += 1))
+                currentMgr=$((currentMgr + 1))
                 continue
             fi
         fi
@@ -161,7 +160,7 @@ main() {
         wait_for_mgr_active "${targetHost}" "${mgrName}"
 
         sleep 5
-        ((currentMgr += 1))
+        currentMgr=$((currentMgr + 1))
     done
 
     __ok__ "All Ceph managers processed!"
@@ -172,18 +171,20 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - fixed exit code check pattern
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - 2025-11-21: Fixed arithmetic increment syntax (3 occurrences)
 # - 2025-11-20: Updated to follow CONTRIBUTING.md guidelines
-# - 2025-11-20: Pending validation
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed $? check to direct command check per shellcheck SC2181
+# - 2025-11-21: Changed ((var += 1)) to var=$((var + 1)) per CONTRIBUTING.md
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

@@ -1,21 +1,21 @@
 #!/bin/bash
 #
-# CephSingleDrive.sh
+# SingleDrive.sh
 #
 # This script helps set up Ceph on a single-drive system, such as a home lab
 # server, by removing the local-lvm partition and creating a Ceph OSD in the
 # freed space.
 #
 # Usage:
-#   CephSingleDrive.sh <create_osd|clear_local_lvm> [--force]
+#   SingleDrive.sh <create_osd|clear_local_lvm> [--force]
 #
 # Steps:
 #   create_osd      - Bootstrap Ceph auth, create LVs, and prepare an OSD
 #   clear_local_lvm - Delete the local-lvm (pve/data) volume (Destructive! Requires --force)
 #
 # Examples:
-#   CephSingleDrive.sh create_osd
-#   CephSingleDrive.sh clear_local_lvm --force
+#   SingleDrive.sh create_osd
+#   SingleDrive.sh clear_local_lvm --force
 #
 # Function Index:
 #   - clear_local_lvm
@@ -77,7 +77,7 @@ function clear_local_lvm() {
     # Safety check: Require --force in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
         __err__ "Destructive operation requires --force flag in non-interactive mode"
-        __err__ "Usage: CephSingleDrive.sh clear_local_lvm --force"
+        __err__ "Usage: SingleDrive.sh clear_local_lvm --force"
         exit 1
     fi
 
@@ -124,13 +124,14 @@ esac
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Fixed script name in header and usage
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Corrected script name from CephSingleDrive.sh to SingleDrive.sh
 #
 # Known issues:
 # -

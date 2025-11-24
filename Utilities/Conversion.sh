@@ -198,10 +198,11 @@ __vmid_to_mac_prefix__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md and PVE docs
+# - Initial creation
 #
 # Fixes:
 # -

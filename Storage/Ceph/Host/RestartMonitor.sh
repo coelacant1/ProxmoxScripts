@@ -43,7 +43,8 @@ function _find_mon_units() {
 # Restart every ceph-mon unit found
 ###############################################################################
 function restartMon() {
-    local units=($(_find_mon_units))
+    local units
+    mapfile -t units < <(_find_mon_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mon units found on this host."
         exit 0
@@ -61,7 +62,8 @@ function restartMon() {
 # Display status for every ceph-mon unit
 ###############################################################################
 function statusMon() {
-    local units=($(_find_mon_units))
+    local units
+    mapfile -t units < <(_find_mon_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mon units found on this host."
         exit 0
@@ -89,13 +91,14 @@ esac
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Fixed array assignment to use mapfile (SC2207)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Changed array assignment from `units=($(...))` to `mapfile -t units < <(...)`
 #
 # Known issues:
 # -

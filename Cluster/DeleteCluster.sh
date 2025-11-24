@@ -103,11 +103,10 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-21
 #
 # Changes:
 # - 2025-11-20: Updated to use utility functions
-# - 2025-11-20: Pending validation
 # - 2025-11-19: Added pmxcfs -l step for cluster file system check
 #
 # Fixes:

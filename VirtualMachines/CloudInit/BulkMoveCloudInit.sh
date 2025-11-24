@@ -139,17 +139,20 @@ main() {
         fi
 
         __update__ "Deleting existing Cloud-Init disk for VM ${vmid}..."
-        qm set "$vmid" --delete sata1 --node "$node" 2>/dev/null || qm set "$vmid" --delete ide2 --node "$node" 2>/dev/null || true
+        if qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^sata1:"; then
+            qm set "$vmid" --delete sata1 --node "$node" 2>/dev/null || true
+        elif qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^ide2:"; then
+            qm set "$vmid" --delete ide2 --node "$node" 2>/dev/null || true
+        fi
 
-        # Determine which interface was used
-        local ci_interface="sata1"
-        if qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^ide2:"; then
+        # Determine which interface to use for re-creation
+        local ci_interface="ide2"
+        if qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^sata"; then
             ci_interface="ide2"
         fi
 
         __update__ "Re-creating Cloud-Init disk for VM ${vmid} on ${TARGET_STORAGE}..."
-        local interface_type="${ci_interface%%[0-9]*}"
-        qm set "$vmid" --"${interface_type}" "${TARGET_STORAGE}:cloudinit" --node "$node" 2>/dev/null
+        qm set "$vmid" --"${ci_interface}" "${TARGET_STORAGE}:cloudinit" --node "$node" 2>/dev/null
 
         __update__ "Restoring Cloud-Init parameters for VM ${vmid}..."
 
@@ -205,14 +208,15 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed Cloud-Init disk recreation logic - PVE Guide shows the full
+#   parameter (--ide2, --sata1) should be used, not just the interface type
 #
 # Known issues:
 # -

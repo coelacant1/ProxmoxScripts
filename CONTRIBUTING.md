@@ -249,7 +249,7 @@ validate_custom_options() {
         __err__ "At least one option must be specified"
         exit 64
     fi
-    
+
     # Check vCPUs doesn't exceed cores
     if [[ -n "$VCPUS" && -n "$CORES" && $VCPUS -gt $CORES ]]; then
         __err__ "vCPUs ($VCPUS) cannot exceed cores ($CORES)"
@@ -321,7 +321,7 @@ validate_custom_options() {
         __err__ "Invalid relationship: vCPUs > cores"
         exit 64
     fi
-    
+
     # Check complex formats
     if [[ -n "$FLAGS" ]]; then
         if ! [[ "$FLAGS" =~ ^[+\-][a-z0-9_\-]+(,[+\-][a-z0-9_\-]+)*$ ]]; then
@@ -329,7 +329,7 @@ validate_custom_options() {
             exit 64
         fi
     fi
-    
+
     # Business logic
     if [[ -z "$CORES" && -z "$FLAGS" ]]; then
         __err__ "At least one option required"
@@ -428,12 +428,12 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 main() {
     __check_root__
     __check_proxmox__
-    
+
     # This automatically works in both interactive and non-interactive modes
     if __prompt_user_yn__ "Proceed with operation?"; then
         perform_operation
     fi
-    
+
     __ok__ "Operation complete"
 }
 
@@ -476,9 +476,9 @@ done
 
 main() {
     __check_root__
-    
+
     __warn__ "DESTRUCTIVE: This will delete all data"
-    
+
     # Safety check: Require --force in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
         __err__ "Destructive operation requires --force flag in non-interactive mode"
@@ -486,7 +486,7 @@ main() {
         __err__ "Or add '--force' to parameters in GUI"
         exit 1
     fi
-    
+
     # Prompt for confirmation (unless force is set)
     if [[ $FORCE -eq 1 ]]; then
         __info__ "Force mode enabled - proceeding without confirmation"
@@ -494,7 +494,7 @@ main() {
         __info__ "Operation cancelled"
         exit 0
     fi
-    
+
     perform_deletion
 }
 ```
@@ -506,9 +506,9 @@ __parse_args__ "vmid:vmid --yes:flag" "$@"
 
 main() {
     __check_root__
-    
+
     __warn__ "DESTRUCTIVE: This will delete VM $VMID"
-    
+
     # Safety check: Require --yes in non-interactive mode
     if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "$YES" != "true" ]]; then
         __err__ "Destructive operation requires --yes flag in non-interactive mode"
@@ -516,7 +516,7 @@ main() {
         __err__ "Or add '--yes' to parameters in GUI"
         exit 1
     fi
-    
+
     # Prompt for confirmation (unless --yes provided)
     if [[ "$YES" == "true" ]]; then
         __info__ "Auto-confirm enabled (--yes flag) - proceeding without prompt"
@@ -524,7 +524,7 @@ main() {
         __info__ "Operation cancelled"
         exit 0
     fi
-    
+
     perform_deletion
 }
 ```

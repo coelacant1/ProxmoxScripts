@@ -38,7 +38,7 @@ source "${UTILITYPATH}/BulkOperations.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid password:string username?:string" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid password:string username:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -52,7 +52,7 @@ main() {
         [[ -n "${USERNAME:-}" ]] && args="${args} --ciuser ${USERNAME}"
 
         __vm_set_config__ "$vmid" $args
-        __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid}" >/dev/null 2>&1 || true
+        __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
     }
 
     __bulk_vm_operation__ --report "$START_VMID" "$END_VMID" change_userpass_callback
@@ -68,13 +68,16 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
+# - 2025-11-24: Fixed ArgumentParser optional syntax - changed 'username?:string'
+#   to correct format 'username:string:?'
 #
 # Known issues:
 # -

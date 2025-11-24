@@ -1,6 +1,8 @@
 # Proxmox VE Management Scripts
 
-[![Deploy static content to Pages](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml)[![Release on .sh changes](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml)
+[![Version](https://img.shields.io/badge/version-2.1.5-blue.svg)](https://github.com/coelacant1/ProxmoxScripts/releases)
+[![Deploy static content to Pages](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml)
+[![Release on .sh changes](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml)
 
 This repository provides automation scripts for managing Proxmox VE (Virtual Environment) systems efficiently. The scripts are designed for system administrators and DevOps professionals who need to streamline their Proxmox operations.
 
@@ -21,6 +23,21 @@ Explore the scripts for Proxmox VE management on the website:
 > - **Manually validate** each script before execution on production systems
 > - **Test in a non-production environment** first whenever possible
 > - **You are responsible for any changes made to your infrastructure**
+
+## Version 2.0 Update
+
+Version 2.0 represents a major refactor focused on extending backend utilities, improving remote cluster management, and establishing comprehensive testing and quality assurance frameworks.
+
+**Major Changes:**
+- **Remote Cluster Management** - Execute scripts on single or multiple Proxmox nodes without re-downloading the repository, with support for temporary multi-remote mode using IP/VMID ranges
+- **Unified Utility Framework** - New ArgumentParser, BulkOperations, and Operations utilities standardize script behavior and error handling across the entire codebase
+- **Structured Logging System** - Dual log output with separate .log and .debug.log files, debug flag support (-d), and configurable log levels (INFO, DEBUG, ERROR) for both local and remote execution
+- **Comprehensive Testing System** - TestFramework with automated test suites for all utility libraries, plus RunAllTests.sh for continuous integration
+- **Enhanced Bulk Operations** - Improved VM/LXC bulk operations with progress tracking, detailed statistics, and automatic success/failure reporting
+- **Script Compliance Standards** - All scripts now follow consistent patterns with standardized headers, argument parsing, logging, and error handling
+- **Quality Assurance Tools** - Repository checks including line ending conversion, function indexing, source verification, code formatting, security analysis, and dead code detection
+- **Cross-Platform GUI Improvements** - Auto-detects package managers across all major Linux distributions with branch management and settings accessible from any menu
+- **Script Validation** - Scripts validated against Proxmox VE 9.1.1 documentation with standardized notes tracking validation status, changes, and known issues
 
 ## Getting Started
 
@@ -146,7 +163,7 @@ The recommended way to use ProxmoxScripts is through the interactive GUI, which 
 
 **GUI Features:**
 - **Cross-Platform**: Works on any major Linux distribution (auto-detects package manager)
-- **Execution Modes**: 
+- **Execution Modes**:
   - Local execution (run directly on Proxmox node)
   - Single remote node (manage one Proxmox server from your workstation)
   - Multiple remote nodes (execute across entire cluster simultaneously)

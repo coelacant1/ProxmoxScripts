@@ -44,7 +44,7 @@ source "${UTILITYPATH}/Cluster.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "--range:flag start_vmid?:vmid end_vmid?:vmid --pool:flag pool_name?:string --local:flag --target:string --offline:flag --storage?:string" "$@"
+__parse_args__ "--range:flag start_vmid:vmid:? end_vmid:vmid:? --pool:flag pool_name:string:? --local:flag --target:string --offline:flag --storage:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -149,9 +149,10 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed ArgumentParser syntax for optional parameters (? placement)
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:

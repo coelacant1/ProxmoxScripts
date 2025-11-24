@@ -180,18 +180,17 @@ echo "Done."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md
 # - 2025-11-20: ArgumentParser.sh sourced (hybrid for uninstall vs variable args)
-# - 2025-11-20: Pending validation
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
 # -
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

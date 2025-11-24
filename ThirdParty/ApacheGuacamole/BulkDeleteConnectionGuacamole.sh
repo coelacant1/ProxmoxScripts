@@ -118,10 +118,10 @@ main() {
 
         if [[ "$http_code" -eq 204 ]]; then
             __ok__ "Deleted: $conn_id"
-            ((deleted++))
+            deleted=$((deleted + 1))
         else
             __err__ "Failed to delete: $conn_id (HTTP $http_code)"
-            ((failed++))
+            failed=$((failed + 1))
         fi
     done
 
@@ -142,19 +142,18 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md and Apache Guacamole API best practices
 # - 2025-11-20: Updated to use utility functions
-# - 2025-11-20: Pending validation
 # - 2025-11-20: Updated to use ArgumentParser.sh
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed arithmetic increment syntax (Lines 121, 124): Changed ((var++)) to var=$((var + 1))
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

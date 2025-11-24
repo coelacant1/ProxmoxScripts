@@ -217,9 +217,9 @@ echo "$matchingConnections" | jq -c '.[]' | while IFS= read -r conn; do
     connName=$(echo "$conn" | jq -r '.name')
 
     if delete_connection "$connId" "$connName" "$GUAC_URL" "$GUAC_DATA_SOURCE" "$AUTH_TOKEN"; then
-        ((deleted_count++))
+        deleted_count=$((deleted_count + 1))
     else
-        ((failed_count++))
+        failed_count=$((failed_count + 1))
     fi
 done
 
@@ -237,18 +237,18 @@ __prompt_keep_installed_packages__
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - fixed arithmetic increment syntax
 # - 2025-11-20: ArgumentParser.sh sourced (hybrid for complex dual-mode args)
 # - 2025-11-20: Pending validation
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed ((var++)) to var=$((var + 1)) per CONTRIBUTING.md (2 occurrences)
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

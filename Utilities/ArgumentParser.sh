@@ -176,7 +176,6 @@ __parse_args__() {
     declare -a POSITIONAL_DEFAULTS=()
     declare -A FLAG_NAMES=()
     declare -A FLAG_TYPES=()
-    declare -A FLAG_DEFAULTS=()
 
     __argparser_log__ "DEBUG" "Parsing specification..."
 
@@ -210,7 +209,6 @@ __parse_args__() {
 
             FLAG_NAMES["--${name}"]="${name^^}"
             FLAG_TYPES["--${name}"]="$type"
-            FLAG_DEFAULTS["--${name}"]="$default"
 
             # Check for reserved variable name conflicts
             local var_name="${name^^}"
@@ -364,7 +362,7 @@ __parse_args__() {
     __argparser_log__ "DEBUG" "=== ArgumentParser Success ==="
 
     # Check if all required positional arguments were provided
-    for ((i = $positional_index; i < ${#POSITIONAL_NAMES[@]}; i++)); do
+    for ((i = positional_index; i < ${#POSITIONAL_NAMES[@]}; i++)); do
         local default="${POSITIONAL_DEFAULTS[$i]}"
         if [[ -z "$default" && "$default" != "?" ]]; then
             echo "Error: Missing required argument: ${POSITIONAL_NAMES[$i]}" >&2
@@ -582,7 +580,8 @@ __validate_ip__() {
     fi
 
     local IFS='.'
-    local -a octets=($ip)
+    local -a octets
+    read -ra octets <<< "$ip"
     for octet in "${octets[@]}"; do
         if ((octet > 255)); then
             __argparser_log__ "DEBUG" "Validation failed: octet $octet exceeds 255"
@@ -611,7 +610,8 @@ __validate_cidr__() {
     local mask="${cidr#*/}"
 
     local IFS='.'
-    local -a octets=($ip)
+    local -a octets
+    read -ra octets <<< "$ip"
     for octet in "${octets[@]}"; do
         if ((octet > 255)); then
             __argparser_log__ "DEBUG" "Validation failed: octet $octet exceeds 255"
@@ -1120,13 +1120,19 @@ __validate_string__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Deep technical analysis performed
+# - 2025-11-24: Fixed ShellCheck warnings (SC2034, SC2004, SC2206)
+# - 2025-11-24: Removed unused FLAG_DEFAULTS array
+# - 2025-11-24: Fixed arithmetic variable syntax
+# - 2025-11-24: Fixed array splitting to use read -ra
 #
 # Fixes:
-# -
+# - 2025-11-24: Removed FLAG_DEFAULTS array (SC2034 - never used in parsing logic)
+# - 2025-11-24: Changed $positional_index to positional_index in arithmetic (SC2004)
+# - 2025-11-24: Changed octets=($ip) to read -ra octets for proper splitting (SC2206)
 #
 # Known issues:
 # -

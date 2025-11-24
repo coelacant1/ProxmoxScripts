@@ -48,7 +48,7 @@ main() {
         local vmid="$1"
 
         __vm_set_config__ "$vmid" --nameserver "$DNS_SERVER" --searchdomain "$DNS_SEARCH_DOMAIN"
-        __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid}" >/dev/null 2>&1 || true
+        __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
     }
 
     __bulk_vm_operation__ --name "Change DNS" --report "$START_VMID" "$END_VMID" change_dns_callback
@@ -64,13 +64,14 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
 #
 # Known issues:
 # -

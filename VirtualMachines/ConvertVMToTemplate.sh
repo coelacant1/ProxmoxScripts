@@ -228,11 +228,11 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against PVE Guide Chapter 10 (qm template command)
 # - 2025-11-20: Uses utility functions
-# - 2025-11-20: Pending validation
 # - 2025-11-20: Updated to use ArgumentParser.sh
 # - YYYY-MM-DD: Initial creation
 #
@@ -240,7 +240,6 @@ main "$@"
 # -
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

@@ -37,8 +37,7 @@ __install_or_prompt__ "jq"
 ###############################################################################
 # Retrieve Ceph monitor information in JSON format
 ###############################################################################
-monJSON=$(ceph mon dump --format json 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$monJSON" ]; then
+if ! monJSON=$(ceph mon dump --format json 2>/dev/null) || [ -z "$monJSON" ]; then
     __err__ "Failed to retrieve Ceph monitor dump. Ensure Ceph is running."
     exit 1
 fi
@@ -130,15 +129,13 @@ for index in "${!monNames[@]}"; do
 
     # Restart the monitor service on the appropriate host.
     if [ "$targetHost" = "local" ]; then
-        systemctl restart "ceph-mon@${monName}"
-        if [ $? -eq 0 ]; then
+        if systemctl restart "ceph-mon@${monName}"; then
             __ok__ "Successfully restarted ceph-mon@${monName} on local."
         else
             __err__ "Failed to restart ceph-mon@${monName} on local."
         fi
     else
-        ssh root@"${targetHost}" "systemctl restart ceph-mon@${monName}"
-        if [ $? -eq 0 ]; then
+        if ssh root@"${targetHost}" "systemctl restart ceph-mon@${monName}"; then
             __ok__ "Successfully restarted ceph-mon@${monName} on ${targetHost}."
         else
             __err__ "Failed to restart ceph-mon@${monName} on ${targetHost}."
@@ -157,13 +154,15 @@ __ok__ "All Ceph monitors processed."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - fixed exit code check patterns
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed $? checks to direct command checks per shellcheck SC2181 (3 occurrences)
 #
 # Known issues:
 # -

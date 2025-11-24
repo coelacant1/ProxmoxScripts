@@ -64,31 +64,8 @@ usage() {
 ###############################################################################
 # Parse Arguments
 ###############################################################################
-# Method 1: Using positional parser for required args
-if [[ $# -lt 2 ]]; then
-    echo "Error: Missing required arguments." >&2
-    usage
-    exit 1
-fi
-
-# Parse positional arguments (vmid, cores)
-if ! __parse_positional_args__ \
-    "VMID:numeric:required CORES:numeric:required" \
-    "$1" "$2"; then
-    echo "Error: Invalid arguments." >&2
-    usage
-    exit 1
-fi
-shift 2
-
-# Parse optional named arguments (--memory, --verbose)
-if ! __parse_named_args__ \
-    "MEMORY:--memory:numeric:optional:2048 VERBOSE:--verbose:boolean:optional:false" \
-    "$@"; then
-    echo "Error: Invalid options." >&2
-    usage
-    exit 1
-fi
+# Parse all arguments using unified __parse_args__ API
+__parse_args__ "vmid:vmid cores:cpu --memory:memory:2048 --verbose:flag" "$@"
 
 # Additional validation with range checking
 if ! __validate_range__ "$CORES" "1" "128" "cores"; then
@@ -145,28 +122,26 @@ main
 # Alternative Parsing Methods (commented out)
 ###############################################################################
 #
-# Method 2: Using flag parser for short/long flags
-# __parse_flag_options__ \
-#   "VMID:-i:--vmid:numeric: CORES:-c:--cores:numeric:4 MEMORY:-m:--memory:numeric:2048 VERBOSE:-v:--verbose:boolean:false" \
-#   "$@"
+# Method 2: Using short and long flags
+# __parse_args__ "vmid:vmid --cores:cpu:4 -m|--memory:memory:2048 --verbose:flag" "$@"
 #
-# Method 3: Using VMID range parser for bulk operations
-# __parse_vmid_range_args__ "$@"
-# for ((vmid=START_VMID; vmid<=END_VMID; vmid++)); do
-#   echo "Processing VM $vmid"
+# Method 3: Using VMID range for bulk operations
+# __parse_args__ "start:vmid end:vmid --action:string" "$@"
+# for ((vmid=START; vmid<=END; vmid++)); do
+#   echo "Processing VM $vmid with action $ACTION"
 # done
 #
-# Method 4: Using bulk operation parser
-# __parse_bulk_operation_args__ 3 "ACTION:string:required" "$@"
-# echo "Performing $ACTION on VMs $START_VMID to $END_VMID"
+# Method 4: All flags, no positional
+# __parse_args__ "--vmid:vmid --cores:cpu --memory:memory:2048" "$@"
 #
 
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Updated to use unified __parse_args__ API (v2)
 # - 2025-11-20: Created comprehensive example script
 # - 2025-11-20: Added examples for all utility functions
 # - 2025-11-20: Demonstrated ArgumentParser usage patterns
@@ -176,7 +151,7 @@ main
 # - This is an example script for demonstration purposes only
 #
 # Fixes:
-# -
+# - 2025-11-24: Replaced deprecated __parse_positional_args__ and __parse_named_args__ with __parse_args__
 #
 # Known issues:
 # -

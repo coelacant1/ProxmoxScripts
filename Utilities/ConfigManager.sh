@@ -144,7 +144,7 @@ __has_ssh_keys__() {
     fi
 
     # Test SSH connection
-    if ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=2 "root@${node_ip}" echo "test" &>/dev/null 2>&1; then
         # Update cache if node_name provided
         if [[ -n "$node_name" ]]; then
             NODE_SSH_KEYS["$node_name"]="true"
@@ -170,7 +170,8 @@ __update_node_ssh_keys__() {
     fi
 
     # Update the JSON file
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp)
     jq --arg name "$node_name" --argjson ssh_keys "$ssh_keys_status" \
         '(.nodes[] | select(.name == $name) | .ssh_keys) = $ssh_keys' \
         "$NODES_FILE" >"$temp_file" && mv "$temp_file" "$NODES_FILE"
@@ -188,7 +189,8 @@ __scan_ssh_keys__() {
         local node_ip="${AVAILABLE_NODES[$node_name]}"
         echo -n "  Checking $node_name ($node_ip)... "
 
-        local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+        local has_keys
+        has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
 
         if [[ "$has_keys" == "true" ]]; then
             echo "[SSH]"
@@ -218,13 +220,15 @@ __get_remote_log_level__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md, fixed ShellCheck warnings
+# - Initial version: Configuration management for GUI execution modes
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed variable declaration/assignment separation (SC2155)
+# - 2025-11-24: Fixed unquoted variable in SSH command (SC2086)
 #
 # Known issues:
 # -

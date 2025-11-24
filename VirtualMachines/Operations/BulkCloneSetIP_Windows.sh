@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# BulkCloneSetIPWindows.sh
+# BulkCloneSetIP_Windows.sh
 #
 # Clones a Windows VM multiple times on a Proxmox server, updates each clone's
 # IPv4 address (including CIDR notation), sets a new default gateway, and
@@ -12,6 +12,9 @@
 #
 # Example:
 #   BulkCloneSetIPWindows.sh 192.168.1.50 192.168.1.10/24 192.168.1.1 5 9000 9010 Administrator Passw0rd WinClone- "Ethernet" 8.8.8.8 8.8.4.4
+#
+# Function Index:
+#   - main
 #
 
 # Function Index:
@@ -87,9 +90,10 @@ remoteBatPathCmd="C:\\Users\\${SSH_USERNAME}\\ChangeIP.bat"
 ###############################################################################
 # Main logic: Clone and configure Windows VMs
 ###############################################################################
-for ((i = 0; i < instanceCount; i++)); do
-    currentVmId=$((baseVmId + i))
-    currentIp="$(__int_to_ip__ "$ipInt")"
+main() {
+    for ((i = 0; i < COUNT; i++)); do
+        currentVmId=$((BASE_VM_ID + i))
+        currentIp="$(__int_to_ip__ "$ipInt")"
 
     ssh-keygen -f "/root/.ssh/known_hosts" -R "${currentIp}"
 
@@ -124,18 +128,24 @@ for ((i = 0; i < instanceCount; i++)); do
     echo "Waiting for new IP \"$currentIp\" to become reachable via SSH..."
     __wait_for_ssh__ "$currentIp" "$SSH_USERNAME" "$SSH_PASSWORD"
 
-    ipInt=$((ipInt + 1))
-done
+        ipInt=$((ipInt + 1))
+    done
 
-rm -f "$tempBat"
-__prompt_keep_installed_packages__
+    rm -f "$tempBat"
+    __prompt_keep_installed_packages__
+}
+
+main
 
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed script name in header to match filename
+# - 2025-11-24: Refactored main logic into main() function
+# - 2025-11-24: Fixed variable name mismatches (COUNT, BASE_VM_ID)
 # - 2025-11-20: ArgumentParser.sh sourced
 # - 2025-11-20: Pending validation
 # - 2025-11-20: Updated to use ArgumentParser.sh

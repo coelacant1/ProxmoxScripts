@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.5] - 2025-11-24
+
+PVE documentation automation and repository cleanup
+
+### Added
+- **PVE Documentation automation scripts** - Tools for managing Proxmox VE documentation
+  - `UpdatePVEGuide.sh` - Downloads and converts latest Proxmox VE Administration Guide with version tracking
+  - `HTMLToMarkdown.py` - Converts HTML documentation to markdown with chapter splitting
+  - `GenerateContentDiff.sh` - Creates content-focused diffs between documentation versions
+- **Minor version tracking** - Timestamp-based detection for documentation updates with VX-Y-Z_NN naming scheme
+- **Version badge** - Added version badge to README.md displaying current release
+
+### Changed
+- **Check system** - Formatting check now counts as passed with recommendations instead of uncounted
+- **GitIgnore configuration** - Added rules for downloaded documentation and generated content
+- **Code cleanup** - Removed trailing whitespace from all markdown and shell script files
+
 ## [2.1.4] - 2025-11-20
 
 Partial script validation against PVE documentation
@@ -119,7 +136,7 @@ Utility library consolidation and dependency cleanup
 ArgumentParser migration
 
 ### Changed
-- **Rest of Scripts Updated with ArgumentParser** 
+- **Rest of Scripts Updated with ArgumentParser**
   - Migration of all non-interactive scripts (previously listed in TODO.md)
 
 - **Standards Applied**

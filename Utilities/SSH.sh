@@ -62,7 +62,7 @@ __wait_for_ssh__() {
 
     for attempt in $(seq 1 "$maxAttempts"); do
         __ssh_log__ "DEBUG" "SSH connection attempt $attempt/$maxAttempts to $host"
-        if sshpass -p "$sshPassword" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+        if sshpass -p "$sshPassword" ssh -o BatchMode=no -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
             "$sshUsername@$host" exit 2>/dev/null; then
             echo "SSH is up on \"$host\""
             __ssh_log__ "INFO" "SSH connection successful to $host"
@@ -277,17 +277,6 @@ __scp_send__() {
     local -a extraScpArgs=()
 
     __ssh_log__ "DEBUG" "SCP send called"
-    local user=""
-    local password=""
-    local identity=""
-    local port=""
-    local destination=""
-    local connectTimeout="10"
-    local useStrict=0
-    local knownHosts=""
-    local recursive=0
-    local -a sources=()
-    local -a extraScpArgs=()
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -437,16 +426,6 @@ __scp_fetch__() {
     local -a extraScpArgs=()
 
     __ssh_log__ "DEBUG" "SCP fetch called"
-    local password=""
-    local identity=""
-    local port=""
-    local destination=""
-    local connectTimeout="10"
-    local useStrict=0
-    local knownHosts=""
-    local recursive=0
-    local -a sources=()
-    local -a extraScpArgs=()
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -999,13 +978,16 @@ __ssh_exec_function__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md and PVE docs
+# - 2025-11-24: Removed duplicate variable declarations in __scp_send__ and __scp_fetch__
+# - 2025-11-24: Added missing BatchMode=no to __wait_for_ssh__ SSH command
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed duplicate local variable declarations (lines 280-290, 440-449)
+# - 2025-11-24: Fixed missing -o BatchMode=no in __wait_for_ssh__ (line 65)
 #
 # Known issues:
 # -

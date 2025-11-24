@@ -31,7 +31,7 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-__parse_args__ "guac_url:url search_substring:string data_source:string=mysql" "$@"
+__parse_args__ "guac_url:url search_substring:string data_source:string:mysql" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -120,17 +120,17 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - fixed ArgumentParser syntax
 # - 2025-11-20: Pending validation
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed ArgumentParser syntax: changed '=' to ':' for default value (line 34)
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

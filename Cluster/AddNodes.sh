@@ -125,15 +125,15 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-21
 #
 # Changes:
 # - 2025-11-20: Updated to use utility functions
 # - 2025-11-20: Updated to use ArgumentParser.sh (hybrid for complex args)
-# - 2025-11-20: Pending validation
+# - 2025-11-19: Fixed link parameter ordering
 #
 # Fixes:
-# - 2025-11-19: Fixed link parameter ordering
+# -
 #
 # Known issues:
 # -

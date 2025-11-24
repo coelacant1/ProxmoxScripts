@@ -38,8 +38,7 @@ __install_or_prompt__ "jq"
 ###############################################################################
 # Retrieve Ceph filesystem information in JSON format
 ###############################################################################
-fsJSON=$(ceph fs dump --format json 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$fsJSON" ]; then
+if ! fsJSON=$(ceph fs dump --format json 2>/dev/null) || [ -z "$fsJSON" ]; then
     __err__ "Failed to retrieve Ceph filesystem dump. Ensure Ceph is running."
     exit 1
 fi
@@ -136,15 +135,13 @@ for index in "${!mdsNames[@]}"; do
 
     # Restart the MDS service on the appropriate host.
     if [ "$targetHost" = "local" ]; then
-        systemctl restart "ceph-mds@${mdsName}"
-        if [ $? -eq 0 ]; then
+        if systemctl restart "ceph-mds@${mdsName}"; then
             __ok__ "Successfully restarted ceph-mds@${mdsName} on local."
         else
             __err__ "Failed to restart ceph-mds@${mdsName} on local."
         fi
     else
-        ssh root@"${targetHost}" "systemctl restart ceph-mds@${mdsName}"
-        if [ $? -eq 0 ]; then
+        if ssh root@"${targetHost}" "systemctl restart ceph-mds@${mdsName}"; then
             __ok__ "Successfully restarted ceph-mds@${mdsName} on ${targetHost}."
         else
             __err__ "Failed to restart ceph-mds@${mdsName} on ${targetHost}."
@@ -163,13 +160,17 @@ __ok__ "All Ceph Metadata Servers processed."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - fixed exit code check patterns
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - 2025-11-21: Fixed arithmetic increment syntax (1 occurrence)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Changed $? checks to direct command checks per shellcheck SC2181 (3 occurrences)
+# - 2025-11-21: Changed ((elapsed += 5)) to elapsed=$((elapsed + 5)) per CONTRIBUTING.md
 #
 # Known issues:
 # -

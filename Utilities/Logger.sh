@@ -81,9 +81,9 @@ __log__() {
         if command -v date >/dev/null 2>&1; then
             log_entry+="[$(date '+%Y-%m-%d %H:%M:%S')] "
         elif [[ -x /bin/date ]]; then
-            log_entry+="[$(\/bin/date '+%Y-%m-%d %H:%M:%S')] "
+            log_entry+="[$(/bin/date '+%Y-%m-%d %H:%M:%S')] "
         elif [[ -x /usr/bin/date ]]; then
-            log_entry+="[$(\/usr/bin/date '+%Y-%m-%d %H:%M:%S')] "
+            log_entry+="[$(/usr/bin/date '+%Y-%m-%d %H:%M:%S')] "
         else
             # Fallback: no timestamp if date not available
             log_entry+="[NO-TIMESTAMP] "
@@ -224,13 +224,15 @@ fi
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md
+# - 2025-11-24: Fixed unnecessary backslash escaping in date command paths (SC1001)
+# - Initial creation: Centralized logging utility with level-based filtering
 #
 # Fixes:
-# -
+# - 2025-11-24: Removed unnecessary backslash escaping in /bin/date and /usr/bin/date paths
 #
 # Known issues:
 # -

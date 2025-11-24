@@ -40,7 +40,7 @@ source "${UTILITYPATH}/Conversion.sh"
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid start_ip_cidr:string bridge:string gateway?:string" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid start_ip_cidr:string bridge:string gateway:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -67,7 +67,7 @@ main() {
         [[ -n "${GATEWAY:-}" ]] && ipconfig="${ipconfig},gw=${GATEWAY}"
 
         __vm_set_config__ "$vmid" --ipconfig0 "$ipconfig" --net0 "virtio,bridge=${BRIDGE}"
-        __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid}" >/dev/null 2>&1 || true
+        __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
     }
 
     __bulk_vm_operation__ --name "Change IP" --report "$START_VMID" "$END_VMID" change_ip_callback
@@ -83,13 +83,16 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
 # - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
+# - 2025-11-24: Fixed ArgumentParser optional syntax - changed 'gateway?:string'
+#   to correct format 'gateway:string:?'
 #
 # Known issues:
 # -

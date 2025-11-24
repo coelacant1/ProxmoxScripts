@@ -11,7 +11,7 @@
 #   - Logger.sh (for logging)
 #
 # Usage:
-#   source "${UTILITYPATH}/Discovery.sh"
+#   Source this file from other scripts to use discovery functions
 #
 # Function Index:
 #   - __discovery_log__
@@ -43,8 +43,8 @@ __discovery_log__() {
 }
 
 # Global associative arrays for node mappings (initialized by __init_node_mappings__ in Cluster.sh)
-declare -gA NODE_NAME_TO_IP
-declare -gA NODE_IP_TO_NAME
+declare -gA NAME_TO_IP
+declare -gA IP_TO_NAME
 
 # Bridge subnet cache (used by get_ip_from_vmid)
 declare -gA BRIDGE_SUBNET_CACHE
@@ -57,10 +57,10 @@ declare -gA BRIDGE_SUBNET_CACHE
 # @function get_ip_from_vmid
 # @description Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0).
 #   Prints the IP if found.
-# @usage get_ip_from_vmid 100
+# @usage __get_ip_from_vmid__ 100
 # @param 1 The VMID.
 # @return Prints the discovered IP or exits 1 if not found.
-# @example_output For get_ip_from_vmid 100, the output might be:
+# @example_output For __get_ip_from_vmid__ 100, the output might be:
 #   192.168.1.100
 __get_ip_from_vmid__() {
     local vmid="$1"
@@ -470,13 +470,17 @@ __get_name_from_ip__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed variable name mismatch - changed NODE_NAME_TO_IP and
+#   NODE_IP_TO_NAME to NAME_TO_IP and IP_TO_NAME to match Cluster.sh declarations
+# - 2025-11-24: Updated usage documentation formatting
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED: Variable name mismatch causing undefined associative array
+#   references when calling __get_ip_from_name__ and __get_name_from_ip__
 #
 # Known issues:
 # -

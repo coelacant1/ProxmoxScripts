@@ -63,10 +63,10 @@ main() {
         __update__ "Sparsifying ${POOL_NAME}/${image_name}"
         if rbd sparsify "${POOL_NAME}/${image_name}" &>/dev/null; then
             __ok__ "Sparsified ${image_name}"
-            ((success += 1))
+            success=$((success + 1))
         else
             __warn__ "Failed to sparsify ${image_name}"
-            ((failed += 1))
+            failed=$((failed + 1))
         fi
     done <<<"$images"
 
@@ -80,17 +80,16 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-21
 #
 # Changes:
-# - 2025-11-20: Pending validation
+# - 2025-11-21: Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
 # -
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

@@ -100,7 +100,7 @@ main() {
     while read -r line; do
         if [[ $line =~ ^[0-9]+:\ ([^:@]+)[@:]? ]]; then
             local iface="${BASH_REMATCH[1]}"
-            
+
             # Skip special interfaces
             if [[ "$iface" == "lo" ]] || [[ "$iface" == *"tap"* ]] \
                 || [[ "$iface" == *"veth"* ]] || [[ "$iface" == *"fwbr"* ]] \

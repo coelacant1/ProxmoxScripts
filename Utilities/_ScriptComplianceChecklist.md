@@ -601,22 +601,22 @@ trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 main() {
     __check_root__
-    
+
     # Parse and validate arguments
     __parse_positional_args__ "VMID:numeric:required" "$@" || exit 1
-    
+
     # Check if VM exists
     if ! __vm_exists__ "$VMID"; then
         __err__ "VM $VMID does not exist"
         exit 1
     fi
-    
+
     # Check if already running
     if __vm_is_running__ "$VMID"; then
         __warn__ "VM $VMID is already running"
         exit 0
     fi
-    
+
     # Start the VM
     __info__ "Starting VM $VMID"
     if __vm_start__ "$VMID"; then

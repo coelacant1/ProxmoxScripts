@@ -10,6 +10,9 @@
 # Example:
 #   DebugConnectionTree.sh https://domain.com/guacamole mysql
 #
+# Function Index:
+#   - (no functions - inline script)
+#
 
 set -euo pipefail
 
@@ -120,8 +123,8 @@ echo "$connectionsJson" | jq -r '
     def getAllConnections:
       (.childConnections // []) +
       ((.childConnectionGroups // []) | map(getAllConnections) | flatten);
-    
-    getAllConnections[] | 
+
+    getAllConnections[] |
     "\(.identifier) | \(.protocol) | \(.name)"
 '
 echo ""
@@ -131,8 +134,8 @@ echo "$connectionsJson" | jq -r '
     def getAllGroups:
       (.childConnectionGroups // []) +
       ((.childConnectionGroups // []) | map(.childConnectionGroups // []) | flatten);
-    
-    getAllGroups[] | 
+
+    getAllGroups[] |
     "Group: \(.name) (ID: \(.identifier))"
 '
 echo ""
@@ -142,7 +145,7 @@ echo "$connectionsJson" | jq -r '
     def getAllConnections:
       (.childConnections // []) +
       ((.childConnectionGroups // []) | map(getAllConnections) | flatten);
-    
+
     [ getAllConnections[]
       | select(.name | test("Bio"; "i"))
       | select(.protocol == "rdp")
@@ -152,9 +155,11 @@ echo "$connectionsJson" | jq -r '
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md and Apache Guacamole API best practices
+# - 2025-11-24: Added Function Index to header
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

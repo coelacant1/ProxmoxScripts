@@ -92,7 +92,7 @@ main() {
         local osd_json
         if ! osd_json=$(ceph osd find "${osd_id}" 2>/dev/null) || [[ -z "$osd_json" ]]; then
             __err__ "Failed to retrieve details for ceph-osd@${osd_id}"
-            ((current_osd += 1))
+            current_osd=$((current_osd + 1))
             continue
         fi
 
@@ -102,7 +102,7 @@ main() {
 
         if [[ -z "$osd_host" ]] || [[ "$osd_host" == "null" ]]; then
             __err__ "Host information for ceph-osd@${osd_id} not found"
-            ((current_osd += 1))
+            current_osd=$((current_osd + 1))
             continue
         fi
 
@@ -114,7 +114,7 @@ main() {
             target_host=$(__get_ip_from_name__ "$osd_host")
             if [[ -z "$target_host" ]]; then
                 __err__ "Failed to resolve IP for host '${osd_host}'"
-                ((current_osd += 1))
+                current_osd=$((current_osd + 1))
                 continue
             fi
         fi
@@ -139,7 +139,7 @@ main() {
 
         # Pause briefly before processing the next OSD
         sleep 5
-        ((current_osd += 1))
+        current_osd=$((current_osd + 1))
     done
 
     __ok__ "All Ceph OSDs processed"
@@ -151,18 +151,19 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Deep technical validation - confirmed compliant
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - 2025-11-21: Fixed arithmetic increment syntax (4 occurrences)
 # - 2025-11-20: Updated to use utility functions and modern standards
-# - 2025-11-20: Pending validation
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Changed ((var += 1)) to var=$((var + 1)) per CONTRIBUTING.md
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

@@ -128,7 +128,7 @@ __display_path__() {
     local base_dir="${2:-.}"
     local prefix="${3:-cc_pve}"
 
-    local relative="${fullpath#$base_dir}"
+    local relative="${fullpath#"$base_dir"}"
     relative="${relative#/}"
 
     if [[ -z "$relative" ]]; then
@@ -140,7 +140,6 @@ __display_path__() {
 
 __show_script_info__() {
     local script_path="$1"
-    local display_path="${2:-$script_path}"
 
     if [[ ! -f "$script_path" ]]; then
         echo "Error: Script not found: $script_path"
@@ -150,7 +149,6 @@ __show_script_info__() {
     __line_rgb__ "--- Top Comments ---" 255 200 0 2>/dev/null || echo "--- Top Comments ---"
     echo
 
-    local in_header=true
     while IFS= read -r line; do
         if [[ "$line" =~ ^#!/ ]]; then
             continue
@@ -233,9 +231,9 @@ __readline_input__() {
     local result
 
     if [[ -n "$default" ]]; then
-        read -e -i "$default" -p "$prompt" result
+        read -r -e -i "$default" -p "$prompt" result
     else
-        read -e -p "$prompt" result
+        read -r -e -p "$prompt" result
     fi
 
     echo "$result"
@@ -244,13 +242,16 @@ __readline_input__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md and fixed ShellCheck issues
+# - 2024-XX-XX: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed unquoted variable expansion in __display_path__ (SC2295)
+# - 2025-11-24: Removed unused variables display_path and in_header (SC2034)
+# - 2025-11-24: Added -r flag to read commands for proper backslash handling (SC2162)
 #
 # Known issues:
 # -

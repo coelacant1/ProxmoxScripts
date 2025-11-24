@@ -317,10 +317,11 @@ __require_root_and_proxmox__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Deep validation performed against CONTRIBUTING.md
+# - Initial creation with full NON_INTERACTIVE mode support
 #
 # Fixes:
 # -

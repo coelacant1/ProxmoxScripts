@@ -337,12 +337,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck python3
-      
+
       - name: Run checks
         run: |
           cd .check

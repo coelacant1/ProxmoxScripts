@@ -32,11 +32,13 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/BulkOperations.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid memory_size:int" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid memory_size:memory" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -59,7 +61,7 @@ main() {
         fi
 
         __update__ "Setting memory to ${MEMORY_SIZE}MB for VM ${vmid}..."
-        if qm set "$vmid" --memory "$MEMORY_SIZE" --node "$node" 2>/dev/null; then
+        if __node_exec__ "$node" "qm set ${vmid} --memory ${MEMORY_SIZE}" 2>/dev/null; then
             return 0
         else
             return 1
@@ -81,14 +83,19 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed qm command execution to use __node_exec__ for cluster-aware operations
+# - 2025-11-24: Added Operations.sh source for __node_exec__ function
+# - 2025-11-24: Fixed argument type from 'int' to 'memory' for proper validation
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED CRITICAL BUG: qm commands were using --node flag which doesn't
+#   exist. Changed to use __node_exec__ to execute commands on correct node via ssh
+# - 2025-11-24: Fixed memory_size using incorrect 'int' type instead of 'memory'
 #
 # Known issues:
 # -

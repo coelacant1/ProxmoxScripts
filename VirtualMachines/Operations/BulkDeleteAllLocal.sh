@@ -58,12 +58,20 @@ main() {
     __warn__ "This will permanently delete ${#vm_array[@]} VM(s) on this node:"
     echo "$vm_ids"
 
-    # Confirm unless --force
-    if [[ -z "${FORCE:-}" ]]; then
-        if ! __prompt_user_yn__ "Are you sure you want to delete all VMs?"; then
-            __info__ "Operation canceled"
-            exit 0
-        fi
+    # Safety check: Require --force flag in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ "${FORCE:-false}" != "true" ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: BulkDeleteAllLocal.sh --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
+    fi
+
+    # Prompt for confirmation (unless --force provided)
+    if [[ "${FORCE:-false}" == "true" ]]; then
+        __info__ "Force mode enabled (--force flag) - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Are you sure you want to delete all VMs?"; then
+        __info__ "Operation canceled"
+        exit 0
     fi
 
     # Local callback for bulk operation
@@ -103,9 +111,10 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed non-interactive mode detection for destructive operations
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 # - YYYY-MM-DD: Initial creation
 #

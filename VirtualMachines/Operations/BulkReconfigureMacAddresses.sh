@@ -2,21 +2,29 @@
 #
 # BulkReconfigureMacAddresses.sh
 #
-# Examples:
-#   # Using password:
-#   AdaptMacPrefixByVMID.sh 1300 1310 root 'Sup3rSecret!'
-#
-#   # Using SSH key (pass '-' for password):
-#   AdaptMacPrefixByVMID.sh 1300 1310 root - /root/.ssh/id_rsa
-#
-# Notes:
-# - Runs on the OUTER Proxmox host.
-# - Each target VM is assumed to be a Proxmox VE instance (nested).
-# - We update the inner PVE's default MAC prefix in /etc/pve/datacenter.cfg (key: mac_prefix)
-#   and rewrite MACs in /etc/pve/qemu-server/*.conf and /etc/pve/lxc/*.conf.
+# Reconfigures MAC address prefixes for nested Proxmox VE instances (Proxmox-in-VM).
+# For each target VM (assumed to be a Proxmox VE instance), this script:
+# 1. Computes a unique MAC prefix based on the VMID using __vmid_to_mac_prefix__
+# 2. Updates the inner PVE's datacenter.cfg with the new mac_prefix
+# 3. Rewrites existing VM/CT MAC addresses in /etc/pve/qemu-server/*.conf and /etc/pve/lxc/*.conf
+# 4. Reloads pvedaemon to apply changes
 #
 # Usage:
-#   AdaptMacPrefixByVMID.sh <startVMID> <endVMID> <sshUser> <sshPasswordOrDash> [sshKeyPath]
+#   BulkReconfigureMacAddresses.sh <start_vmid> <end_vmid> <ssh_username> <ssh_password_or_dash> [ssh_key_path]
+#
+# Arguments:
+#   start_vmid            - Starting VMID (outer Proxmox host)
+#   end_vmid              - Ending VMID (outer Proxmox host)
+#   ssh_username          - SSH username for nested Proxmox instances
+#   ssh_password_or_dash  - SSH password, or '-' to use SSH key
+#   ssh_key_path          - Path to SSH private key (required if password is '-')
+#
+# Examples:
+#   # Using password:
+#   BulkReconfigureMacAddresses.sh 1300 1310 root 'Sup3rSecret!'
+#
+#   # Using SSH key (pass '-' for password):
+#   BulkReconfigureMacAddresses.sh 1300 1310 root - /root/.ssh/id_rsa
 #
 # Function Index:
 #   - rewrite_file_mac_prefix
@@ -197,9 +205,11 @@ echo "All done."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed script name in header (was AdaptMacPrefixByVMID.sh)
+# - 2025-11-24: Updated header documentation to match actual functionality
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

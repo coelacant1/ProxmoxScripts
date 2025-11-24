@@ -188,9 +188,10 @@ echo "Done. All relevant TRIM operations have been attempted."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

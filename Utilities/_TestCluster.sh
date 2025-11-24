@@ -66,8 +66,8 @@ Votequorum information
 Expected votes:   3
 Highest expected: 3
 Total votes:      3
-Quorum:           2  
-Flags:            Quorate 
+Quorum:           2
+Flags:            Quorate
 
 Membership information
 ----------------------

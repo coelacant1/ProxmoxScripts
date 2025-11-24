@@ -17,6 +17,12 @@
 #   - __select_nodes__
 #
 
+# Conditionally source Colors.sh if available
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Colors.sh" ]]; then
+    # shellcheck source=Colors.sh
+    source "${UTILITYPATH}/Colors.sh"
+fi
+
 # Load available nodes from nodes.json
 # Sets: AVAILABLE_NODES associative array (name => ip)
 # Returns: 0 if nodes loaded, 1 if not
@@ -52,9 +58,14 @@ __display_node_menu__() {
 
     for node_name in "${!AVAILABLE_NODES[@]}"; do
         local node_ip="${AVAILABLE_NODES[$node_name]}"
-        __line_rgb__ "  $i) $node_name ($node_ip)" 0 200 200
+        # Use colored output if available, otherwise plain text
+        if declare -f __line_rgb__ &>/dev/null; then
+            __line_rgb__ "  $i) $node_name ($node_ip)" 0 200 200
+        else
+            echo "  $i) $node_name ($node_ip)"
+        fi
         node_menu[$i]="$node_name:$node_ip"
-        ((i += 1))
+        i=$((i + 1))
     done
 
     # Export the menu for caller to use
@@ -198,13 +209,19 @@ __select_nodes__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Validated against CONTRIBUTING.md
+# - 2025-11-24: Added conditional Colors.sh sourcing with fallback
+# - 2025-11-24: Fixed arithmetic increment to use compatible syntax
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED: Missing Colors.sh source - added conditional sourcing
+#   with fallback to plain echo when __line_rgb__ unavailable
+# - 2025-11-24: FIXED: Changed ((i += 1)) to i=$((i + 1)) for compatibility
+#   with set -e error handling (CONTRIBUTING.md Section 3.7)
 #
 # Known issues:
 # -

@@ -1,13 +1,13 @@
 # ProxmoxScripts Utility Functions Reference
 
-**Auto-generated documentation** - Last updated: 2025-11-20 15:59:42
+**Auto-generated documentation** - Last updated: 2025-11-24 17:11:41
 
 ---
 
 ## Overview
 
-This reference provides comprehensive documentation for all utility functions in the ProxmoxScripts repository. 
-These utilities provide reusable functions for building automation scripts, 
+This reference provides comprehensive documentation for all utility functions in the ProxmoxScripts repository.
+These utilities provide reusable functions for building automation scripts,
 management tools, and integration solutions for Proxmox VE environments.
 
 ## Utility Files Overview
@@ -1253,11 +1253,6 @@ __vmid_to_mac_prefix__ --vmid 512 --prefix aa --pad-length 6
 - API.sh (for VM/CT existence checks)
 - Logger.sh (for logging)
 
-**Usage**:
-```bash
-source "${UTILITYPATH}/Discovery.sh"
-```
-
 **Functions**:
 - `__discovery_log__`
 - `__get_ip_from_vmid__`
@@ -1273,14 +1268,14 @@ source "${UTILITYPATH}/Discovery.sh"
 **Description**: Retrieves the IP address of a VM by using its net0 MAC address for an ARP scan on the default interface (vmbr0). Prints the IP if found.
 **Usage**:
 ```bash
-get_ip_from_vmid 100
+__get_ip_from_vmid__ 100
 ```
 **Parameters**:
 - 1 The VMID.
 **Returns**: Prints the discovered IP or exits 1 if not found.
 **Example Output**:
 ```
-For get_ip_from_vmid 100, the output might be: 192.168.1.100
+For __get_ip_from_vmid__ 100, the output might be: 192.168.1.100
 ```
 ---
 ### `__get_ip_from_guest_agent__`
@@ -1428,7 +1423,15 @@ source "${UTILITYPATH}/ManualViewer.sh"
 
 # Menu.sh
 
-**Purpose**: !/bin/bash Utilities for creating consistent menu interfaces Functions: __menu_choice__       - Handle menu choice with common options __menu_display__      - Display menu items in consistent format __menu_header__       - Display menu header __menu_footer__       - Display menu footer with common options
+**Purpose**: !/bin/bash Utilities for creating consistent menu interfaces Source this utility in scripts that need menu functions Dependencies:
+
+**Features**:
+- Colors.sh (optional, for colored output)
+
+**Usage**:
+```bash
+source "${UTILITYPATH}/Menu.sh"
+```
 
 **Functions**:
 - `__menu_header__`
@@ -2580,7 +2583,7 @@ __require_root_and_proxmox__
 ---
 # RemoteExecutor.sh
 
-**Purpose**: !/bin/bash Handles all remote script execution logic including SSH, file transfer, and result collection. Supports both password-based (sshpass) and SSH key-based authentication.
+**Purpose**: !/bin/bash Handles all remote script execution logic including SSH, file transfer, and result collection. Supports both password-based (sshpass) and SSH key-based authentication. This utility is sourced by GUI.sh for remote node execution. It expects: - REMOTE_TEMP_DIR: Remote temporary directory path - REMOTE_TARGETS: Array of target nodes (name:ip format) - NODE_PASSWORDS: Associative array of node passwords - REMOTE_LOG_LEVEL: Log level for remote execution
 
 **Functions**:
 - `__remote_cleanup__`
@@ -3021,5 +3024,5 @@ fi
 
 ---
 
-**Note**: This documentation is automatically generated from source code comments. 
+**Note**: This documentation is automatically generated from source code comments.
 To update, run: `python3 .check/UpdateUtilityDocumentation.py`

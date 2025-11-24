@@ -45,23 +45,23 @@ create_osds() {
 
         if [ ! -b "$device" ]; then
             __update__ "Skipping $device (not a valid block device)"
-            ((skipped += 1))
+            skipped=$((skipped + 1))
             continue
         fi
 
-        # Check if device is mounted or in pvs
-        if lsblk -no MOUNTPOINT "$device" 2>/dev/null | grep -q '^$' && ! pvs 2>/dev/null | grep -q "$device"; then
+        # Check if device is not mounted and not in pvs
+        if ! lsblk -no MOUNTPOINT "$device" 2>/dev/null | grep -q . && ! pvs 2>/dev/null | grep -q "$device"; then
             __update__ "Creating OSD for $device..."
             if ceph-volume lvm create --data "$device" 2>/dev/null; then
                 __ok__ "Created OSD for $device"
-                ((created += 1))
+                created=$((created + 1))
             else
                 __warn__ "Failed to create OSD for $device"
-                ((failed += 1))
+                failed=$((failed + 1))
             fi
         else
             __update__ "Skipping $device (in use - mounted or in pvs)"
-            ((skipped += 1))
+            skipped=$((skipped + 1))
         fi
     done
 
@@ -87,7 +87,7 @@ main() {
     local current=0
 
     for node_ip in "${remote_nodes[@]}"; do
-        ((current += 1))
+        current=$((current + 1))
         __update__ "Processing node $current/$total_nodes: $node_ip"
 
         if ssh root@"$node_ip" "$(typeset -f create_osds); create_osds" 2>/dev/null; then
@@ -105,17 +105,22 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
-# - 2025-11-20: Pending validation
+# - 2025-11-24: Deep technical validation - fixed mount point check logic
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - 2025-11-21: Fixed arithmetic increment syntax (5 occurrences)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED CRITICAL BUG: Mount point check at line 53 used grep -q '^$'
+#   which matched empty lines instead of checking for non-empty mount points. This
+#   would incorrectly skip mounted devices. Changed to ! grep -q . to properly
+#   check that device is NOT mounted before creating OSD
+# - 2025-11-21: Changed ((var += 1)) to var=$((var + 1)) per CONTRIBUTING.md
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

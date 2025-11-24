@@ -57,6 +57,8 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/BulkOperations.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -161,7 +163,7 @@ main() {
 
         # Get current network configuration
         local current_config
-        current_config=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${NET_ID}:" | cut -d' ' -f2- || echo "")
+        current_config=$(__node_exec__ "$node" "qm config ${vmid}" 2>/dev/null | grep "^${NET_ID}:" | cut -d' ' -f2- || echo "")
 
         if [[ -z "$current_config" ]]; then
             __update__ "VM ${vmid} has no ${NET_ID} interface"
@@ -251,8 +253,8 @@ main() {
             new_config=$(echo "$new_config" | sed "s/^[^=]*=/${MODEL}=/")
         fi
 
-        # Apply configuration
-        if qm set "$vmid" --node "$node" "--${NET_ID}" "$new_config" 2>&1; then
+        # Apply configuration on correct node
+        if __node_exec__ "$node" "qm set ${vmid} --${NET_ID} '${new_config}'" 2>&1; then
             return 0
         else
             return 1
@@ -274,9 +276,11 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed qm command execution to use __node_exec__ for cluster-aware operations
+# - 2025-11-24: Added Operations.sh source for __node_exec__ function
 # - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
 # - 2025-11-20: Removed manual usage() and parse_args() functions
 # - 2025-11-20: Now uses __parse_args__ with automatic validation
@@ -284,6 +288,8 @@ main "$@"
 # - 2025-11-20: Added missing Cluster.sh source for __get_vm_node__
 #
 # Fixes:
+# - 2025-11-24: FIXED CRITICAL BUG: qm commands were using --node flag which doesn't
+#   exist. Changed to use __node_exec__ to execute commands on correct node via ssh
 # - Fixed __prompt_yes_no__ -> __prompt_user_yn__
 #
 # Known issues:

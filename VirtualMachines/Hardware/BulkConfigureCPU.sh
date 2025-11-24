@@ -55,6 +55,8 @@ source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/BulkOperations.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
@@ -158,8 +160,8 @@ main() {
 
         __update__ "Configuring CPU for VM ${vmid} on node ${node}..."
 
-        # Build qm set command
-        local cmd="qm set \"$vmid\" --node \"$node\""
+        # Build qm set command (execute on correct node via ssh)
+        local cmd="qm set ${vmid}"
 
         # Cores
         [[ -n "$CORES" ]] && cmd+=" --cores \"$CORES\""
@@ -181,7 +183,7 @@ main() {
         elif [[ -n "$FLAGS" ]]; then
             # Flags without type change - need to get current type
             local current_type
-            current_type=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^cpu:" | sed 's/cpu: *//' | cut -d',' -f1 || echo "kvm64")
+            current_type=$(__node_exec__ "$node" "qm config ${vmid}" 2>/dev/null | grep "^cpu:" | sed 's/cpu: *//' | cut -d',' -f1 || echo "kvm64")
             local cpu_config="${current_type},flags=${FLAGS}"
             cmd+=" --cpu \"$cpu_config\""
         fi
@@ -198,8 +200,8 @@ main() {
         # Affinity
         [[ -n "$AFFINITY" ]] && cmd+=" --affinity \"$AFFINITY\""
 
-        # Execute configuration
-        if eval "$cmd" 2>&1; then
+        # Execute configuration on correct node
+        if __node_exec__ "$node" "$cmd" 2>&1; then
             return 0
         else
             return 1
@@ -221,9 +223,11 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed qm command execution to use __node_exec__ for cluster-aware operations
+# - 2025-11-24: Added Operations.sh source for __node_exec__ function
 # - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
 # - 2025-11-20: Removed manual parse_args and validate_options functions
 # - 2025-11-20: Now uses __parse_args__ with automatic validation
@@ -231,6 +235,8 @@ main "$@"
 # - 2025-11-20: Added missing Cluster.sh source for __get_vm_node__
 #
 # Fixes:
+# - 2025-11-24: FIXED CRITICAL BUG: qm commands were using --node flag which doesn't
+#   exist. Changed to use __node_exec__ to execute commands on correct node via ssh
 # - Fixed __prompt_yes_no__ -> __prompt_user_yn__
 #
 # Known issues:

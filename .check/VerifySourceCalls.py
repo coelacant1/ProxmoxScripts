@@ -34,29 +34,35 @@ from pathlib import Path
 # Directories to skip during traversal
 SKIP_DIRS = {".git", ".github", ".site", ".check", ".docs"}
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # HARD-CODED DIRECTORIES:
 # Adjust these as needed for your environment.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 script_dir = Path(__file__).resolve().parent
 
 SCRIPTS_DIR = script_dir.parent  # if your scripts are one level up
 UTILITIES_DIR = script_dir.parent / "Utilities"
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # Regex for function definitions: "__myFunction__() {" or "function __myFunction__ {"
 # We capture the entire name with underscores.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 FUNC_DEF_REGEX = re.compile(
     r'^(?:function\s+)?(__[a-zA-Z0-9_]+__)\s*\(\)\s*\{'
 )
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # Regex for lines that source a utility:
 #   source "${UTILITYPATH}/Something.sh"
 #   . "${UTILITYPATH}/Something.sh"
 # We'll capture "Something.sh" as group(1).
-# -----------------------------------------------------------------------------
+###############################################################################
+
 SOURCE_REGEX = re.compile(
     r'^\s*(?:source|\.)\s+"?\$\{?UTILITYPATH\}?/([a-zA-Z0-9_.-]+)"?'
 )
@@ -66,15 +72,19 @@ SHELLCHECK_SOURCE_REGEX = re.compile(
     r'^\s*#\s*shellcheck\s+source=Utilities/([a-zA-Z0-9_.-]+)'
 )
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # Regex for function call tokens like "__something__"
 # We'll detect them as distinct tokens in a line.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 CALL_REGEX = re.compile(r'^__[a-zA-Z0-9_]+__$')
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 1) Build a global map:  function -> set of utility filenames that define it
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def build_global_function_map(utilities_dir):
     """
     Recursively parse all .sh files under 'utilities_dir'
@@ -103,9 +113,11 @@ def build_global_function_map(utilities_dir):
             global_map[f].add(util_script.name)
     return global_map
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 2) Parse function definitions from a single file
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def parse_functions_in_file(filepath):
     results = set()
     if not os.path.isfile(filepath):
@@ -119,9 +131,11 @@ def parse_functions_in_file(filepath):
                 results.add(func_name)
     return results
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 3) Identify which utilities are included in a script & local function definitions
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def parse_script_for_includes_and_local_funcs(script_path):
     includes = set()
     local_funcs = parse_functions_in_file(script_path)
@@ -147,9 +161,11 @@ def parse_script_for_includes_and_local_funcs(script_path):
                 
     return includes, local_funcs
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 4) Gather function calls from lines that are not function definitions
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def gather_function_calls(script_path):
     """
     Extract all function calls (__function_name__) from a script.
@@ -181,9 +197,11 @@ def gather_function_calls(script_path):
     
     return calls
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 5) Cache for utility -> set of functions.  parse_utility_functions(Utility.sh).
-# -----------------------------------------------------------------------------
+###############################################################################
+
 _utility_func_cache = {}
 
 def parse_utility_functions(utility_file):
@@ -196,11 +214,13 @@ def parse_utility_functions(utility_file):
     _utility_func_cache[utility_file] = funcs
     return funcs
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 6) Analyze a single script:
 #    - Figure out which calls are unknown / where they might be found
 #    - Which includes are used vs. unused
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def analyze_script(script_path, global_map):
     """
     Returns:
@@ -253,12 +273,14 @@ def analyze_script(script_path, global_map):
 
     return unknown_calls, used_includes, all_includes
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 7) For --fix mode, we want to:
 #    - Summarize needed changes (Add or Remove sources)
 #    - Prompt user Y/N for each script
 #    - If Y, do the changes: add lines after the top # block, remove lines for unused
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def fix_script(
     script_path,
     add_sources,
@@ -389,9 +411,11 @@ def find_source_insertion_point(lines):
     # Otherwise insert after comment block
     return comment_block_end + 1  # Add blank line after comment
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 8) Main script
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def main():
     parser = argparse.ArgumentParser(description="Check unknown calls in .sh scripts and optionally fix missing sources.")
     parser.add_argument("--scripts-dir", default=SCRIPTS_DIR, help="Directory of .sh scripts to check (recursively).")

@@ -6,6 +6,12 @@
 # and result collection. Supports both password-based (sshpass) and
 # SSH key-based authentication.
 #
+# This utility is sourced by GUI.sh for remote node execution. It expects:
+# - REMOTE_TEMP_DIR: Remote temporary directory path
+# - REMOTE_TARGETS: Array of target nodes (name:ip format)
+# - NODE_PASSWORDS: Associative array of node passwords
+# - REMOTE_LOG_LEVEL: Log level for remote execution
+#
 # Function Index:
 #   - __remote_cleanup__
 #   - __prompt_for_params__
@@ -16,6 +22,22 @@
 #   - __execute_on_remote_node__
 #   - __execute_remote_script__
 #
+
+# Conditionally source utilities if available
+if [[ -f "${UTILITYPATH}/Communication.sh" ]]; then
+    # shellcheck source=Utilities/Communication.sh
+    source "${UTILITYPATH}/Communication.sh"
+fi
+
+if [[ -f "${UTILITYPATH}/Colors.sh" ]]; then
+    # shellcheck source=Utilities/Colors.sh
+    source "${UTILITYPATH}/Colors.sh"
+fi
+
+if [[ -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
 
 # Global flag for interrupt
 REMOTE_INTERRUPTED=0
@@ -82,9 +104,9 @@ __ssh_exec__() {
     local command="$*"
 
     if [[ "$USE_SSH_KEYS" == "true" ]] || [[ -z "$node_pass" ]]; then
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$node_ip "$command"
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${node_ip}" "$command"
     else
-        sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$node_ip "$command"
+        sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${node_ip}" "$command"
     fi
 }
 
@@ -158,17 +180,19 @@ __execute_on_remote_node__() {
     __log_info__ "Cleaning and creating remote directory structure on $node_name" "REMOTE"
 
     local ssh_output
-    ssh_output=$(__ssh_exec__ "$node_ip" "$node_pass" \
-        "rm -rf $REMOTE_TEMP_DIR && mkdir -p $REMOTE_TEMP_DIR/{Utilities,Host,LXC,Storage,VirtualMachines,Networking,Cluster,Security,HighAvailability,Firewall,Resources,RemoteManagement}" 2>&1)
-
-    # Check if interrupted
-    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+    if ! ssh_output=$(__ssh_exec__ "$node_ip" "$node_pass" \
+        "rm -rf $REMOTE_TEMP_DIR && mkdir -p $REMOTE_TEMP_DIR/{Utilities,Host,LXC,Storage,VirtualMachines,Networking,Cluster,Security,HighAvailability,Firewall,Resources,RemoteManagement}" 2>&1); then
+        # Check if interrupted
+        if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
+            return 1
+        fi
+        __err__ "Failed to connect to $node_name"
+        __log_error__ "Failed to connect/create directories on $node_name: $ssh_output" "REMOTE"
         return 1
     fi
 
-    if [[ $? -ne 0 ]]; then
-        __err__ "Failed to connect to $node_name"
-        __log_error__ "Failed to connect/create directories on $node_name: $ssh_output" "REMOTE"
+    # Check if interrupted
+    if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
         return 1
     fi
     __ok__ "Remote environment ready"
@@ -333,7 +357,7 @@ __execute_on_remote_node__() {
     CURRENT_MESSAGE="Cleaning up..."
     __update__ "$CURRENT_MESSAGE"
     __log_info__ "Cleaning up remote directory: $REMOTE_TEMP_DIR" "REMOTE"
-    sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no root@$node_ip \
+    __ssh_exec__ "$node_ip" "$node_pass" \
         "rm -rf $REMOTE_TEMP_DIR $remote_log $remote_debug_log ${remote_log}.exit" 2>/dev/null || __log_warn__ "Cleanup failed (non-critical)" "REMOTE"
     __ok__ "Cleanup complete"
 
@@ -346,7 +370,7 @@ __execute_on_remote_node__() {
         __log_error__ "$node_name execution failed with exit code: $ssh_exit_code" "REMOTE"
     fi
 
-    return $ssh_exit_code
+    return "$ssh_exit_code"
 }
 
 # Execute script on remote target(s)
@@ -429,20 +453,28 @@ __execute_remote_script__() {
     echo "Summary: $success_count successful, $fail_count failed"
     echo "========================================"
 
-    LAST_SCRIPT="$display_path_result"
-    LAST_OUTPUT="Remote execution on ${#REMOTE_TARGETS[@]} node(s): $success_count OK, $fail_count FAIL"
+    # Export for use by GUI.sh
+    export LAST_SCRIPT="$display_path_result"
+    export LAST_OUTPUT="Remote execution on ${#REMOTE_TARGETS[@]} node(s): $success_count OK, $fail_count FAIL"
 }
 
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md and fixed ShellCheck issues
+# - 2025-11-24: Added conditional sourcing of utility dependencies
+# - 2025-11-24: Fixed variable quoting issues (SC2086)
+# - 2025-11-24: Changed exit code check to direct command check (SC2181)
+# - 2025-11-24: Exported LAST_SCRIPT and LAST_OUTPUT for GUI.sh use
+# - 2025-11-24: Replaced direct sshpass call with __ssh_exec__ wrapper
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed unquoted node_ip variables causing globbing risks
+# - 2025-11-24: Fixed indirect exit code check with direct command check
+# - 2025-11-24: Fixed return value quoting
 #
 # Known issues:
 # -

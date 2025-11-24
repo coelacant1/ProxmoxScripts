@@ -203,7 +203,8 @@ __net_vm_set_bridge__() {
     fi
 
     # Get current network config
-    local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
+    local current_config
+    current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
         __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
@@ -212,7 +213,7 @@ __net_vm_set_bridge__() {
     fi
 
     # Replace bridge in config
-    local new_config=$(echo "$current_config" | sed "s/bridge=[^,]*/bridge=${new_bridge}/")
+    local new_config="${current_config/bridge=[^,]*/bridge=${new_bridge}}"
     __net_log__ "DEBUG" "New config: $new_config"
 
     if __vm_set_config__ "$vmid" "--${net_id}" "$new_config"; then
@@ -248,7 +249,8 @@ __net_vm_set_vlan__() {
     fi
 
     # Get current network config
-    local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
+    local current_config
+    current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
         __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
@@ -261,12 +263,12 @@ __net_vm_set_vlan__() {
     if [[ "$vlan" == "none" ]]; then
         # Remove VLAN tag
         __net_log__ "DEBUG" "Removing VLAN tag from $net_id"
-        new_config=$(echo "$current_config" | sed 's/,tag=[^,]*//g')
+        new_config="${current_config//,tag=[^,]*/}"
     else
         # Add or replace VLAN tag
         if echo "$current_config" | grep -q "tag="; then
             __net_log__ "DEBUG" "Replacing existing VLAN tag with $vlan"
-            new_config=$(echo "$current_config" | sed "s/tag=[^,]*/tag=${vlan}/")
+            new_config="${current_config/tag=[^,]*/tag=${vlan}}"
         else
             __net_log__ "DEBUG" "Adding VLAN tag $vlan"
             new_config="${current_config},tag=${vlan}"
@@ -312,7 +314,8 @@ __net_vm_set_mac__() {
     fi
 
     # Get current network config
-    local current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
+    local current_config
+    current_config=$(qm config "$vmid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
         __net_log__ "ERROR" "Interface $net_id not found on VM $vmid"
@@ -325,7 +328,7 @@ __net_vm_set_mac__() {
     # Add or replace MAC address
     if echo "$current_config" | grep -q "macaddr="; then
         __net_log__ "DEBUG" "Replacing existing MAC address"
-        new_config=$(echo "$current_config" | sed "s/macaddr=[^,]*/macaddr=${mac}/")
+        new_config="${current_config/macaddr=[^,]*/macaddr=${mac}}"
     else
         __net_log__ "DEBUG" "Adding MAC address"
         new_config="${current_config},macaddr=${mac}"
@@ -360,10 +363,10 @@ __net_vm_get_interfaces__() {
     fi
 
     local count=0
-    qm config "$vmid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
+    while IFS=':' read -r netid config; do
         echo "$netid: $config"
-        ((count += 1))
-    done
+        count=$((count + 1))
+    done < <(qm config "$vmid" | grep "^net[0-9]")
 
     __net_log__ "DEBUG" "Found $count network interface(s) for VM $vmid"
     return 0
@@ -520,7 +523,8 @@ __net_ct_set_ip__() {
     fi
 
     # Get current network config
-    local current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
+    local current_config
+    current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
         __net_log__ "ERROR" "Interface $net_id not found on CT $ctid"
@@ -529,7 +533,7 @@ __net_ct_set_ip__() {
     fi
 
     # Replace IP in config
-    local new_config=$(echo "$current_config" | sed "s/ip=[^,]*/ip=${ip}/")
+    local new_config="${current_config/ip=[^,]*/ip=${ip}}"
 
     if pct set "$ctid" "-${net_id}" "$new_config" 2>/dev/null; then
         __net_log__ "INFO" "Set IP for CT $ctid $net_id to $ip"
@@ -570,7 +574,8 @@ __net_ct_set_gateway__() {
     fi
 
     # Get current network config
-    local current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
+    local current_config
+    current_config=$(pct config "$ctid" | grep "^${net_id}:" | cut -d':' -f2- | sed 's/^ //')
 
     if [[ -z "$current_config" ]]; then
         __net_log__ "ERROR" "Interface $net_id not found on CT $ctid"
@@ -583,7 +588,7 @@ __net_ct_set_gateway__() {
     # Add or replace gateway
     if echo "$current_config" | grep -q "gw="; then
         __net_log__ "DEBUG" "Replacing existing gateway"
-        new_config=$(echo "$current_config" | sed "s/gw=[^,]*/gw=${gateway}/")
+        new_config="${current_config/gw=[^,]*/gw=${gateway}}"
     else
         __net_log__ "DEBUG" "Adding gateway"
         new_config="${current_config},gw=${gateway}"
@@ -654,10 +659,10 @@ __net_ct_get_interfaces__() {
     fi
 
     local count=0
-    pct config "$ctid" | grep "^net[0-9]" | while IFS=':' read -r netid config; do
+    while IFS=':' read -r netid config; do
         echo "$netid: $config"
-        ((count += 1))
-    done
+        count=$((count + 1))
+    done < <(pct config "$ctid" | grep "^net[0-9]")
 
     __net_log__ "DEBUG" "Found $count network interface(s) for CT $ctid"
 
@@ -687,7 +692,8 @@ __net_validate_ip__() {
 
     # Check each octet is 0-255
     local IFS='.'
-    local octets=($ip)
+    local -a octets
+    read -ra octets <<<"$ip"
 
     for octet in "${octets[@]}"; do
         if ((octet > 255)); then
@@ -804,7 +810,8 @@ __net_get_next_ip__() {
 
     # Extract base network
     local IFS='.'
-    local octets=($base_ip)
+    local -a octets
+    read -ra octets <<<"$base_ip"
     local base="${octets[0]}.${octets[1]}.${octets[2]}"
 
     # Check IPs starting from start_host
@@ -936,7 +943,8 @@ __net_test_gateway__() {
     fi
 
     # Get gateway from config
-    local gateway=$(pct config "$ctid" | grep "gw=" | head -1 | sed 's/.*gw=\([^,]*\).*/\1/')
+    local gateway
+    gateway=$(pct config "$ctid" | grep "gw=" | head -1 | sed 's/.*gw=\([^,]*\).*/\1/')
 
     if [[ -z "$gateway" ]]; then
         __net_log__ "ERROR" "No gateway configured for CT $ctid"
@@ -1078,9 +1086,7 @@ __net_migrate_network__() {
     local net_id="$3"
     shift 3
 
-    local from_bridge=""
     local to_bridge=""
-    local from_vlan=""
     local to_vlan=""
 
     __net_log__ "DEBUG" "Network migration: range=$start_vmid-$end_vmid, interface=$net_id"
@@ -1088,7 +1094,7 @@ __net_migrate_network__() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --from-bridge)
-                from_bridge="$2"
+                # from_bridge parameter accepted but not used (for future filtering)
                 shift 2
                 ;;
             --to-bridge)
@@ -1097,7 +1103,7 @@ __net_migrate_network__() {
                 shift 2
                 ;;
             --from-vlan)
-                from_vlan="$2"
+                # from_vlan parameter accepted but not used (for future filtering)
                 shift 2
                 ;;
             --to-vlan)
@@ -1187,13 +1193,17 @@ __net_migrate_network__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155, SC2001, SC2030/2031, SC2206, SC2034)
 #
 # Fixes:
-# -
+# - 2025-11-24: Separated variable declaration/assignment for proper error handling
+# - 2025-11-24: Changed pipeline to process substitution to fix subshell variable scope
+# - 2025-11-24: Used bash parameter expansion instead of sed for simple replacements
+# - 2025-11-24: Used read -ra for proper array splitting
+# - 2025-11-24: Removed unused from_bridge and from_vlan variables (reserved for future use)
 #
 # Known issues:
 # -

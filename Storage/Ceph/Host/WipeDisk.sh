@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# CephWipeDisk.sh
+# WipeDisk.sh
 #
 # Securely erase a disk previously used by Ceph for removal or redeployment.
 # This script will:
@@ -9,11 +9,11 @@
 #   3. Optionally overwrite the disk with zeroes.
 #
 # Usage:
-#   CephWipeDisk.sh /dev/sdX [--force]
+#   WipeDisk.sh /dev/sdX [--force]
 #
 # Example:
-#   CephWipeDisk.sh /dev/sdb
-#   CephWipeDisk.sh /dev/sdb --force     # Skip confirmation
+#   WipeDisk.sh /dev/sdb
+#   WipeDisk.sh /dev/sdb --force     # Skip confirmation
 #
 # Notes:
 # - This script must be run as root (sudo).
@@ -85,7 +85,7 @@ __warn__ "This operation is destructive and cannot be undone"
 # Safety check: Require --force in non-interactive mode
 if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
     __err__ "Destructive operation requires --force flag in non-interactive mode"
-    __err__ "Usage: CephWipeDisk.sh $DISK --force"
+    __err__ "Usage: WipeDisk.sh $DISK --force"
     __err__ "Or add '--force' to parameters in GUI"
     exit 1
 fi
@@ -131,13 +131,14 @@ __prompt_keep_installed_packages__
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Fixed script name in header and usage
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Corrected script name from CephWipeDisk.sh to WipeDisk.sh
 #
 # Known issues:
 # -

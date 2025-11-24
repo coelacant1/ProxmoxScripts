@@ -66,7 +66,7 @@ main() {
 
         if [[ -z "$vm_ip" ]]; then
             __warn__ "Could not retrieve IP for VM $vmid. Skipping."
-            ((failed++))
+            failed=$((failed + 1))
             continue
         fi
 
@@ -84,8 +84,8 @@ main() {
                 --arg NAME "${vm_name}" \
                 --arg HOST "$vm_ip" \
                 --arg PORT "3389" \
-                --arg USER "$RDP_USER" \
-                --arg PASS "$RDP_PASS" \
+                --arg USER "$GUAC_RDP_USER" \
+                --arg PASS "$GUAC_RDP_PASS" \
                 '{
                 "parentIdentifier": "ROOT",
                 "name": $NAME,
@@ -115,7 +115,7 @@ main() {
             curl -s -X POST \
                 -H "Content-Type: application/json" \
                 -d "$create_payload" \
-                "${GUAC_URL}/api/session/data/${DATA_SOURCE}/connections?token=${auth_token}"
+                "${GUAC_URL}/api/session/data/${GUAC_DATA_SOURCE}/connections?token=${AUTH_TOKEN}"
         )"
 
         local conn_id
@@ -123,10 +123,10 @@ main() {
 
         if [[ -n "$conn_id" ]]; then
             __ok__ "Created connection for VM $vmid (Name: $vm_name, IP: $vm_ip, ID: $conn_id)"
-            ((created++))
+            created=$((created + 1))
         else
             __warn__ "Failed to create connection for VM $vmid. Response: $response"
-            ((failed++))
+            failed=$((failed + 1))
         fi
     done
 
@@ -142,19 +142,20 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
-# - 2025-11-20: Pending validation
+# - 2025-11-24: Deep technical validation - fixed variable name issues and arithmetic
 # - 2025-11-20: ArgumentParser.sh sourced
 # - 2025-11-20: Updated to use ArgumentParser.sh
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed variable name mismatch: AUTH_TOKEN vs auth_token (line 118)
+# - 2025-11-24: Fixed variable names: GUAC_RDP_USER, GUAC_RDP_PASS, GUAC_DATA_SOURCE
+# - 2025-11-24: Changed ((var++)) to var=$((var + 1)) per CONTRIBUTING.md (3 occurrences)
 #
 # Known issues:
-# - Pending validation
 # -
 #
 

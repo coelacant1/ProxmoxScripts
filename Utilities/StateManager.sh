@@ -98,7 +98,8 @@ __state_save_vm__() {
 
     # Get VM configuration
     __state_log__ "DEBUG" "__state_save_vm__: Getting VM configuration"
-    local config=$(qm config "$vmid" 2>/dev/null)
+    local config
+    config=$(qm config "$vmid" 2>/dev/null)
     if [[ -z "$config" ]]; then
         __state_log__ "ERROR" "Failed to get VM $vmid configuration"
         echo "Error: Failed to get VM configuration" >&2
@@ -108,8 +109,10 @@ __state_save_vm__() {
 
     # Get VM status
     __state_log__ "DEBUG" "__state_save_vm__: Getting VM status and node"
-    local status=$(__vm_get_status__ "$vmid")
-    local node=$(__get_vm_node__ "$vmid")
+    local status
+    local node
+    status=$(__vm_get_status__ "$vmid")
+    node=$(__get_vm_node__ "$vmid")
     __state_log__ "DEBUG" "__state_save_vm__: status=$status, node=$node"
 
     # Create JSON state file
@@ -201,9 +204,11 @@ __state_restore_vm__() {
 
     # Extract and apply configuration
     __state_log__ "DEBUG" "__state_restore_vm__: Extracting configuration from state file"
-    local config=$(jq -r '.config | to_entries[] | "\(.key)=\(.value)"' "$state_file")
+    local config
+    config=$(jq -r '.config | to_entries[] | "\(.key)=\(.value)"' "$state_file")
 
-    local node=$(__get_vm_node__ "$vmid")
+    local node
+    node=$(__get_vm_node__ "$vmid")
     __state_log__ "DEBUG" "__state_restore_vm__: Applying configuration changes"
 
     while IFS='=' read -r key value; do
@@ -250,19 +255,23 @@ __state_compare_vm__() {
 
     # Get current config
     __state_log__ "DEBUG" "__state_compare_vm__: Getting current configuration"
-    local current_config=$(qm config "$vmid" 2>/dev/null)
+    local current_config
+    current_config=$(qm config "$vmid" 2>/dev/null)
 
     # Get saved config
     __state_log__ "DEBUG" "__state_compare_vm__: Getting saved configuration"
-    local saved_config=$(jq -r '.config | to_entries[] | "\(.key): \(.value)"' "$state_file")
+    local saved_config
+    saved_config=$(jq -r '.config | to_entries[] | "\(.key): \(.value)"' "$state_file")
 
     # Compare
     __state_log__ "DEBUG" "__state_compare_vm__: Comparing configurations"
     local differences=0
 
     while IFS=': ' read -r key value; do
-        local current_value=$(echo "$current_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
-        local saved_value=$(echo "$saved_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
+        local current_value
+        local saved_value
+        current_value=$(echo "$current_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
+        saved_value=$(echo "$saved_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
 
         if [[ "$current_value" != "$saved_value" ]]; then
             __state_log__ "DEBUG" "__state_compare_vm__: Difference found in $key"
@@ -304,7 +313,8 @@ __state_export_vm__() {
     fi
 
     # Save to temporary state
-    local temp_state="export_$(date +%s)"
+    local temp_state
+    temp_state="export_$(date +%s)"
     __state_log__ "DEBUG" "__state_export_vm__: Creating temporary state: $temp_state"
     __state_save_vm__ "$vmid" "$temp_state" >/dev/null || return 1
 
@@ -351,7 +361,8 @@ __state_save_ct__() {
 
     # Get CT configuration
     __state_log__ "DEBUG" "__state_save_ct__: Getting CT configuration"
-    local config=$(pct config "$ctid" 2>/dev/null)
+    local config
+    config=$(pct config "$ctid" 2>/dev/null)
     if [[ -z "$config" ]]; then
         __state_log__ "ERROR" "Failed to get CT $ctid configuration"
         echo "Error: Failed to get CT configuration" >&2
@@ -360,7 +371,8 @@ __state_save_ct__() {
 
     # Get CT status
     __state_log__ "DEBUG" "__state_save_ct__: Getting CT status"
-    local status=$(__ct_get_status__ "$ctid")
+    local status
+    status=$(__ct_get_status__ "$ctid")
 
     # Create JSON state file
     {
@@ -446,7 +458,8 @@ __state_restore_ct__() {
 
     # Extract and apply configuration
     __state_log__ "DEBUG" "__state_restore_ct__: Extracting and applying configuration"
-    local config=$(jq -r '.config | to_entries[] | "\(.key)=\(.value)"' "$state_file")
+    local config
+    config=$(jq -r '.config | to_entries[] | "\(.key)=\(.value)"' "$state_file")
 
     while IFS='=' read -r key value; do
         if pct set "$ctid" -"$key" "$value" 2>/dev/null; then
@@ -492,19 +505,23 @@ __state_compare_ct__() {
 
     # Get current config
     __state_log__ "DEBUG" "__state_compare_ct__: Getting current configuration"
-    local current_config=$(pct config "$ctid" 2>/dev/null)
+    local current_config
+    current_config=$(pct config "$ctid" 2>/dev/null)
 
     # Get saved config
     __state_log__ "DEBUG" "__state_compare_ct__: Getting saved configuration"
-    local saved_config=$(jq -r '.config | to_entries[] | "\(.key): \(.value)"' "$state_file")
+    local saved_config
+    saved_config=$(jq -r '.config | to_entries[] | "\(.key): \(.value)"' "$state_file")
 
     # Compare
     __state_log__ "DEBUG" "__state_compare_ct__: Comparing configurations"
     local differences=0
 
     while IFS=': ' read -r key value; do
-        local current_value=$(echo "$current_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
-        local saved_value=$(echo "$saved_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
+        local current_value
+        local saved_value
+        current_value=$(echo "$current_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
+        saved_value=$(echo "$saved_config" | grep "^${key}:" | cut -d':' -f2- | sed 's/^ //')
 
         if [[ "$current_value" != "$saved_value" ]]; then
             __state_log__ "DEBUG" "__state_compare_ct__: Difference found in $key"
@@ -545,7 +562,8 @@ __state_export_ct__() {
         return 1
     fi
 
-    local temp_state="export_$(date +%s)"
+    local temp_state
+    temp_state="export_$(date +%s)"
     __state_log__ "DEBUG" "__state_export_ct__: Creating temporary state: $temp_state"
     __state_save_ct__ "$ctid" "$temp_state" >/dev/null || return 1
 
@@ -686,11 +704,13 @@ __state_snapshot_cluster__() {
 
     # Get all VM IDs
     __state_log__ "DEBUG" "__state_snapshot_cluster__: Getting VM list"
-    local vm_ids=$(qm list 2>/dev/null | awk 'NR>1 {print $1}')
+    local vm_ids
+    vm_ids=$(qm list 2>/dev/null | awk 'NR>1 {print $1}')
 
     # Get all CT IDs
     __state_log__ "DEBUG" "__state_snapshot_cluster__: Getting CT list"
-    local ct_ids=$(pct list 2>/dev/null | awk 'NR>1 {print $1}')
+    local ct_ids
+    ct_ids=$(pct list 2>/dev/null | awk 'NR>1 {print $1}')
 
     local vm_success=0
     local vm_failed=0
@@ -759,11 +779,16 @@ __state_list__() {
     echo ""
 
     find "$STATE_DIR" -name "$pattern" -type f 2>/dev/null | while read -r file; do
-        local filename=$(basename "$file")
-        local timestamp=$(jq -r '.timestamp' "$file" 2>/dev/null || echo "unknown")
-        local type=$(jq -r '.type' "$file" 2>/dev/null || echo "unknown")
-        local id=$(jq -r 'if .type == "vm" then .vmid else .ctid end' "$file" 2>/dev/null || echo "unknown")
-        local name=$(jq -r '.name' "$file" 2>/dev/null || echo "unknown")
+        local filename
+        local timestamp
+        local type
+        local id
+        local name
+        filename=$(basename "$file")
+        timestamp=$(jq -r '.timestamp' "$file" 2>/dev/null || echo "unknown")
+        type=$(jq -r '.type' "$file" 2>/dev/null || echo "unknown")
+        id=$(jq -r 'if .type == "vm" then .vmid else .ctid end' "$file" 2>/dev/null || echo "unknown")
+        name=$(jq -r '.name' "$file" 2>/dev/null || echo "unknown")
 
         echo "$filename"
         echo "  Type: $type, ID: $id, Name: $name"
@@ -851,12 +876,12 @@ __state_cleanup__() {
     echo "Cleaning up state files older than $days days..."
 
     local count=0
-    find "$STATE_DIR" -name "*.json" -type f -mtime "+$days" 2>/dev/null | while read -r file; do
+    while IFS= read -r file; do
         rm -f "$file"
-        ((count += 1))
+        count=$((count + 1))
         __state_log__ "DEBUG" "__state_cleanup__: Deleted $(basename "$file")"
         echo "Deleted: $(basename "$file")"
-    done
+    done < <(find "$STATE_DIR" -name "*.json" -type f -mtime "+$days" 2>/dev/null)
 
     __state_log__ "INFO" "Cleanup complete: $count files removed"
     echo "Cleanup complete: $count files removed"
@@ -902,19 +927,18 @@ __state_diff__() {
     echo "Comparing states: $state1 vs $state2"
     echo ""
 
-    # Extract configs
-    local config1=$(jq -r '.config' "$file1")
-    local config2=$(jq -r '.config' "$file2")
-
     # Compare
     local differences=0
 
     # Check all keys from both configs
-    local all_keys=$(jq -r '.config | keys[]' "$file1" "$file2" | sort -u)
+    local all_keys
+    all_keys=$(jq -r '.config | keys[]' "$file1" "$file2" | sort -u)
 
     while read -r key; do
-        local value1=$(jq -r ".config.\"$key\" // empty" "$file1")
-        local value2=$(jq -r ".config.\"$key\" // empty" "$file2")
+        local value1
+        local value2
+        value1=$(jq -r ".config.\"$key\" // empty" "$file1")
+        value2=$(jq -r ".config.\"$key\" // empty" "$file2")
 
         if [[ "$value1" != "$value2" ]]; then
             echo "Changed: $key"
@@ -990,8 +1014,10 @@ __state_validate__() {
 
     # Check required fields
     __state_log__ "DEBUG" "__state_validate__: Checking required fields"
-    local type=$(jq -r '.type' "$state_file" 2>/dev/null)
-    local config=$(jq -r '.config' "$state_file" 2>/dev/null)
+    local type
+    local config
+    type=$(jq -r '.type' "$state_file" 2>/dev/null)
+    config=$(jq -r '.config' "$state_file" 2>/dev/null)
 
     if [[ -z "$type" ]] || [[ "$type" == "null" ]]; then
         __state_log__ "ERROR" "Missing 'type' field in state file"
@@ -1042,10 +1068,13 @@ __state_validate__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed ShellCheck SC2155 warnings (variable declaration/assignment separation)
+# - 2025-11-24: Fixed ShellCheck SC2030/SC2031 warnings (subshell variable scope in __state_cleanup__)
+# - 2025-11-24: Removed unused variables config1/config2 in __state_diff__
+# - Initial creation
 #
 # Fixes:
 # -

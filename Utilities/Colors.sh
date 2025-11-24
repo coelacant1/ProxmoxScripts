@@ -115,9 +115,12 @@ __gradient_print__() {
         local fraction=$((i * 100 / (total_lines - 1)))
 
         # Interpolate color
-        local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
-        local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
-        local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
+        local R
+        local G
+        local B
+        R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+        G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+        B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
         # Color codes for the line
         local lineColorPrefix="\033[38;2;${R};${G};${B}m"
@@ -175,9 +178,12 @@ __line_gradient__() {
 
     for ((i = 0; i < length; i++)); do
         local fraction=$((i * 100 / (length - 1)))
-        local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
-        local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
-        local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
+        local R
+        local G
+        local B
+        R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+        G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+        B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
         # Extract single character
         local c="${text:$i:1}"
@@ -231,9 +237,6 @@ __simulate_blink_async__() {
     local delay="${3:-0.3}"
 
     __color_log__ "DEBUG" "Starting async blink: '$text' x$times delay=$delay"
-    local text="$1"
-    local times="${2:-5}"
-    local delay="${3:-0.3}"
 
     local BRIGHT="\033[1m"
     local DIM="\033[2m"
@@ -262,13 +265,18 @@ __simulate_blink_async__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed ShellCheck SC2155 warnings (separated variable declaration
+#   and assignment in __gradient_print__ and __line_gradient__)
+# - 2025-11-24: Removed duplicate variable assignments in __simulate_blink_async__
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed SC2155 - Separated local declaration and assignment to
+#   avoid masking return values in color interpolation loops
+# - 2025-11-24: Removed duplicate local variable declarations (lines 234-236)
 #
 # Known issues:
 # -

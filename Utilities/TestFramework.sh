@@ -125,7 +125,7 @@ declare -g TEST_START_TIME=0
 declare -g SUITE_START_TIME=0
 
 # Test output capture
-declare -g TEST_OUTPUT=""
+declare -gx TEST_OUTPUT=""
 declare -g CAPTURE_OUTPUT=false
 
 # Test configuration
@@ -136,7 +136,6 @@ declare -g CLEANUP_ON_EXIT=true
 
 # Mock state
 declare -gA MOCKED_COMMANDS=()
-declare -gA MOCK_CALL_COUNT=()
 declare -g MOCK_DIR=""
 
 # Test results storage
@@ -708,7 +707,6 @@ restore_all_mocks() {
         rm -f "$count_file"
     done
     MOCKED_COMMANDS=()
-    MOCK_CALL_COUNT=()
     __test_log__ "DEBUG" "All mocks restored"
 }
 
@@ -904,7 +902,8 @@ EOF
 # Create temporary test file
 create_temp_file() {
     local content=${1:-""}
-    local temp_file="${TEST_TEMP_DIR}/test_file_$(date +%s%N)"
+    local temp_file
+    temp_file="${TEST_TEMP_DIR}/test_file_$(date +%s%N)"
 
     __test_log__ "DEBUG" "Creating temp file: $temp_file"
     echo "$content" >"$temp_file"
@@ -913,7 +912,8 @@ create_temp_file() {
 
 # Create temporary test directory
 create_temp_dir() {
-    local temp_dir="${TEST_TEMP_DIR}/test_dir_$(date +%s%N)"
+    local temp_dir
+    temp_dir="${TEST_TEMP_DIR}/test_dir_$(date +%s%N)"
     __test_log__ "DEBUG" "Creating temp directory: $temp_dir"
     mkdir -p "$temp_dir"
     echo "$temp_dir"
@@ -949,13 +949,16 @@ fi
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed ShellCheck warnings (SC2034, SC2155)
+# - 2025-11-24: Validated against CONTRIBUTING.md standards
 #
 # Fixes:
-# -
+# - 2025-11-24: Fixed TEST_OUTPUT variable scope (export for external use)
+# - 2025-11-24: Removed unused MOCK_CALL_COUNT associative array
+# - 2025-11-24: Separated variable declarations from assignments in helper functions
 #
 # Known issues:
 # -

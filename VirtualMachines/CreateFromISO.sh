@@ -576,7 +576,6 @@ qm set "$VM_ID" --scsihw virtio-scsi-pci --scsi0 "${VOL_ID},discard=on,ssd=1,cac
 # If Windows, add TPM & secondary virtio
 if [[ "$OS_TYPE" == "windows" ]]; then
     qm set "$VM_ID" --tpmstate0 "$VM_STORAGE":1,size=4,version=v2.0
-    local virtioVolId
     virtioVolId="$(disk_volume_id "$VM_STORAGE" "4")"
     qm set "$VM_ID" --virtio0 "${virtioVolId},cache=none"
 fi
@@ -611,9 +610,10 @@ echo >&2 "VM '$VM_NAME' (ID: $VM_ID) created and started."
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed ShellCheck errors (local outside function)
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:

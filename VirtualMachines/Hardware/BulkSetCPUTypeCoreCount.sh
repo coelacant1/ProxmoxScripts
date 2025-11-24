@@ -35,11 +35,13 @@ source "${UTILITYPATH}/ArgumentParser.sh"
 source "${UTILITYPATH}/BulkOperations.sh"
 # shellcheck source=Utilities/Cluster.sh
 source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
 trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 # Parse arguments
-__parse_args__ "start_vmid:vmid end_vmid:vmid num_cores:int cpu_type?" "$@"
+__parse_args__ "start_vmid:vmid end_vmid:vmid num_cores:cpu cpu_type:string:?" "$@"
 
 # --- main --------------------------------------------------------------------
 main() {
@@ -64,9 +66,9 @@ main() {
 
         __update__ "Updating CPU configuration for VM ${vmid}..."
 
-        if qm set "$vmid" --cores "$NUM_CORES" --node "$node" 2>/dev/null; then
+        if __node_exec__ "$node" "qm set ${vmid} --cores ${NUM_CORES}" 2>/dev/null; then
             if [[ -n "${CPU_TYPE:-}" ]]; then
-                if qm set "$vmid" --cpu "$CPU_TYPE" --node "$node" 2>/dev/null; then
+                if __node_exec__ "$node" "qm set ${vmid} --cpu ${CPU_TYPE}" 2>/dev/null; then
                     return 0
                 else
                     return 1
@@ -94,14 +96,19 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed qm command execution to use __node_exec__ for cluster-aware operations
+# - 2025-11-24: Added Operations.sh source for __node_exec__ function
+# - 2025-11-24: Fixed argument type from 'int' to 'cpu' for num_cores validation
 # - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED CRITICAL BUG: qm commands were using --node flag which doesn't
+#   exist. Changed to use __node_exec__ to execute commands on correct node via ssh
+# - 2025-11-24: Fixed num_cores using incorrect 'int' type instead of 'cpu'
 #
 # Known issues:
 # -

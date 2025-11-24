@@ -46,6 +46,12 @@ if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
     source "${UTILITYPATH}/Logger.sh"
 fi
 
+# Source Discovery for IP/name resolution functions
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Discovery.sh" ]]; then
+    # shellcheck source=Utilities/Discovery.sh
+    source "${UTILITYPATH}/Discovery.sh"
+fi
+
 # Safe logging wrapper
 __query_log__() {
     local level="$1"
@@ -229,7 +235,8 @@ __get_server_lxc__() {
     lxc_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="lxc" and .node==$NODENAME) | .vmid')
-    local count=$(echo "$lxc_list" | grep -c '^' || echo 0)
+    local count
+    count=$(echo "$lxc_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count LXC containers on $nodeName"
     echo "$lxc_list"
 }
@@ -248,7 +255,8 @@ __get_cluster_vms__() {
     local vm_list
     vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r '.[] | select(.type=="qemu") | .vmid')
-    local count=$(echo "$vm_list" | grep -c '^' || echo 0)
+    local count
+    count=$(echo "$vm_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count QEMU VMs in cluster"
     echo "$vm_list"
 }
@@ -289,7 +297,8 @@ __get_server_vms__() {
     vm_list=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r --arg NODENAME "$nodeName" \
             '.[] | select(.type=="qemu" and .node==$NODENAME) | .vmid')
-    local count=$(echo "$vm_list" | grep -c '^' || echo 0)
+    local count
+    count=$(echo "$vm_list" | grep -c '^' || echo 0)
     __query_log__ "DEBUG" "Found $count QEMU VMs on $nodeName"
     echo "$vm_list"
 }
@@ -775,15 +784,17 @@ __get_pool_vms__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Validated against CONTRIBUTING.md and PVE Guide Chapter 5
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155 - declare/assign separation)
+# - Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: Separated variable declarations from assignments to avoid masking return values
 #
 # Known issues:
-# -
+# - IP_TO_NAME and MAPPINGS_INITIALIZED marked as unused by ShellCheck (intentional - used by external callers)
 #
 

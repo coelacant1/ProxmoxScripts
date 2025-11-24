@@ -4,6 +4,13 @@
 #
 # Utilities for creating consistent menu interfaces
 #
+# Usage:
+#   Source this utility in scripts that need menu functions
+#   source "${UTILITYPATH}/Menu.sh"
+#
+# Dependencies:
+#   - Colors.sh (optional, for colored output)
+#
 # Functions:
 #   __menu_choice__       - Handle menu choice with common options
 #   __menu_display__      - Display menu items in consistent format
@@ -16,6 +23,12 @@
 #   - __menu_display__
 #   - __menu_choice__
 #
+
+# Conditionally source Colors.sh for colored output
+if [[ -f "${UTILITYPATH}/Colors.sh" ]]; then
+    # shellcheck source=Utilities/Colors.sh
+    source "${UTILITYPATH}/Colors.sh"
+fi
 
 # Display menu header
 # Args: title
@@ -52,8 +65,13 @@ __menu_display__() {
     local i=1
     for item in "${items[@]}"; do
         if [[ "$item_type" == "numbered" ]]; then
-            __line_rgb__ "$i) $item" 0 200 200
-            ((i += 1))
+            # Use colored output if available, otherwise plain text
+            if declare -f __line_rgb__ &>/dev/null; then
+                __line_rgb__ "$i) $item" 0 200 200
+            else
+                echo "$i) $item"
+            fi
+            i=$((i + 1))
         else
             # Handle custom formatting if needed
             echo "$item"
@@ -86,13 +104,20 @@ __menu_choice__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Added Colors.sh conditional sourcing for __line_rgb__ support
+# - 2025-11-24: Added fallback to plain text if Colors.sh unavailable
+# - 2025-11-24: Fixed arithmetic increment to use assignment form
+# - 2025-11-24: Added proper header with usage and dependencies
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED: Missing Colors.sh source - __line_rgb__ was called but
+#   Colors.sh was never sourced, causing function not found errors
+# - 2025-11-24: FIXED: Arithmetic increment used ((i += 1)) which is incompatible
+#   with set -e, changed to i=$((i + 1))
 #
 # Known issues:
 # -

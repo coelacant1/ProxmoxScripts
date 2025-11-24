@@ -76,25 +76,25 @@ __check_proxmox__
 ###############################################################################
 # Convert frequency from human-readable format to kHz integer
 # Usage: convert_freq_to_khz <freq>
-# Examples: 
+# Examples:
 #   "1.2GHz" -> "1200000"
 #   "800MHz" -> "800000"
 #   "1200000" -> "1200000" (already in kHz)
 convert_freq_to_khz() {
     local freq="$1"
     local khz_value
-    
+
     # If already a plain integer (assumed kHz), return as-is
     if [[ "$freq" =~ ^[0-9]+$ ]]; then
         echo "$freq"
         return
     fi
-    
+
     # Parse value and unit
     if [[ "$freq" =~ ^([0-9.]+)([GMk]?Hz)$ ]]; then
         local value="${BASH_REMATCH[1]}"
         local unit="${BASH_REMATCH[2]}"
-        
+
         case "$unit" in
             GHz)
                 # Convert GHz to kHz: multiply by 1,000,000
@@ -142,7 +142,7 @@ set_governor() {
         [[ -n "${maxFreq}" ]] && cpupower frequency-set -u "${maxFreq}" >/dev/null 2>&1
     else
         echo "Warning: cpupower not found, using sysfs fallback..."
-        
+
         # Convert frequencies to kHz for sysfs
         local minFreqKhz maxFreqKhz
         if [[ -n "${minFreq}" ]]; then
@@ -157,7 +157,7 @@ set_governor() {
                 exit 1
             }
         fi
-        
+
         for cpuDir in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
             if [[ -w "${cpuDir}/scaling_governor" ]]; then
                 echo "${gov}" >"${cpuDir}/scaling_governor" 2>/dev/null || {

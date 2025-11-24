@@ -923,7 +923,8 @@ __vm_list_all__() {
         vm_list=$(qm list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
 
-    local count=$(echo "$vm_list" | grep -c .)
+    local count
+    count=$(echo "$vm_list" | grep -c .)
     __api_log__ "DEBUG" "Found $count VMs matching filter: ${filter:-all}"
     echo "$vm_list"
 }
@@ -1103,7 +1104,8 @@ __ct_list_all__() {
         ct_list=$(pct list 2>/dev/null | awk 'NR>1 {print $1}')
     fi
 
-    local count=$(echo "$ct_list" | grep -c .)
+    local count
+    count=$(echo "$ct_list" | grep -c .)
     __api_log__ "DEBUG" "Found $count CTs matching filter: ${filter:-all}"
     echo "$ct_list"
 }
@@ -2091,13 +2093,17 @@ __vm_add_ip_to_note__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed ShellCheck warnings (SC2155) - separated variable declaration and assignment
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED: Variable declaration/assignment separation for proper error handling
+#   - Line 926: __vm_list_all__ - Separated 'count' variable declaration from assignment
+#   - Line 1106: __ct_list_all__ - Separated 'count' variable declaration from assignment
+#   - Impact: Allows detection of grep command failures instead of masking return values
 #
 # Known issues:
 # -

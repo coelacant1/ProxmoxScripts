@@ -357,11 +357,13 @@ __show_script_examples__() {
 
     local found_any=false
     local example_count=0
-    grep -E '^# *\./' "$script_path" 2>/dev/null | sed -E 's/^# *//' | while IFS= read -r line; do
+
+    # Use process substitution to avoid subshell variable scope issues
+    while IFS= read -r line; do
         __line_rgb__ "$line" 0 255 0
         found_any=true
-        ((example_count += 1))
-    done
+        example_count=$((example_count + 1))
+    done < <(grep -E '^# *\./' "$script_path" 2>/dev/null | sed -E 's/^# *//')
 
     __comm_log__ "DEBUG" "Displayed $example_count examples"
 
@@ -411,13 +413,17 @@ __display_script_info__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
-# - YYYY-MM-DD: Initial creation
+# - 2025-11-24: Fixed subshell variable scope issue in __show_script_examples__
+# - 2025-11-24: Changed arithmetic from ((var++)) to var=$((var + 1)) for compatibility
 #
 # Fixes:
-# -
+# - 2025-11-24: FIXED: Variables modified in pipeline subshell were lost
+#   - Changed from: grep | while (subshell) to while < <(grep) (process substitution)
+#   - Impact: example_count and found_any now correctly track state
+#   - Reference: ShellCheck SC2030/SC2031 - subshell variable modifications
 #
 # Known issues:
 # -

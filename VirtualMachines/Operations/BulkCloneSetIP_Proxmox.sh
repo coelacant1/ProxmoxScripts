@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# BulkCloneSetIPDebian.sh
+# BulkCloneSetIP_Proxmox.sh
 #
 # Clones a Debian-based VM multiple times, updates each clone's IP/network,
 # sets a default gateway, and restarts networking. Uses SSH with username/password.
@@ -201,15 +201,18 @@ done
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed script name in header to match filename
+# - 2025-11-20: Pending validation on Proxmox VE cluster
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
 # -
 #
 # Known issues:
+# - Pending validation on Proxmox VE cluster
 # -
 #
 

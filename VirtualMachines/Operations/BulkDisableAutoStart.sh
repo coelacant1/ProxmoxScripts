@@ -109,13 +109,18 @@ process_vmid() {
     fi
     echo "Detected IP: $ip"
 
-    if ! __wait_for_ssh__ "$ip" 300; then
+    if ! __wait_for_ssh__ "$ip" "$user" "$pass"; then
         __warn__ "SSH not reachable at $ip for VMID $vmId. Skipping."
         return
     fi
 
     __info__ "Disabling autostart on nested Proxmox at $ip..."
-    if __ssh_exec_script__ "$ip" "$user" "$pass" "$disableAutostartScript"; then
+    if __ssh_exec_script__ \
+        --host "$ip" \
+        --user "$user" \
+        --password "$pass" \
+        --sudo \
+        --script-content "$disableAutostartScript"; then
         __ok__ "Successfully disabled autostart on VMID $vmId ($ip)."
     else
         __err__ "Failed to disable autostart on VMID $vmId ($ip)."
@@ -165,9 +170,10 @@ main "$@"
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-20
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-24: Fixed utility function call signatures (__wait_for_ssh__, __ssh_exec_script__)
 # - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
 # - 2025-11-20: Removed manual usage() function
 # - 2025-11-20: Removed manual argument parsing

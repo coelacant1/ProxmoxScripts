@@ -1,20 +1,20 @@
 #!/bin/bash
 #
-# CephEditCrushmap.sh
+# EditCrushmap.sh
 #
 # This script manages the decompilation and recompilation of the Ceph cluster's CRUSH map,
 # facilitating custom modifications. Administrators can either decompile the current CRUSH
 # map into a human-readable format or recompile it for use in the cluster.
 #
 # Usage:
-#   CephEditCrushmap.sh <command>
+#   EditCrushmap.sh <command>
 #
 # Examples:
 #   # Decompile the CRUSH map
-#   CephEditCrushmap.sh decompile
+#   EditCrushmap.sh decompile
 #
 #   # Recompile the CRUSH map
-#   CephEditCrushmap.sh compile
+#   EditCrushmap.sh compile
 #
 # Function Index:
 #   - decompileCrushMap
@@ -23,25 +23,29 @@
 
 set -euo pipefail
 
-trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 # shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
 # shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
 
-set -u
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "command:string" "$@"
+
+# Validate command argument
+if [[ "$COMMAND" != "decompile" && "$COMMAND" != "compile" ]]; then
+    __err__ "Invalid command: $COMMAND (must be: decompile or compile)"
+    exit 64
+fi
 
 ###############################################################################
 # Environment Checks
 ###############################################################################
 __check_root__
 __check_proxmox__
-
-###############################################################################
-# Variables
-###############################################################################
-userCommand="$1"
 
 ###############################################################################
 # Functions
@@ -63,34 +67,27 @@ function recompileCrushMap() {
 ###############################################################################
 # Main Logic
 ###############################################################################
-if [ -z "$userCommand" ]; then
-    echo "Error: Missing command. Use 'decompile' or 'compile'."
-    exit 1
-fi
-
-case "$userCommand" in
+case "$COMMAND" in
     decompile)
         decompileCrushMap
         ;;
     compile)
         recompileCrushMap
         ;;
-    *)
-        echo "Error: Invalid command. Use 'decompile' or 'compile'."
-        exit 2
-        ;;
 esac
 
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: YYYY-MM-DD
+# Last checked: 2025-11-24
 #
 # Changes:
+# - 2025-11-21: Migrated to ArgumentParser framework, fixed script name
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
-# -
+# - 2025-11-21: Added ArgumentParser for argument validation
+# - 2025-11-21: Fixed script name in header (CephEditCrushmap.sh → EditCrushmap.sh)
 #
 # Known issues:
 # -
