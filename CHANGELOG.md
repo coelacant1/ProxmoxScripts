@@ -5,9 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.7] - 2025-11-25
+
+Bug fix for VerifySourceCalls.py validation tool, 
+
+### Fixed
+- **Bug: VerifySourceCalls.py Multi-line Source Removal Bug**
+  - Fixed logic that caused orphaned error handler blocks when removing unused sources
+  - Tool previously only skipped ONE line after shellcheck directive
+  - Now properly handles multi-line source statements with error handlers (`|| { ... }`)
+  - Implements brace-depth tracking to remove entire error handler blocks
+  - This bug was the root cause of the HostInfo.sh orphaned code issue discovered in v2.1.6
+
+### Changed
+- **Startup Dependency Check** - Added informational dependency warning at GUI.sh startup
+  - Shows friendly warning if `jq` is not installed
+  - Provides installation commands for all major distributions
+  - Non-blocking - allows local execution without optional dependencies
+  - Complements the existing remote execution dependency check
+
 ## [2.1.6] - 2025-11-25
 
-Bug fixes, username support, and validation improvements
+Critical bug fixes, username support, and validation improvements
 
 ### Added
 - **Username Configuration** - Support for specifying SSH usernames per node

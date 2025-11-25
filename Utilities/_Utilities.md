@@ -1,6 +1,6 @@
 # ProxmoxScripts Utility Functions Reference
 
-**Auto-generated documentation** - Last updated: 2025-11-25 10:18:58
+**Auto-generated documentation** - Last updated: 2025-11-25 10:34:21
 
 ---
 
