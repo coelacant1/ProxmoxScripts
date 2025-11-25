@@ -42,6 +42,7 @@
 #   - display_path
 #   - show_common_footer
 #   - process_common_input
+#   - __check_remote_dependencies__
 #   - select_execution_mode
 #   - configure_single_remote
 #   - configure_multi_remote
@@ -57,6 +58,7 @@
 #   - change_branch
 #   - view_branches
 #   - navigate
+#   - __startup_check__
 #
 
 set -euo pipefail
@@ -349,6 +351,45 @@ process_common_input() {
 ###############################################################################
 # EXECUTION MODE SELECTION
 ###############################################################################
+
+# Check for required dependencies for remote execution
+# Returns: 0 if all dependencies met, 1 if missing dependencies
+__check_remote_dependencies__() {
+    local missing_deps=()
+
+    # Check for sshpass (only needed if not using SSH keys)
+    if ! command -v sshpass &>/dev/null; then
+        missing_deps+=("sshpass")
+    fi
+
+    # Check for jq (for nodes.json parsing)
+    if ! command -v jq &>/dev/null; then
+        missing_deps+=("jq")
+    fi
+
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo
+        __line_rgb__ "⚠ Missing Dependencies for Remote Execution" 255 200 0
+        echo
+        echo "The following tools are required but not installed:"
+        for dep in "${missing_deps[@]}"; do
+            echo "  - $dep"
+        done
+        echo
+        echo "Installation commands:"
+        echo "  Debian/Ubuntu:  sudo apt install ${missing_deps[*]}"
+        echo "  Arch Linux:     sudo pacman -S ${missing_deps[*]}"
+        echo "  RHEL/CentOS:    sudo yum install ${missing_deps[*]}"
+        echo
+        echo "Note: If you have SSH keys configured, sshpass is not required."
+        echo
+        read -rp "Press Enter to continue..."
+        return 1
+    fi
+
+    return 0
+}
+
 select_execution_mode() {
     while true; do
         clear
@@ -381,11 +422,19 @@ select_execution_mode() {
                 return 0
                 ;;
             2)
+                # Check dependencies before proceeding
+                if ! __check_remote_dependencies__; then
+                    continue
+                fi
                 if configure_single_remote; then
                     return 0
                 fi
                 ;;
             3)
+                # Check dependencies before proceeding
+                if ! __check_remote_dependencies__; then
+                    continue
+                fi
                 if configure_multi_remote; then
                     return 0
                 fi
@@ -416,15 +465,17 @@ configure_single_remote() {
             echo
             read -rp "Enter node IP manually: " manual_ip
             read -rp "Enter node name: " manual_name
+            read -rp "Enter username (default: root): " manual_user
+            manual_user="${manual_user:-root}"
 
             # Check for SSH key auth automatically (test since not in nodes.json)
-            local has_keys=$(__has_ssh_keys__ "$manual_ip" "")
+            local has_keys=$(__has_ssh_keys__ "$manual_ip" "$manual_user" "")
             if [[ "$has_keys" == "true" ]]; then
                 echo
                 __line_rgb__ "SSH key authentication detected" 0 255 0
                 export USE_SSH_KEYS=true
                 __clear_remote_targets__
-                __add_remote_target__ "$manual_name" "$manual_ip" ""
+                __add_remote_target__ "$manual_name" "$manual_ip" "" "$manual_user"
                 __set_execution_mode__ "single-remote"
                 __success__ "Using SSH key authentication (no password needed)"
                 sleep 1
@@ -437,7 +488,7 @@ configure_single_remote() {
             echo
 
             __clear_remote_targets__
-            __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass"
+            __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass" "$manual_user"
             __set_execution_mode__ "single-remote"
             return 0
         fi
@@ -448,17 +499,19 @@ configure_single_remote() {
         while IFS= read -r node_name; do
             local node_ip
             node_ip=$(__get_node_ip__ "$node_name")
+            local node_username
+            node_username=$(__get_node_username__ "$node_name")
 
             # Check if SSH keys work for this node (use cache)
             local key_indicator=""
-            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_username" "$node_name")
             if [[ "$has_keys" == "true" ]]; then
                 key_indicator=" [SSH Key]"
             else
                 key_indicator=" [No Key]"
             fi
 
-            __line_rgb__ "  $i) $node_name ($node_ip) $key_indicator" 0 200 200
+            __line_rgb__ "  $i) $node_name ($node_username@$node_ip) $key_indicator" 0 200 200
             node_menu[$i]="$node_name:$node_ip"
             ((i += 1))
         done < <(__get_available_nodes__)
@@ -497,15 +550,17 @@ configure_single_remote() {
         if [[ "$node_choice" == "m" ]]; then
             read -rp "Enter node IP: " manual_ip
             read -rp "Enter node name: " manual_name
+            read -rp "Enter username (default: root): " manual_user
+            manual_user="${manual_user:-root}"
 
             # Check for SSH key auth automatically (use cache)
-            local has_keys=$(__has_ssh_keys__ "$manual_ip" "")
+            local has_keys=$(__has_ssh_keys__ "$manual_ip" "$manual_user" "")
             if [[ "$has_keys" == "true" ]]; then
                 echo
                 __line_rgb__ "SSH key authentication detected" 0 255 0
                 export USE_SSH_KEYS=true
                 __clear_remote_targets__
-                __add_remote_target__ "$manual_name" "$manual_ip" ""
+                __add_remote_target__ "$manual_name" "$manual_ip" "" "$manual_user"
                 __set_execution_mode__ "single-remote"
                 __success__ "Using SSH key authentication (no password needed)"
                 sleep 1
@@ -518,20 +573,22 @@ configure_single_remote() {
             echo
 
             __clear_remote_targets__
-            __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass"
+            __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass" "$manual_user"
             __set_execution_mode__ "single-remote"
             return 0
         elif [[ -n "$node_choice" && -n "${node_menu[$node_choice]:-}" ]]; then
             IFS=':' read -r selected_name selected_ip <<<"${node_menu[$node_choice]}"
+            local selected_username
+            selected_username=$(__get_node_username__ "$selected_name")
 
             # Check for SSH key auth automatically (use cache)
-            local has_keys=$(__has_ssh_keys__ "$selected_ip" "$selected_name")
+            local has_keys=$(__has_ssh_keys__ "$selected_ip" "$selected_username" "$selected_name")
             if [[ "$has_keys" == "true" ]]; then
                 echo
                 __line_rgb__ "SSH key authentication detected" 0 255 0
                 export USE_SSH_KEYS=true
                 __clear_remote_targets__
-                __add_remote_target__ "$selected_name" "$selected_ip" ""
+                __add_remote_target__ "$selected_name" "$selected_ip" "" "$selected_username"
                 __set_execution_mode__ "single-remote"
                 __success__ "Using SSH key authentication (no password needed)"
                 sleep 1
@@ -544,7 +601,7 @@ configure_single_remote() {
             echo
 
             __clear_remote_targets__
-            __add_remote_target__ "$selected_name" "$selected_ip" "$node_pass"
+            __add_remote_target__ "$selected_name" "$selected_ip" "$node_pass" "$selected_username"
             __set_execution_mode__ "single-remote"
             return 0
         else
@@ -625,17 +682,19 @@ configure_multi_saved() {
         while IFS= read -r node_name; do
             local node_ip
             node_ip=$(__get_node_ip__ "$node_name")
+            local node_username
+            node_username=$(__get_node_username__ "$node_name")
 
             # Check if SSH keys work for this node (use cache)
             local key_indicator=" [No Key]"
-            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+            local has_keys=$(__has_ssh_keys__ "$node_ip" "$node_username" "$node_name")
             if [[ "$has_keys" == "true" ]]; then
                 key_indicator=" [SSH Key]"
             else
                 key_indicator=" [No Key]"
             fi
 
-            __line_rgb__ "  $i) $node_name ($node_ip) $key_indicator" 0 200 200
+            __line_rgb__ "  $i) $node_name ($node_username@$node_ip) $key_indicator" 0 200 200
             node_menu[$i]="$node_name:$node_ip"
             ((i += 1))
         done < <(__get_available_nodes__)
@@ -700,12 +759,17 @@ configure_multi_saved() {
         echo
 
         # Check if SSH keys are available (test first node)
-        if ssh -o BatchMode=yes -o ConnectTimeout=2 root@${REMOTE_TARGETS[0]##*:} echo "test" &>/dev/null 2>&1; then
+        # Get username for first node
+        local first_node_name="${REMOTE_TARGETS[0]%%:*}"
+        local first_node_username="${NODE_USERNAMES[$first_node_name]:-$DEFAULT_USERNAME}"
+        local first_node_ip="${REMOTE_TARGETS[0]##*:}"
+        if ssh -o BatchMode=yes -o ConnectTimeout=2 "${first_node_username}@${first_node_ip}" echo "test" &>/dev/null 2>&1; then
             # Verify all selected nodes have SSH keys configured
             local all_have_keys=true
             for target in "${REMOTE_TARGETS[@]}"; do
                 IFS=':' read -r node_name node_ip <<<"$target"
-                if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+                local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+                if ! ssh -o BatchMode=yes -o ConnectTimeout=2 "${node_username}@$node_ip" echo "test" &>/dev/null 2>&1; then
                     all_have_keys=false
                     break
                 fi
@@ -730,14 +794,16 @@ configure_multi_saved() {
                     echo "Nodes needing passwords:"
                     for target in "${REMOTE_TARGETS[@]}"; do
                         IFS=':' read -r node_name node_ip <<<"$target"
-                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
-                            echo "  - $node_name ($node_ip)"
+                        local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 "${node_username}@$node_ip" echo "test" &>/dev/null 2>&1; then
+                            echo "  - $node_name ($node_username@$node_ip)"
                         fi
                     done
                     echo
                     for target in "${REMOTE_TARGETS[@]}"; do
                         IFS=':' read -r node_name node_ip <<<"$target"
-                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 root@$node_ip echo "test" &>/dev/null 2>&1; then
+                        local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+                        if ! ssh -o BatchMode=yes -o ConnectTimeout=2 "${node_username}@$node_ip" echo "test" &>/dev/null 2>&1; then
                             read -rsp "Enter password for $node_name: " node_pass
                             echo
                             NODE_PASSWORDS["$node_name"]="$node_pass"
@@ -809,6 +875,8 @@ configure_multi_ip_range() {
     fi
 
     echo
+    read -rp "Enter username for all nodes in range (default: root): " shared_user
+    shared_user="${shared_user:-root}"
     read -rsp "Enter password for all nodes in range: " shared_pass
     echo
 
@@ -819,6 +887,7 @@ configure_multi_ip_range() {
         local node_name="temp-${ip//\./-}"
         REMOTE_TARGETS+=("$node_name:$ip")
         NODE_PASSWORDS["$node_name"]="$shared_pass"
+        NODE_USERNAMES["$node_name"]="$shared_user"
     done
 
     echo
@@ -843,6 +912,8 @@ configure_multi_vmid_range() {
         return 1
     fi
 
+    read -rp "Proxmox host username (default: root): " query_user
+    query_user="${query_user:-root}"
     read -rp "Start VMID: " start_vmid
     read -rp "End VMID: " end_vmid
 
@@ -861,6 +932,8 @@ configure_multi_vmid_range() {
     echo
     read -rsp "Enter password for query host: " query_pass
     echo
+    read -rp "Enter username for all target nodes (default: root): " shared_user
+    shared_user="${shared_user:-root}"
     read -rsp "Enter password for all target nodes: " shared_pass
     echo
 
@@ -874,7 +947,7 @@ configure_multi_vmid_range() {
     for ((vmid = start_vmid; vmid <= end_vmid; vmid++)); do
         # Query for VM/LXC IP address
         local ip=$(sshpass -p "$query_pass" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            root@"$query_host" \
+            "${query_user}@${query_host}" \
             "pvesh get /nodes/\$(hostname)/qemu/$vmid/agent/network-get-interfaces 2>/dev/null | grep -oP '(?<=\"ip-address\":\")[^\"]*' | grep -v '^127\\.' | grep -v '^::' | head -n1 || \
              pvesh get /nodes/\$(hostname)/lxc/$vmid/interfaces 2>/dev/null | grep -oP '(?<=inet )[0-9.]+' | head -n1" 2>/dev/null)
 
@@ -882,6 +955,7 @@ configure_multi_vmid_range() {
             local node_name="vmid-$vmid"
             REMOTE_TARGETS+=("$node_name:$ip")
             NODE_PASSWORDS["$node_name"]="$shared_pass"
+            NODE_USERNAMES["$node_name"]="$shared_user"
             echo "  Found VMID $vmid: $ip"
             ((found_count += 1))
         fi
@@ -936,7 +1010,8 @@ manage_nodes_menu() {
                     echo "  (none)"
                 else
                     for node_name in "${!AVAILABLE_NODES[@]}"; do
-                        echo "  - $node_name: ${AVAILABLE_NODES[$node_name]}"
+                        local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+                        echo "  - $node_name: $node_username@${AVAILABLE_NODES[$node_name]}"
                     done
                 fi
                 echo
@@ -946,13 +1021,17 @@ manage_nodes_menu() {
                 echo
                 read -rp "Node name: " new_name
                 read -rp "Node IP: " new_ip
+                read -rp "Username (default: root): " new_username
+                new_username="${new_username:-root}"
 
                 if command -v jq &>/dev/null; then
-                    jq --arg name "$new_name" --arg ip "$new_ip" \
-                        '.nodes += [{"name": $name, "ip": $ip}]' \
+                    jq --arg name "$new_name" --arg ip "$new_ip" --arg username "$new_username" \
+                        '.nodes += [{"name": $name, "ip": $ip, "username": $username, "ssh_keys": false}]' \
                         "$NODES_FILE" >"${NODES_FILE}.tmp" \
                         && mv "${NODES_FILE}.tmp" "$NODES_FILE"
                     AVAILABLE_NODES["$new_name"]="$new_ip"
+                    NODE_USERNAMES["$new_name"]="$new_username"
+                    NODE_SSH_KEYS["$new_name"]="false"
                     echo "Added $new_name"
                 else
                     echo "jq not installed"
@@ -1363,6 +1442,14 @@ navigate() {
         for s in "${scripts[@]}"; do
             local sname
             sname="$(basename "$s")"
+            
+            # Skip GUI.sh and CCPVE.sh in remote execution mode at root level
+            if [[ "$EXECUTION_MODE" != "local" ]] && [[ "$current_dir" == "$BASE_DIR" ]]; then
+                if [[ "$sname" == "GUI.sh" ]] || [[ "$sname" == "CCPVE.sh" ]]; then
+                    continue
+                fi
+            fi
+            
             __line_rgb__ "$index) $sname" 100 200 100
             menu_map[$index]="$s"
             ((index += 1))
@@ -1490,6 +1577,43 @@ navigate() {
 ###############################################################################
 # MAIN
 ###############################################################################
+
+# Startup dependency check (informational only)
+__startup_check__() {
+    local warnings=()
+    
+    # Check for jq (optional but recommended)
+    if ! command -v jq &>/dev/null; then
+        warnings+=("jq - Required for node management and remote execution configuration")
+    fi
+    
+    # Only show warnings if any exist
+    if [[ ${#warnings[@]} -gt 0 ]]; then
+        echo
+        echo "----------------------------------------"
+        __line_rgb__ "Optional Dependencies Not Found" 255 200 0
+        echo "----------------------------------------"
+        echo
+        echo "The following optional tools are not installed:"
+        for warning in "${warnings[@]}"; do
+            echo "  • $warning"
+        done
+        echo
+        echo "You can still use GUI.sh for local execution."
+        echo "For remote execution, install missing tools:"
+        echo
+        echo "  Debian/Ubuntu:  sudo apt install jq"
+        echo "  Arch Linux:     sudo pacman -S jq"
+        echo "  RHEL/CentOS:    sudo yum install jq"
+        echo
+        echo "----------------------------------------"
+        echo
+        sleep 3
+    fi
+}
+
+# Run startup check
+__startup_check__
 
 # Make all scripts executable
 find . -type f -name "*.sh" -exec chmod +x {} \;

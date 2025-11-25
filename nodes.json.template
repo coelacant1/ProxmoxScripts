@@ -3,11 +3,13 @@
     {
       "name": "node1",
       "ip": "192.168.1.11",
+      "username": "root",
       "ssh_keys": true
     },
     {
       "name": "node2",
       "ip": "192.168.1.12",
+      "username": "root",
       "ssh_keys": false
     }
   ]

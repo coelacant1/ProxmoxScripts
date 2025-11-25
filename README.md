@@ -1,6 +1,7 @@
 # Proxmox VE Management Scripts
 
-[![Version](https://img.shields.io/badge/version-2.1.5-blue.svg)](https://github.com/coelacant1/ProxmoxScripts/releases)
+[![Version](https://img.shields.io/badge/version-2.1.6-blue.svg)](https://github.com/coelacant1/ProxmoxScripts/releases)
+[![Repository Checks](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/checks.yml/badge.svg)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/checks.yml)
 [![Deploy static content to Pages](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/static.yml)
 [![Release on .sh changes](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/coelacant1/ProxmoxScripts/actions/workflows/release.yml)
 
@@ -52,8 +53,9 @@ These instructions will guide you on how to start using the scripts for managing
 
 **For Remote Execution from Any Linux System:**
 - Any major Linux distribution (Debian, Ubuntu, Fedora, RHEL, CentOS, Arch, openSUSE, etc.)
-- `wget` and `unzip` (auto-installed via package manager)
-- `sshpass` for remote execution (optional, prompted when needed)
+- `wget` and `unzip` (for updating scripts from GitHub)
+- `jq` (for parsing node configuration files)
+- `sshpass` (for password-based SSH authentication, not needed if using SSH keys)
 - Network access to target Proxmox nodes
 
 ### Single Line Usage
@@ -118,7 +120,7 @@ bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCP
 > - For repeated usage, clone the repo and call `GUI.sh` directly
 > - `UTILITYPATH` is exported automatically so scripts can source shared helpers
 
-![Single Line Online Command](.site/SingleLineCommand.png)
+![Single Line Online Command](.site/MultiView.png)
 
 ### Installation
 
@@ -128,8 +130,10 @@ bash -c "$(wget -qLO - https://github.com/coelacant1/ProxmoxScripts/raw/main/CCP
 Requires git if you plan to download through cloning:
 ```bash
 apt update
-apt install git wget unzip
+apt install git wget unzip jq sshpass
 ```
+
+**Note:** `sshpass` is only needed if you plan to use password-based SSH authentication for remote execution. If you configure SSH keys, it's not required.
 
 To execute these scripts offline on your system, follow these steps:
 

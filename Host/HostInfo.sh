@@ -34,9 +34,6 @@ source "$UTILITYPATH/ArgumentParser.sh" 2>/dev/null || {
     echo "Error: Cannot find ArgumentParser.sh"
     exit 1
 }
-    echo "Error: Cannot find Communication.sh"
-    exit 1
-}
 # shellcheck source=Utilities/Prompts.sh
 source "$UTILITYPATH/Prompts.sh" 2>/dev/null || {
     echo "Error: Cannot find Prompts.sh"

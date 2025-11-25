@@ -138,27 +138,47 @@ def parse_functions_in_file(filepath):
 
 def parse_script_for_includes_and_local_funcs(script_path):
     includes = set()
+    shellcheck_directives = set()
     local_funcs = parse_functions_in_file(script_path)
 
     if not os.path.isfile(script_path):
         return includes, local_funcs
 
     with open(script_path, "r", encoding="utf-8", newline='\n') as f:
-        for line in f:
-            line_stripped = line.strip()
+        lines = f.readlines()
+        
+    for i, line in enumerate(lines):
+        line_stripped = line.strip()
+        
+        # Check for shellcheck directive
+        sc_match = SHELLCHECK_SOURCE_REGEX.search(line_stripped)
+        if sc_match:
+            util_name = sc_match.group(1)
+            shellcheck_directives.add(util_name)
             
-            # Check for source statement
-            s_match = SOURCE_REGEX.search(line_stripped)
-            if s_match:
-                # e.g., "Prompts.sh" or "Cluster.sh"
-                includes.add(s_match.group(1))
+            # Look for matching source statement in next few lines (max 5)
+            found_source = False
+            for j in range(i + 1, min(i + 6, len(lines))):
+                next_line = lines[j].strip()
+                s_match = SOURCE_REGEX.search(next_line)
+                if s_match and s_match.group(1) == util_name:
+                    found_source = True
+                    break
+                # Stop if we hit another shellcheck or source for different file
+                if SHELLCHECK_SOURCE_REGEX.search(next_line) or SOURCE_REGEX.search(next_line):
+                    break
             
-            # Also check for shellcheck directive (for consistency checking)
-            sc_match = SHELLCHECK_SOURCE_REGEX.search(line_stripped)
-            if sc_match:
-                # Verify this matches an actual source line
-                includes.add(sc_match.group(1))
-                
+            if not found_source:
+                # Orphaned shellcheck directive - don't add to includes
+                print(f"  [WARNING] Orphaned shellcheck directive for {util_name} at line {i+1}")
+                continue
+        
+        # Check for source statement
+        s_match = SOURCE_REGEX.search(line_stripped)
+        if s_match:
+            # e.g., "Prompts.sh" or "Cluster.sh"
+            includes.add(s_match.group(1))
+            
     return includes, local_funcs
 
 ###############################################################################
