@@ -1,79 +1,122 @@
 #!/bin/bash
 #
-# AddResourcesToHAGroup.sh
+# AddResources.sh
 #
-# This script adds LXC containers or VMs (found anywhere in the cluster) to a
-# specified High Availability (HA) group in a Proxmox VE cluster.
+# Adds VMs/containers to a High Availability group in a Proxmox cluster.
+# Automatically detects resource type (VM or CT) across the cluster.
 #
 # Usage:
-#   ./AddResourcesToHAGroup.sh <group_name> <resource_id_1> [<resource_id_2> ... <resource_id_n>]
+#   AddResources.sh <group_name> <resource_id_1> [<resource_id_2> ...]
 #
-# Example:
-#   # Adds VM/LXC IDs 100, 101, and 200 to the 'Primary' HA group
-#   # even if they are located on different nodes
-#   ./AddResourcesToHAGroup.sh Primary 100 101 200
+# Arguments:
+#   group_name    - Name of the HA group
+#   resource_id_* - One or more VM/CT IDs to add
 #
-# Notes:
-#   - You must be root or run via sudo.
-#   - This script assumes you have a working Proxmox VE cluster.
-#   - Group names must not be purely numeric (e.g., '123').
-#   - The script relies on utility functions that must be sourced elsewhere.
+# Examples:
+#   AddResources.sh Primary 100 101 200
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
-###############################################################################
-# MAIN
-###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
-
-if [[ "$#" -lt 2 ]]; then
-    echo "Usage: \"$0\" <group_name> <resource_id_1> [<resource_id_2> ... <resource_id_n>]"
-    exit 1
+# Variable args: group_name + resource IDs - hybrid parsing
+if [[ $# -lt 2 ]]; then
+    __err__ "Missing required arguments"
+    echo "Usage: $0 <group_name> <resource_id_1> [<resource_id_2> ...]"
+    exit 64
 fi
 
-declare GROUP_NAME="$1"
+GROUP_NAME="$1"
 shift
-declare -a RESOURCE_IDS=("$@")
+RESOURCE_IDS=("$@")
 
-# Make sure the group name is not purely numeric,
-# because Proxmox HA groups cannot be numeric only.
+# Validate group name is not purely numeric
 if [[ "$GROUP_NAME" =~ ^[0-9]+$ ]]; then
-    echo "Error: The group name \"${GROUP_NAME}\" is invalid; it cannot be purely numeric."
-    exit 1
+    __err__ "Group name '${GROUP_NAME}' cannot be purely numeric"
+    exit 64
 fi
 
-# Gather all LXC and VM IDs across the entire cluster
-readarray -t ALL_CLUSTER_LXC < <( __get_cluster_lxc__ )
-readarray -t ALL_CLUSTER_VMS < <( __get_cluster_vms__ )
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
 
-for resourceId in "${RESOURCE_IDS[@]}"; do
-    # Determine if this resource ID belongs to an LXC or a VM
-    if [[ " ${ALL_CLUSTER_LXC[*]} " == *" ${resourceId} "* ]]; then
-        resourceType="ct"
-    elif [[ " ${ALL_CLUSTER_VMS[*]} " == *" ${resourceId} "* ]]; then
-        resourceType="vm"
-    else
-        echo "Error: Resource ID \"${resourceId}\" not found in the cluster as a VM or LXC container."
-        continue
-    fi
+    __warn__ "HA Groups are deprecated since Proxmox VE 9.0 - use 'ha-manager rules add node-affinity' instead"
+    __info__ "Adding ${#RESOURCE_IDS[@]} resource(s) to HA configuration"
 
-    echo "Adding resource \"${resourceType}:${resourceId}\" to HA group \"${GROUP_NAME}\"..."
-    if pvesh create /cluster/ha/resources --sid "${resourceType}:${resourceId}" --group "${GROUP_NAME}"; then
-        echo " - Successfully added \"${resourceType}:${resourceId}\" to HA group \"${GROUP_NAME}\"."
-    else
-        echo " - Failed to add \"${resourceType}:${resourceId}\" to HA group \"${GROUP_NAME}\"."
-    fi
-done
+    # Get all cluster resources
+    local -a all_cluster_lxc
+    local -a all_cluster_vms
+    mapfile -t all_cluster_lxc < <(__get_cluster_cts__)
+    mapfile -t all_cluster_vms < <(__get_cluster_vms__)
 
-echo "=== HA resource addition process completed! ==="
+    local success=0
+    local failed=0
+
+    for resource_id in "${RESOURCE_IDS[@]}"; do
+        local resource_type=""
+
+        # Determine resource type
+        if [[ " ${all_cluster_lxc[*]} " == *" ${resource_id} "* ]]; then
+            resource_type="ct"
+        elif [[ " ${all_cluster_vms[*]} " == *" ${resource_id} "* ]]; then
+            resource_type="vm"
+        else
+            __warn__ "Resource ${resource_id} not found in cluster"
+            failed=$((failed + 1))
+            continue
+        fi
+
+        __update__ "Adding ${resource_type}:${resource_id} to HA"
+        if ha-manager add "${resource_type}:${resource_id}" --group "${GROUP_NAME}" 2>&1; then
+            __ok__ "Added ${resource_type}:${resource_id}"
+            success=$((success + 1))
+        else
+            __warn__ "Failed to add ${resource_type}:${resource_id}"
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo
+    __info__ "HA Resource Addition Summary:"
+    __info__ "  Added: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "All resources added to HA group successfully!"
+}
+
+main "$@"
 
 ###############################################################################
-# Testing status
+# Script notes:
 ###############################################################################
-# Tested single-node
-# Tested multi-node
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Added deprecation warning for HA groups per PVE Guide Section 15.6.2
+#
+# Fixes:
+# - 2025-11-20: Fixed ha-manager command usage per PVE Guide Section 15.3
+# - 2025-11-20: Fixed arithmetic operations for set -e compatibility
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

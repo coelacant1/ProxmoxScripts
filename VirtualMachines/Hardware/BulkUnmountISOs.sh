@@ -1,48 +1,78 @@
 #!/bin/bash
 #
-# This script unmounts all ISO images from the CD/DVD drives for a range of virtual machines (VMs) within a Proxmox VE environment.
+# BulkUnmountISOs.sh
+#
+# Unmounts ISO images from CD/DVD drives for virtual machines within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-# ./BulkUnmountISOs.sh <start_vm_id> <end_vm_id>
+#   BulkUnmountISOs.sh <start_vmid> <end_vmid>
 #
 # Arguments:
-#   start_vm_id - The ID of the first VM to update.
-#   end_vm_id - The ID of the last VM to update.
+#   start_vmid - Starting VM ID
+#   end_vmid   - Ending VM ID
 #
-# Example:
-#   ./BulkUnmountISOs.sh 400 430
+# Examples:
+#   BulkUnmountISOs.sh 400 430
+#
+# Function Index:
+#   - main
+#
 
-# Check if the required parameters are provided
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <start_vm_id> <end_vm_id>"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-START_VM_ID=$1
-END_VM_ID=$2
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Loop to unmount ISOs for VMs in the specified range
-for (( VMID=START_VM_ID; VMID<=END_VM_ID; VMID++ )); do
-    # Check if the VM exists
-    if qm status $VMID &>/dev/null; then
-        echo "Unmounting ISOs for VM ID: $VMID"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-        # Get all CD/DVD drives for the VM
-        DRIVES=$(qm config $VMID | grep -oP '(?<=^\S+\s)(ide\d+|sata\d+|scsi\d+|virtio\d+):\s.*media=cdrom')
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
 
-        # Loop through each drive and unmount the ISO
-        while read -r DRIVE; do
-            DRIVE_NAME=$(echo "$DRIVE" | awk -F: '{print $1}')
-            if [ -n "$DRIVE_NAME" ]; then
-                qm set $VMID --$DRIVE_NAME none,media=cdrom
-                echo " - ISO unmounted for drive $DRIVE_NAME of VM ID: $VMID."
-            fi
-        done <<< "$DRIVES"
-    else
-        echo "VM ID: $VMID does not exist. Skipping..."
-    fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-done
+    unmount_iso_callback() {
+        local vmid="$1"
 
-echo "ISO unmount process completed!"
+        # Unmount from common CD/DVD drive types
+        for drive in ide2 sata0 scsi0; do
+            __vm_set_config__ "$vmid" --${drive} "none,media=cdrom" 2>/dev/null || true
+        done
+    }
+
+    __bulk_vm_operation__ --name "Unmount ISOs" --report "$START_VMID" "$END_VMID" unmount_iso_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "ISOs unmounted successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

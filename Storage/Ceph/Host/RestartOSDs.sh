@@ -7,8 +7,8 @@
 # units with systemd and restarts them safely.
 #
 # Usage:
-#   ./RestartOSDs.sh restart     # (default) Restart all OSD daemons
-#   ./RestartOSDs.sh status      # Show OSD daemon status only
+#   RestartOSDs.sh restart     # (default) Restart all OSD daemons
+#   RestartOSDs.sh status      # Show OSD daemon status only
 #
 # Function Index:
 #   - _find_osd_units
@@ -16,10 +16,17 @@
 #   - statusOsd
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 __check_root__
 __check_proxmox__
@@ -36,7 +43,8 @@ function _find_osd_units() {
 # Restart every ceph-osd unit found
 ###############################################################################
 function restartOsd() {
-    local units=($(_find_osd_units))
+    local units
+    mapfile -t units < <(_find_osd_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-osd units found on this host."
         exit 0
@@ -44,7 +52,7 @@ function restartOsd() {
 
     echo "Restarting Ceph OSD daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-osd daemons have been restarted."
@@ -54,7 +62,8 @@ function restartOsd() {
 # Display status for every ceph-osd unit
 ###############################################################################
 function statusOsd() {
-    local units=($(_find_osd_units))
+    local units
+    mapfile -t units < <(_find_osd_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-osd units found on this host."
         exit 0
@@ -78,3 +87,20 @@ case "${1:-restart}" in
         exit 2
         ;;
 esac
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-21: Fixed array assignment to use mapfile (SC2207)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - 2025-11-21: Changed array assignment from `units=($(...))` to `mapfile -t units < <(...)`
+#
+# Known issues:
+# -
+#
+

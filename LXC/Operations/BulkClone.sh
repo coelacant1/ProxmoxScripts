@@ -2,81 +2,152 @@
 #
 # BulkClone.sh
 #
-# This script automates the process of cloning LXC containers within a Proxmox VE environment. 
-# It clones a source LXC container into a specified number of new containers, assigning them 
-# unique IDs, names based on a user-provided base name, and sets static IP addresses. 
-# Adding cloned containers to a designated pool is optional. 
+# Clones a source container into multiple new containers with sequential IDs, names, and IP addresses.
+# All clones are created on the same node as the source container.
 #
 # Usage:
-#   ./BulkClone.sh <source_ct_id> <base_ct_name> <start_ct_id> <num_cts> <start_ip/cidr> <bridge> [gateway] [pool_name]
+#   BulkClone.sh <source_ctid> <base_name> <start_ctid> <count> <start_ip/cidr> <bridge> [gateway] [--pool <pool_name>]
 #
 # Arguments:
-#   source_ct_id - The ID of the LXC container that will be cloned.
-#   base_ct_name - The base name for the new containers, which will be appended with a numerical index.
-#   start_ct_id  - The starting container ID for the first clone.
-#   num_cts       - The number of containers to clone.
-#   start_ip/cidr - The new IP address and subnet mask of the container (e.g., 192.168.1.50/24).
-#   bridge        - The bridge to be used for the network configuration.
-#   gateway       - Optional. The gateway for the IP configuration (e.g., 192.168.1.1).
-#   pool_name     - Optional. The name of the pool to which the new containers will be added. 
-#                   If not provided, containers are not added to any pool.
+#   source_ctid  - The ID of the container to be cloned.
+#   base_name    - Base name for new containers (appended with sequential number).
+#   start_ctid   - Starting container ID for the first clone.
+#   count        - Number of containers to clone.
+#   start_ip/cidr - Starting IP address with CIDR notation (e.g., 192.168.1.50/24).
+#   bridge       - Network bridge to use (e.g., vmbr0).
+#   gateway      - Optional gateway IP address (e.g., 192.168.1.1).
+#   --pool       - Optional pool name to add cloned containers to.
 #
 # Examples:
-#   # Clones container 110, creating 30 new containers with IPs starting at 192.168.1.50/24 on vmbr0, 
-#   # gateway 192.168.1.1, and assigns them to a pool named 'PoolName'.
-#   ./BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 192.168.1.1 PoolName
+#   BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0
+#   BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 192.168.1.1
+#   BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 192.168.1.1 --pool PoolName
 #
-#   # Same as above but without specifying a gateway or pool.
-#   ./BulkClone.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0
+# Function Index:
+#   - main
 #
 
-source "${UTILITYPATH}/Conversion.sh"
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "source_vmid:vmid base_name:string start_vmid:vmid count:number start_ip_cidr:cidr bridge:bridge gateway:gateway:? --pool:string:?" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    # Verify source container exists
+    if ! __ct_exists__ "$SOURCE_VMID"; then
+        __err__ "Source container ID ${SOURCE_VMID} not found"
+        exit 1
+    fi
+
+    # Get source container node for remote execution
+    local source_node
+    source_node=$(__get_ct_node__ "$SOURCE_VMID")
+
+    # Calculate end VMID
+    local end_vmid=$((START_VMID + COUNT - 1))
+
+    # Parse IP and subnet mask
+    IFS='/' read -r start_ip subnet_mask <<<"$START_IP_CIDR"
+    local start_ip_int
+    start_ip_int=$(__ip_to_int__ "$start_ip")
+
+    __info__ "Cloning container ${SOURCE_VMID} (on node ${source_node}) to create ${COUNT} new containers (${START_VMID}-${end_vmid})"
+    __info__ "IP range: ${start_ip}/${subnet_mask} (incrementing)"
+    [[ -n "${GATEWAY:-}" ]] && __info__ "Gateway: ${GATEWAY}"
+    [[ -n "${POOL:-}" ]] && __info__ "Containers will be added to pool: ${POOL}"
+
+    # Track success and failures
+    local success=0
+    local failed=0
+
+    # Clone containers sequentially
+    for ((i = 0; i < COUNT; i++)); do
+        local target_vmid=$((START_VMID + i))
+        local name_index=$((i + 1))
+        local ct_name="${BASE_NAME}${name_index}"
+        local current=$((i + 1))
+
+        # Calculate new IP
+        local current_ip_int=$((start_ip_int + i))
+        local new_ip
+        new_ip=$(__int_to_ip__ "$current_ip_int")
+
+        __update__ "Cloning container ${target_vmid} (${current}/${COUNT}) with IP ${new_ip}..."
+
+        # Build clone command
+        local clone_cmd="pct clone ${SOURCE_VMID} ${target_vmid} --hostname ${ct_name}"
+        [[ -n "${POOL:-}" ]] && clone_cmd+=" --pool ${POOL}"
+
+        # Execute clone on source container's node
+        if __node_exec__ "$source_node" "$clone_cmd" &>/dev/null; then
+            # Set network configuration
+            local net_cmd="pct set ${target_vmid} -net0 name=eth0,bridge=${BRIDGE},ip=${new_ip}/${subnet_mask}"
+            [[ -n "${GATEWAY:-}" ]] && net_cmd+=",gw=${GATEWAY}"
+
+            if __node_exec__ "$source_node" "$net_cmd" &>/dev/null; then
+                success=$((success + 1))
+            else
+                __warn__ "Cloned container ${target_vmid} but failed to set network configuration"
+                failed=$((failed + 1))
+            fi
+        else
+            __warn__ "Failed to clone container ${target_vmid}"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Display summary
+    echo ""
+    __info__ "Cloning Summary:"
+    __info__ "  Total: ${COUNT}"
+    __info__ "  Success: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    if [[ $failed -gt 0 ]]; then
+        __err__ "Some clones failed. Check the messages above for details."
+        exit 1
+    fi
+
+    __ok__ "Cloning completed successfully!"
+}
+
+main
 
 ###############################################################################
-# Environment Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and utility functions
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid, cidr, bridge, gateway)
+# - Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [ "$#" -lt 6 ]; then
-  echo "Error: Not enough arguments."
-  echo "Usage: $0 <source_ct_id> <base_ct_name> <start_ct_id> <num_cts> <start_ip/cidr> <bridge> [gateway] [pool_name]"
-  exit 1
-fi
-
-SOURCE_CT_ID="$1"
-BASE_CT_NAME="$2"
-START_CT_ID="$3"
-NUM_CTS="$4"
-START_IP_CIDR="$5"
-BRIDGE="$6"
-GATEWAY="${7:-}"
-POOL_NAME="${8:-}"
-
-###############################################################################
-# Main
-###############################################################################
-IFS='/' read -r startIp subnetMask <<< "${START_IP_CIDR}"
-startIpInt="$( __ip_to_int__ "${startIp}" )"
-
-for (( i=0; i<NUM_CTS; i++ )); do
-  targetCtId=$((START_CT_ID + i))
-  nameIndex=$((i + 1))
-  ctName="${BASE_CT_NAME}${nameIndex}"
-
-  currentIpInt=$((startIpInt + i))
-  newIp="$( __int_to_ip__ "${currentIpInt}" )"
-
-  pct clone "${SOURCE_CT_ID}" "${targetCtId}" --hostname "${ctName}"
-  pct set "${targetCtId}" -net0 "name=eth0,bridge=${BRIDGE},ip=${newIp}/${subnetMask},gw=${GATEWAY}"
-
-  if [ -n "${POOL_NAME}" ]; then
-    pct set "${targetCtId}" --pool "${POOL_NAME}"
-  fi
-done
-
-echo "Cloning completed!"

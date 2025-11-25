@@ -1,4 +1,29 @@
 #!/usr/bin/env python3
+"""
+VerifySourceCalls.py
+
+Verifies that all function calls in shell scripts have corresponding source
+statements for the utility files that define those functions.
+
+Features:
+- Scans all .sh files for function calls (e.g., __function_name__)
+- Checks if each call is defined locally or in a sourced utility
+- Identifies missing source statements
+- Identifies unused source statements
+- Can automatically fix issues with --fix flag
+- Dry-run mode with --dry-run (report only, no changes)
+
+Usage:
+    python3 VerifySourceCalls.py [--fix] [--dry-run] [--scripts-dir DIR] [--utilities-dir DIR]
+
+Options:
+    --fix              Prompt to fix each script with issues
+    --dry-run          Report issues without prompting or fixing
+    --scripts-dir      Directory containing scripts to check
+    --utilities-dir    Directory containing utility files
+
+Author: Coela
+"""
 
 import os
 import re
@@ -6,48 +31,67 @@ import sys
 import argparse
 from pathlib import Path
 
-# -----------------------------------------------------------------------------
+# Directories to skip during traversal
+SKIP_DIRS = {".git", ".github", ".site", ".check", ".docs"}
+
+###############################################################################
+
 # HARD-CODED DIRECTORIES:
 # Adjust these as needed for your environment.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 script_dir = Path(__file__).resolve().parent
 
 SCRIPTS_DIR = script_dir.parent  # if your scripts are one level up
 UTILITIES_DIR = script_dir.parent / "Utilities"
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # Regex for function definitions: "__myFunction__() {" or "function __myFunction__ {"
 # We capture the entire name with underscores.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 FUNC_DEF_REGEX = re.compile(
     r'^(?:function\s+)?(__[a-zA-Z0-9_]+__)\s*\(\)\s*\{'
 )
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # Regex for lines that source a utility:
 #   source "${UTILITYPATH}/Something.sh"
 #   . "${UTILITYPATH}/Something.sh"
 # We'll capture "Something.sh" as group(1).
-# -----------------------------------------------------------------------------
+###############################################################################
+
 SOURCE_REGEX = re.compile(
     r'^\s*(?:source|\.)\s+"?\$\{?UTILITYPATH\}?/([a-zA-Z0-9_.-]+)"?'
 )
-# If your scripts always explicitly have ".sh" in the filename, adapt as needed:
-#   r'^\s*(?:source|\.)\s+"?\$\{?UTILITYPATH\}?/([a-zA-Z0-9_.-]+\.sh)"?'
 
-# -----------------------------------------------------------------------------
+# Regex for shellcheck source directive comments
+SHELLCHECK_SOURCE_REGEX = re.compile(
+    r'^\s*#\s*shellcheck\s+source=Utilities/([a-zA-Z0-9_.-]+)'
+)
+
+###############################################################################
+
 # Regex for function call tokens like "__something__"
 # We'll detect them as distinct tokens in a line.
-# -----------------------------------------------------------------------------
+###############################################################################
+
 CALL_REGEX = re.compile(r'^__[a-zA-Z0-9_]+__$')
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 1) Build a global map:  function -> set of utility filenames that define it
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def build_global_function_map(utilities_dir):
     """
     Recursively parse all .sh files under 'utilities_dir'
     Return { "__func__": {"FileA.sh", "FileB.sh"} }
+    
+    Excludes test files (starting with _Test) from the map since they're
+    not real utility libraries.
     """
     global_map = {}
     utilities_path = Path(utilities_dir).resolve()
@@ -58,6 +102,10 @@ def build_global_function_map(utilities_dir):
 
     all_utility_scripts = list(utilities_path.rglob("*.sh"))
     for util_script in all_utility_scripts:
+        # Skip test files - they mock functions but aren't real utilities
+        if util_script.name.startswith("_Test") or util_script.name.startswith("_"):
+            continue
+            
         funcs = parse_functions_in_file(util_script)
         for f in funcs:
             if f not in global_map:
@@ -65,9 +113,11 @@ def build_global_function_map(utilities_dir):
             global_map[f].add(util_script.name)
     return global_map
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 2) Parse function definitions from a single file
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def parse_functions_in_file(filepath):
     results = set()
     if not os.path.isfile(filepath):
@@ -81,9 +131,11 @@ def parse_functions_in_file(filepath):
                 results.add(func_name)
     return results
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 3) Identify which utilities are included in a script & local function definitions
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def parse_script_for_includes_and_local_funcs(script_path):
     includes = set()
     local_funcs = parse_functions_in_file(script_path)
@@ -94,37 +146,62 @@ def parse_script_for_includes_and_local_funcs(script_path):
     with open(script_path, "r", encoding="utf-8", newline='\n') as f:
         for line in f:
             line_stripped = line.strip()
+            
+            # Check for source statement
             s_match = SOURCE_REGEX.search(line_stripped)
             if s_match:
-                # e.g., "Prompts.sh" or "Queries.sh"
+                # e.g., "Prompts.sh" or "Cluster.sh"
                 includes.add(s_match.group(1))
+            
+            # Also check for shellcheck directive (for consistency checking)
+            sc_match = SHELLCHECK_SOURCE_REGEX.search(line_stripped)
+            if sc_match:
+                # Verify this matches an actual source line
+                includes.add(sc_match.group(1))
+                
     return includes, local_funcs
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 4) Gather function calls from lines that are not function definitions
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def gather_function_calls(script_path):
+    """
+    Extract all function calls (__function_name__) from a script.
+    Uses regex to find all occurrences, not just whitespace-separated tokens.
+    This handles cases like:
+        - var=$(__function__ arg)
+        - if __function__; then
+        - echo "$(__function__)"
+    """
     calls = set()
     if not os.path.isfile(script_path):
         return calls
 
+    # Regex to find all __word__ patterns (function calls)
+    call_pattern = re.compile(r'__[a-zA-Z0-9_]+__')
+
     with open(script_path, "r", encoding="utf-8", newline='\n') as f:
         for line in f:
+            # Skip lines that are function definitions
             if FUNC_DEF_REGEX.search(line.strip()):
-                # skip lines that define a function
                 continue
 
-            tokens = line.strip().split()
-            for t in tokens:
-                if CALL_REGEX.match(t):
-                    if t == "__base__":
-                        continue #Skip this function, as it is used by RBD, not a library function
-                    calls.add(t)
+            # Find all function call patterns in the line
+            for match in call_pattern.finditer(line):
+                func_name = match.group(0)
+                if func_name == "__base__":
+                    continue  # Skip this function, as it is used by RBD, not a library function
+                calls.add(func_name)
+    
     return calls
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 5) Cache for utility -> set of functions.  parse_utility_functions(Utility.sh).
-# -----------------------------------------------------------------------------
+###############################################################################
+
 _utility_func_cache = {}
 
 def parse_utility_functions(utility_file):
@@ -137,11 +214,13 @@ def parse_utility_functions(utility_file):
     _utility_func_cache[utility_file] = funcs
     return funcs
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 6) Analyze a single script:
 #    - Figure out which calls are unknown / where they might be found
 #    - Which includes are used vs. unused
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def analyze_script(script_path, global_map):
     """
     Returns:
@@ -194,12 +273,14 @@ def analyze_script(script_path, global_map):
 
     return unknown_calls, used_includes, all_includes
 
-# -----------------------------------------------------------------------------
+###############################################################################
+
 # 7) For --fix mode, we want to:
 #    - Summarize needed changes (Add or Remove sources)
 #    - Prompt user Y/N for each script
 #    - If Y, do the changes: add lines after the top # block, remove lines for unused
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def fix_script(
     script_path,
     add_sources,
@@ -208,7 +289,9 @@ def fix_script(
     """
     Modify 'script_path' in-place:
       - Insert each needed 'source "${UTILITYPATH}/{something}"' after the top comment block
+        with proper shellcheck directive
       - Remove lines that exactly match 'source "${UTILITYPATH}/{something}"'
+        and their shellcheck directive
     after user has confirmed.
     """
     if not add_sources and not remove_sources:
@@ -220,32 +303,50 @@ def fix_script(
     # 1) Build set of lines to remove (exact match, ignoring trailing spaces).
     remove_lines = {f'source "${{UTILITYPATH}}/{r}"' for r in remove_sources}
     remove_lines_dot = {f'. "${{UTILITYPATH}}/{r}"' for r in remove_sources}
+    remove_shellcheck = {f'# shellcheck source=Utilities/{r}' for r in remove_sources}
 
-    # 2) Insert lines for new sources after the top comment block.
-    #    - The "comment block" is consecutive lines from the top that start with # (or are blank?).
-    #      The request specifically said "every line starts with # until the end of the block".
-    #      We'll define that carefully:
-    insertion_index = find_comment_block_end(lines)
+    # 2) Insert lines for new sources after existing source statements or after comment block
+    #    Find where other source statements are, or use comment block end
+    insertion_index = find_source_insertion_point(lines)
 
-    # We'll build new lines as needed. We'll ensure we use the 'source' form (not dot).
+    # Build new lines with shellcheck directive
     lines_to_insert = []
     for a in sorted(add_sources):
-        line_text = f'source "${{UTILITYPATH}}/{a}"\n'
+        shellcheck_line = f'# shellcheck source=Utilities/{a}\n'
+        source_line = f'source "${{UTILITYPATH}}/{a}"\n'
+        
         # only insert if it doesn't already exist
-        if not any(line.strip() == line_text.strip() for line in lines):
-            lines_to_insert.append(line_text)
+        if not any(line.strip() == source_line.strip() for line in lines):
+            lines_to_insert.append(shellcheck_line)
+            lines_to_insert.append(source_line)
 
-    # 3) Rebuild lines, skipping the ones to remove.
+    # 3) Rebuild lines, skipping the ones to remove (including their shellcheck lines)
     new_lines = []
+    skip_next = False
     for i, line in enumerate(lines):
+        # Check if we should skip this line because it's a shellcheck directive for a removed source
+        if skip_next:
+            skip_next = False
+            continue
+            
+        # Check if this is a shellcheck directive for a source we're removing
+        stripped = line.strip()
+        if stripped in remove_shellcheck:
+            skip_next = True  # Skip the next line (the actual source statement)
+            continue
+            
+        # Check if line is a source to remove
+        if should_remove_source_line(line, remove_lines, remove_lines_dot):
+            # Also check if previous line was a shellcheck directive
+            if i > 0 and new_lines and new_lines[-1].strip().startswith('# shellcheck source='):
+                new_lines.pop()  # Remove the shellcheck directive too
+            continue
+            
         # We'll insert new sources at the insertion index
         if i == insertion_index and lines_to_insert:
             for to_ins in lines_to_insert:
                 new_lines.append(to_ins)
-        # Check if line is in remove_lines
-        if should_remove_source_line(line, remove_lines, remove_lines_dot):
-            # skip it
-            continue
+                
         new_lines.append(line)
 
     # Edge case: if insertion_index == len(lines), we might insert at the end
@@ -276,15 +377,56 @@ def find_comment_block_end(lines):
             return i
     return len(lines)
 
-# -----------------------------------------------------------------------------
+def find_source_insertion_point(lines):
+    """
+    Find the best place to insert new source statements:
+    1. After existing source statements if any exist
+    2. After "set -u" or similar shell options
+    3. After the comment block
+    Returns the line index where new sources should be inserted.
+    """
+    last_source_line = -1
+    last_set_line = -1
+    comment_block_end = find_comment_block_end(lines)
+    
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        
+        # Check for existing source statements
+        if SOURCE_REGEX.search(stripped) or stripped.startswith('# shellcheck source='):
+            last_source_line = i
+            
+        # Check for set statements (set -u, set -e, etc.)
+        if stripped.startswith('set -') and i > comment_block_end:
+            last_set_line = i
+    
+    # Insert after the last source statement if any exist
+    if last_source_line >= 0:
+        return last_source_line + 1
+    
+    # Otherwise insert after set statements
+    if last_set_line >= 0:
+        return last_set_line + 2  # Add blank line after set
+    
+    # Otherwise insert after comment block
+    return comment_block_end + 1  # Add blank line after comment
+
+###############################################################################
+
 # 8) Main script
-# -----------------------------------------------------------------------------
+###############################################################################
+
 def main():
     parser = argparse.ArgumentParser(description="Check unknown calls in .sh scripts and optionally fix missing sources.")
     parser.add_argument("--scripts-dir", default=SCRIPTS_DIR, help="Directory of .sh scripts to check (recursively).")
     parser.add_argument("--utilities-dir", default=UTILITIES_DIR, help="Directory containing utility .sh scripts.")
-    parser.add_argument("--fix", action="store_true", help="Automatically add missing 'source' lines if exactly one utility defines the unknown call.")
+    parser.add_argument("--fix", action="store_true", help="Automatically add missing 'source' lines if exactly one utility defines the unknown call (prompts for each file).")
+    parser.add_argument("--dry-run", action="store_true", help="Report issues without prompting or making changes.")
     args = parser.parse_args()
+    
+    # Dry-run overrides fix
+    if args.dry_run:
+        args.fix = False
 
     # 1) Build the global function map from all utilities
     global_map = build_global_function_map(args.utilities_dir)
@@ -294,13 +436,34 @@ def main():
     utilities_path = Path(args.utilities_dir).resolve()
 
     all_scripts = list(scripts_dir_path.rglob("*.sh"))
-    scripts_to_check = [
-        s for s in all_scripts
-        if not str(s.resolve()).startswith(str(utilities_path))
-    ]
+    
+    # Filter out utilities and skip directories
+    scripts_to_check = []
+    for s in all_scripts:
+        s_resolved = s.resolve()
+        # Skip if in utilities
+        if str(s_resolved).startswith(str(utilities_path)):
+            continue
+        # Skip if in a skip directory
+        skip = False
+        for skip_dir in SKIP_DIRS:
+            if f"/{skip_dir}/" in str(s_resolved) or str(s_resolved).endswith(f"/{skip_dir}"):
+                skip = True
+                break
+        if not skip:
+            scripts_to_check.append(s)
+    
+    total_scripts = len(scripts_to_check)
+    scripts_ok = 0
+    scripts_with_issues = 0
+    scripts_fixed = 0
 
     # 3) Analyze each script
-    for script_file in scripts_to_check:
+    for idx, script_file in enumerate(scripts_to_check, 1):
+        # Show progress
+        progress = int((idx / total_scripts) * 100)
+        print(f"\rAnalyzing [{idx}/{total_scripts}] ({progress}%)...", end='')
+        
         unknown_calls, used_includes, all_includes = analyze_script(script_file, global_map)
         # which includes to remove?
         unused_includes = all_includes - used_includes
@@ -321,9 +484,14 @@ def main():
 
         # If no issues, skip
         if not truly_unknown and not missing_includes and not unused_includes:
-            print(f"[OK] {script_file} - all calls recognized; no unused includes.")
+            scripts_ok += 1
             continue
+        
+        # Clear progress line before printing
+        print("\r" + " " * 60 + "\r", end='')
 
+        scripts_with_issues += 1
+        
         # Print summary
         print(f"\n[CHECK] {script_file}")
         if truly_unknown:
@@ -338,6 +506,10 @@ def main():
             print("  Unused includes:")
             for ui in sorted(unused_includes):
                 print(f"    source \"${{UTILITYPATH}}/{ui}\"")
+
+        if args.dry_run:
+            # Dry-run mode: just report, don't fix
+            continue
 
         if not args.fix:
             # Not fixing, just suggesting
@@ -357,9 +529,29 @@ def main():
             remove_sources=unused_includes
         )
         print("  -> Fixes applied.")
+        scripts_fixed += 1
 
-    print("\nDone.")
-    sys.exit(0)
+    # Clear progress line
+    print("\r" + " " * 60 + "\r", end='')
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("SUMMARY")
+    print("=" * 80)
+    print(f"Total scripts analyzed: {total_scripts}")
+    print(f"  Scripts OK: {scripts_ok}")
+    print(f"  Scripts with issues: {scripts_with_issues}")
+    if args.fix:
+        print(f"  Scripts fixed: {scripts_fixed}")
+    elif args.dry_run:
+        print(f"  (Dry-run mode: no changes made)")
+    print("")
+    
+    if scripts_with_issues > 0 and not args.fix:
+        print("Tip: Run with --fix to automatically fix issues (with confirmation)")
+        print("     or --dry-run to just see what would be changed")
+    
+    sys.exit(0 if scripts_with_issues == 0 else 1)
 
 
 if __name__ == "__main__":

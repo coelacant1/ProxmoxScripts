@@ -2,68 +2,117 @@
 #
 # DeleteCluster.sh
 #
-# Script to remove a single-node Proxmox cluster configuration,
-# returning the node to a standalone setup.
+# Removes cluster configuration from a single-node Proxmox cluster,
+# returning the node to standalone mode.
 #
 # Usage:
-#   ./DeleteCluster.sh
+#   DeleteCluster.sh [--force]
 #
-# Warning:
-#   - If this node is part of a multi-node cluster, first remove other nodes
-#     from the cluster (pvecm delnode <nodename>) until this is the last node.
-#   - This process is DESTRUCTIVE and will remove cluster configuration.
+# Examples:
+#   DeleteCluster.sh
+#   DeleteCluster.sh --force    # Skip confirmation
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse --force flag
+FORCE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)
+            FORCE=1
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: DeleteCluster.sh [--force]"
+            exit 64
+            ;;
+    esac
+done
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __warn__ "DESTRUCTIVE: This will remove cluster configuration from this node"
+    __warn__ "This operation cannot be undone"
+
+    # Safety check: Require --force in non-interactive mode
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]] && [[ $FORCE -eq 0 ]]; then
+        __err__ "Destructive operation requires --force flag in non-interactive mode"
+        __err__ "Usage: DeleteCluster.sh --force"
+        __err__ "Or add '--force' to parameters in GUI"
+        exit 1
+    fi
+
+    # Prompt for confirmation (unless force is set)
+    if [[ $FORCE -eq 1 ]]; then
+        __info__ "Force mode enabled - proceeding without confirmation"
+    elif ! __prompt_user_yn__ "Proceed with cluster removal?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+
+    local node_count
+    node_count=$(__get_number_of_cluster_nodes__)
+    if [[ "$node_count" -gt 1 ]]; then
+        __err__ "This script is for single-node clusters only"
+        __err__ "Current cluster has ${node_count} nodes. Remove other nodes first."
+        exit 1
+    fi
+
+    __info__ "Stopping cluster services"
+    systemctl stop pve-cluster || true
+    systemctl stop corosync || true
+
+    __info__ "Starting cluster file system in local mode"
+    pmxcfs -l
+
+    __info__ "Removing Corosync configuration"
+    rm -f "/etc/pve/corosync.conf" 2>/dev/null || true
+    rm -rf "/etc/corosync/"* 2>/dev/null || true
+
+    __info__ "Restarting pve-cluster in standalone mode"
+    killall pmxcfs
+    systemctl start pve-cluster
+
+    __info__ "Disabling corosync service"
+    systemctl stop corosync 2>/dev/null || true
+    systemctl disable corosync 2>/dev/null || true
+
+    __ok__ "Cluster configuration removed successfully!"
+    __info__ "This node is now standalone. Verify with: pvecm status"
+}
+
+main
 
 ###############################################################################
-# Preliminary Checks
+# Script notes:
 ###############################################################################
-__check_root__        # Ensure script is run as root
-__check_proxmox__     # Ensure this is a Proxmox node
+# Last checked: 2025-11-21
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-19: Added pmxcfs -l step for cluster file system check
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "=== Proxmox Cluster Removal (Single-Node) ==="
-echo "This will remove Corosync/cluster configuration from this node."
-read -r -p "Proceed? (y/N): " confirm
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-  echo "Aborted."
-  exit 1
-fi
-
-nodeCount="$(__get_number_of_cluster_nodes__)"
-if [[ "$nodeCount" -gt 1 ]]; then
-  echo "Error: This script is for a single-node cluster only."
-  echo "Current cluster shows \"$nodeCount\" nodes. Remove other nodes first, then re-run."
-  exit 2
-fi
-
-echo "Stopping cluster services..."
-systemctl stop corosync || true
-systemctl stop pve-cluster || true
-
-echo "Removing Corosync config from /etc/pve and /etc/corosync..."
-rm -f "/etc/pve/corosync.conf" 2>/dev/null || true
-rm -rf "/etc/corosync/"* 2>/dev/null || true
-
-# Optionally remove additional cluster-related config (use caution):
-# rm -f /etc/pve/cluster.conf 2>/dev/null || true
-
-echo "Restarting pve-cluster (it will now run standalone)..."
-systemctl start pve-cluster
-
-echo "Verifying that corosync is not running..."
-systemctl stop corosync 2>/dev/null || true
-systemctl disable corosync 2>/dev/null || true
-
-echo "=== Done ==="
-echo "This node is no longer part of any Proxmox cluster."
-echo "You can verify by running 'pvecm status' (it should show no cluster)."
-
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node

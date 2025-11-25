@@ -1,0 +1,123 @@
+================================================================================
+TROUBLESHOOTING GUIDE
+================================================================================
+
+Quick reference for common issues with ProxmoxScripts and GUI.sh
+
+================================================================================
+GUI STARTUP
+================================================================================
+
+GUI.sh Won't Start
+------------------
+Error: "./GUI.sh: No such file or directory"
+Fix:   cd /path/to/ProxmoxScripts && ./GUI.sh
+
+Error: "Permission denied"
+Fix:   chmod +x GUI.sh && ./GUI.sh
+
+Error: "UTILITYPATH not found"
+Fix:   Verify Utilities/ directory exists. Re-clone if files missing.
+
+Missing Dependencies
+--------------------
+Error: "command not found: jq"
+Fix:   apt install jq
+
+Error: "command not found: sshpass"
+Fix:   apt install sshpass
+
+================================================================================
+REMOTE EXECUTION
+================================================================================
+
+Connection Failed
+-----------------
+Error: "Connection refused"
+Fix:   - Verify IP address correct
+       - Check node online: ping X.X.X.X
+       - Verify SSH running: systemctl status ssh
+
+Error: "Permission denied"
+Fix:   - Check username/password
+       - Test manually: ssh user@host
+
+nodes.json Issues
+-----------------
+Error: "No nodes found"
+Fix:   - Auto-creates from nodes.json.template
+       - Add via GUI: 'm' -> Manage Nodes -> Add
+       - Verify format: jq . nodes.json
+
+SSHPASS Issues
+--------------
+Error: Scripts fail to authenticate
+Fix:   - Install: apt install sshpass
+       - Test: sshpass -p 'pass' ssh user@host 'echo test'
+
+================================================================================
+SCRIPT EXECUTION
+================================================================================
+
+Parameters Not Accepted
+-----------------------
+Error: "Unknown option"
+Fix:   - Use --param value (double dash)
+       - Check --help for accepted parameters
+       - Some scripts use positional args
+
+Script Hangs
+------------
+Issue: Script never completes
+Fix:   - Check not waiting for input
+       - Review logs in /tmp/
+       - Check node resources (disk/CPU)
+
+Script Shows Wrong Usage
+------------------------
+Issue: Help doesn't match behavior
+Fix:   - Verify script uses ArgumentParser
+       - Run with --help to see actual usage
+
+================================================================================
+LOGS & DEBUGGING
+================================================================================
+
+Log Locations
+-------------
+Local:  /tmp/gui_execution.log
+Remote: /tmp/ProxmoxScripts_gui/<script>.log (on each node)
+
+View: tail -f /tmp/gui_execution.log
+
+Debug Levels
+------------
+./GUI.sh -d    # Debug (very verbose)
+./GUI.sh -v    # Info (default)
+./GUI.sh -q    # Errors only
+./GUI.sh -c    # Clear logs first
+
+================================================================================
+COMMON MISTAKES
+================================================================================
+
+1. Running from wrong directory
+   -> Always cd to ProxmoxScripts root
+
+2. Typing paths instead of navigating
+   -> Use arrow keys/numbers to select
+
+3. Wrong parameter format
+   -> Use --parameter value (double dash)
+
+4. Not checking logs
+   -> Always check /tmp/gui_execution.log
+
+5. Forgetting to set execution mode
+   -> Choose Local/Remote before browsing
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================

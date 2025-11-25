@@ -2,129 +2,145 @@
 #
 # FindLinkedClone.sh
 #
-# Scans all relevant Proxmox VM or LXC configuration files in the cluster
-# for any child instances derived from a specified base VM or CT ID.
+# Finds child VMs/containers cloned from a base VM or container ID.
 #
 # Usage:
-#   ./FindLinkedClone.sh <BASE_VMID>
+#   FindLinkedClone.sh <base_vmid>
 #
-# Example:
-#   # Find children of base VM or CT 1005
-#   ./FindLinkedClone.sh 1005
+# Arguments:
+#   base_vmid - Base VM or container ID
 #
-# This script determines whether the specified <BASE_VMID> corresponds to
-# a QEMU VM or LXC container, then looks for any config that references
-# the storage base image named "base-<BASE_VMID>-..." within the relevant
-# directory (/etc/pve/nodes/*/qemu-server/ or /etc/pve/nodes/*/lxc/).
+# Examples:
+#   FindLinkedClone.sh 1005
+#   FindLinkedClone.sh 100
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "base_vmid:vmid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
+
+    __info__ "Finding linked clones for base ID: $BASE_VMID"
+
+    # Determine if QEMU or LXC
+    shopt -s nullglob
+    local -a qemu_configs=(/etc/pve/nodes/*/qemu-server/"${BASE_VMID}".conf)
+    local -a lxc_configs=(/etc/pve/nodes/*/lxc/"${BASE_VMID}".conf)
+    shopt -u nullglob
+
+    local vm_type=""
+    local cfg_dir=""
+
+    if [[ ${#qemu_configs[@]} -gt 0 ]]; then
+        vm_type="QEMU"
+        cfg_dir="qemu-server"
+    elif [[ ${#lxc_configs[@]} -gt 0 ]]; then
+        vm_type="LXC"
+        cfg_dir="lxc"
+    else
+        __err__ "Base VM/CT not found: $BASE_VMID"
+        exit 1
+    fi
+
+    __ok__ "Detected base $vm_type with ID: $BASE_VMID"
+
+    # Collect all config files
+    __info__ "Scanning cluster for $vm_type configurations"
+
+    shopt -s nullglob
+    local -a conf_files=()
+    local -a nodes=(/etc/pve/nodes/*)
+
+    for node_path in "${nodes[@]}"; do
+        if [[ -d "${node_path}/${cfg_dir}" ]]; then
+            for conf_file in "${node_path}/${cfg_dir}"/*.conf; do
+                if [[ -e "$conf_file" ]]; then
+                    conf_files+=("$conf_file")
+                fi
+            done
+        fi
+    done
+    shopt -u nullglob
+
+    __ok__ "Found ${#conf_files[@]} configuration file(s)"
+
+    # Scan for children
+    __info__ "Searching for linked clones"
+
+    local -a children=()
+    local scanned=0
+
+    for conf_file in "${conf_files[@]}"; do
+        local vmid
+        vmid="$(basename "$conf_file" .conf)"
+        ((scanned += 1))
+
+        # Skip base VM itself
+        if [[ "$vmid" == "$BASE_VMID" ]]; then
+            continue
+        fi
+
+        # Look for base reference
+        if grep -q "base-${BASE_VMID}-" "${conf_file}" 2>/dev/null; then
+            children+=("$vmid")
+            __ok__ "Found child: $vmid"
+        fi
+    done
+
+    echo
+    __info__ "Scan Summary:"
+    __info__ "  Configurations scanned: $scanned"
+    __info__ "  Linked clones found: ${#children[@]}"
+
+    if [[ ${#children[@]} -eq 0 ]]; then
+        __warn__ "No linked clones found for base $BASE_VMID"
+        exit 0
+    fi
+
+    echo
+    __ok__ "Linked Clones of $BASE_VMID:"
+    for child_id in "${children[@]}"; do
+        echo "  - $child_id"
+    done
+}
+
+main "$@"
 
 ###############################################################################
-# Check prerequisites
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Validate input
-###############################################################################
-BASE_VMID="$1"
-if [ -z "$BASE_VMID" ]; then
-  __err__ "Error: No base VM ID provided. Usage: $0 <BASE_VMID>"
-  exit 1
-fi
-
-###############################################################################
-# Determine if BASE_VMID is a QEMU VM or LXC
-###############################################################################
-__info__ "Checking if \"${BASE_VMID}\" is a QEMU VM or an LXC container..."
-
-# We'll search for .conf files matching BASE_VMID in qemu-server and lxc
-shopt -s nullglob
-qemuConfigFiles=( /etc/pve/nodes/*/qemu-server/"${BASE_VMID}".conf )
-lxcConfigFiles=( /etc/pve/nodes/*/lxc/"${BASE_VMID}".conf )
-shopt -u nullglob
-
-VM_TYPE=""
-if [ ${#qemuConfigFiles[@]} -gt 0 ]; then
-  VM_TYPE="qemu"
-elif [ ${#lxcConfigFiles[@]} -gt 0 ]; then
-  VM_TYPE="lxc"
-else
-  __err__ "Error: Could not find VM or LXC with ID \"${BASE_VMID}\" in the cluster."
-  exit 1
-fi
-
-__ok__ "Detected base ${VM_TYPE^^} with ID \"${BASE_VMID}\"."
-
-case "${VM_TYPE}" in
-  "qemu") CFG_DIR="qemu-server" ;;
-  "lxc")  CFG_DIR="lxc" ;;
-esac
-
-###############################################################################
-# Collect config files across the cluster
-###############################################################################
-shopt -s nullglob
-declare -a CONF_FILE_LIST=()
-NODES=( /etc/pve/nodes/* )
-__info__ "Scanning for config files of type \"${VM_TYPE}\" on all nodes..."
-
-for nodePath in "${NODES[@]}"; do
-  [ -d "${nodePath}/${CFG_DIR}" ] || continue
-  for confFile in "${nodePath}/${CFG_DIR}"/*.conf; do
-    [ -e "$confFile" ] || continue
-    __update__ "Found config file: \"${confFile}\""
-    CONF_FILE_LIST+=( "$confFile" )
-  done
-done
-shopt -u nullglob
-
-__ok__ "Done scanning for config files."
-
-###############################################################################
-# Scan for child VMs or CTs
-###############################################################################
-__info__ "Scanning for child instances from base ID \"${BASE_VMID}\"..."
-
-declare -a CHILDREN=()
-currentIndex=0
-totalConfigs=${#CONF_FILE_LIST[@]}
-
-for confFile in "${CONF_FILE_LIST[@]}"; do
-  ((currentIndex=currentIndex+1))
-  vmId="$(basename "$confFile" .conf)"
-  nodeName="$(basename "$(dirname "$confFile")")"
-
-  __update__ "Scanning ${VM_TYPE^^} ${currentIndex} of ${totalConfigs} \
-(on \"${nodeName}\", ID: \"${vmId}\")"
-
-  # Skip if this instance is the same as the base
-  if [ "${vmId}" == "${BASE_VMID}" ]; then
-    continue
-  fi
-
-  # Look for a reference to "base-<BASE_VMID>-" in the conf file
-  if grep -q "base-${BASE_VMID}-" "${confFile}"; then
-    CHILDREN+=( "${vmId}" )
-  fi
-done
-
-###############################################################################
-# Report results
-###############################################################################
-if [ "${#CHILDREN[@]}" -eq 0 ]; then
-  __err__ "No child ${VM_TYPE^^}s found for base ID \"${BASE_VMID}\"."
-  exit 0
-fi
-
-__ok__ "Child ${VM_TYPE^^}s derived from base ID \"${BASE_VMID}\":"
-for childId in "${CHILDREN[@]}"; do
-  echo "\"${childId}\""
-done
-
-echo "Scan complete. Found ${#CHILDREN[@]} child ${VM_TYPE^^}(s)."

@@ -1,45 +1,82 @@
 #!/bin/bash
 #
-# FixDpkgLock.sh
+# FixDPKGLock.sh
 #
-# This script removes stale dpkg lock files and repairs interrupted dpkg operations
-# on a Proxmox node. It then updates the apt cache.
+# Removes stale dpkg lock files and repairs interrupted dpkg operations.
 #
 # Usage:
-#   ./FixDpkgLock.sh
+#   FixDPKGLock.sh
 #
-# Example:
-#   # To fix dpkg locks on the local Proxmox node
-#   ./FixDpkgLock.sh
+# Examples:
+#   FixDPKGLock.sh
 #
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-__check_root__          # Ensure script is run as root
-__check_proxmox__       # Ensure we're on a Proxmox node
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Fixing dpkg locks and repairing package database"
+
+    # Remove stale locks
+    __info__ "Removing stale dpkg locks"
+    rm -f "/var/lib/dpkg/lock-frontend"
+    rm -f "/var/lib/dpkg/lock"
+    rm -f "/var/lib/apt/lists/lock"
+    rm -f "/var/cache/apt/archives/lock"
+    rm -f "/var/lib/dpkg/lock"*
+    __ok__ "Stale locks removed"
+
+    # Reconfigure dpkg
+    __info__ "Reconfiguring dpkg"
+    if dpkg --configure -a 2>&1; then
+        __ok__ "dpkg configured successfully"
+    else
+        __err__ "Failed to configure dpkg"
+        exit 1
+    fi
+
+    # Update apt cache
+    __info__ "Updating apt cache"
+    if apt-get update 2>&1; then
+        __ok__ "apt cache updated successfully"
+    else
+        __err__ "Failed to update apt cache"
+        exit 1
+    fi
+
+    __ok__ "dpkg locks fixed and system ready!"
+}
+
+main
 
 ###############################################################################
-# Remove stale locks
+# Script notes:
 ###############################################################################
-rm -f "/var/lib/dpkg/lock-frontend"
-rm -f "/var/lib/dpkg/lock"
-rm -f "/var/lib/apt/lists/lock"
-rm -f "/var/cache/apt/archives/lock"
-rm -f "/var/lib/dpkg/lock"*
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Reconfigure dpkg
-###############################################################################
-if ! dpkg --configure -a; then
-  echo "Error: Failed to configure dpkg." >&2
-  exit 1
-fi
-
-###############################################################################
-# Update apt cache
-###############################################################################
-if ! apt-get update; then
-  echo "Error: Failed to update apt cache." >&2
-  exit 1
-fi
-
-echo "dpkg locks removed and apt cache updated successfully."

@@ -2,46 +2,78 @@
 #
 # BulkChangeDNS.sh
 #
-# Updates the DNS search domain and DNS server for a range of VMs within a Proxmox VE environment.
-# It sets new DNS settings and regenerates the Cloud-Init image to apply changes.
+# Updates DNS settings for virtual machines within a Proxmox VE cluster.
+# Sets DNS server and search domain, then regenerates Cloud-Init image.
 #
 # Usage:
-#   ./BulkChangeDNS.sh <start_vm_id> <end_vm_id> <dns_server> <dns_search_domain>
+#   BulkChangeDNS.sh <start_vmid> <end_vmid> <dns_server> <dns_search_domain>
 #
-# Example:
-#   ./BulkChangeDNS.sh 400 430 8.8.8.8 example.com
+# Arguments:
+#   start_vmid        - Starting VM ID
+#   end_vmid          - Ending VM ID
+#   dns_server        - DNS server address
+#   dns_search_domain - DNS search domain
+#
+# Examples:
+#   BulkChangeDNS.sh 400 430 8.8.8.8 example.com
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid dns_server:string dns_search_domain:string" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    change_dns_callback() {
+        local vmid="$1"
+
+        __vm_set_config__ "$vmid" --nameserver "$DNS_SERVER" --searchdomain "$DNS_SEARCH_DOMAIN"
+        __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
+    }
+
+    __bulk_vm_operation__ --name "Change DNS" --report "$START_VMID" "$END_VMID" change_dns_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "DNS settings updated successfully!"
+}
+
+main
 
 ###############################################################################
-# Argument Checking
+# Script notes:
 ###############################################################################
-if [ "$#" -ne 4 ]; then
-  echo "Usage: $0 <start_vm_id> <end_vm_id> <dns_server> <dns_search_domain>"
-  exit 1
-fi
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
+#
+# Known issues:
+# -
+#
 
-START_VMID="$1"
-END_VMID="$2"
-DNS_SERVER="$3"
-DNS_SEARCHDOMAIN="$4"
-
-###############################################################################
-# Main
-###############################################################################
-for (( vmid=START_VMID; vmid<=END_VMID; vmid++ )); do
-  if qm status "$vmid" &>/dev/null; then
-    echo "Updating DNS settings for VM ID: $vmid"
-    qm set "$vmid" --nameserver "$DNS_SERVER" --searchdomain "$DNS_SEARCHDOMAIN"
-    qm cloudinit dump "$vmid"
-    echo " - Cloud-Init DNS settings updated for VM ID: $vmid."
-  else
-    echo "VM ID: $vmid does not exist. Skipping..."
-  fi
-done
-
-echo "Cloud-Init DNS update process completed!"

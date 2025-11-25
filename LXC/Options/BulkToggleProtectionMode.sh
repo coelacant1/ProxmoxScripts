@@ -2,106 +2,91 @@
 #
 # BulkToggleProtectionMode.sh
 #
-# This script bulk enables or disables the protection mode for multiple LXC
-# containers within a Proxmox VE environment. Protection mode prevents
-# containers from being accidentally deleted or modified. This script is useful
-# for managing the protection status of a group of containers efficiently.
+# Enables or disables protection mode for a range of LXC containers.
+# Protection mode prevents accidental deletion or modification.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkToggleProtectionMode.sh <action> <start_ct_id> <num_cts>
+#   BulkToggleProtectionMode.sh <start_ct_id> <end_ct_id> <action>
+#
+# Arguments:
+#   start_ct_id - Starting container ID
+#   end_ct_id   - Ending container ID
+#   action      - "enable" or "disable"
 #
 # Examples:
-#   # The following command will enable protection for LXC containers
-#   # with IDs from 400 to 429 (30 containers total).
-#   ./BulkToggleProtectionMode.sh enable 400 30
-#
-#   # The following command will disable protection for LXC containers
-#   # with IDs from 200 to 209 (10 containers total).
-#   ./BulkToggleProtectionMode.sh disable 200 10
+#   BulkToggleProtectionMode.sh 400 429 enable
+#   BulkToggleProtectionMode.sh 200 209 disable
 #
 # Function Index:
-#   - set_protection
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
-###############################################################################
-# Validate Environment and Permissions
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Parse and Validate Arguments
-###############################################################################
-if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 <action> <start_ct_id> <num_cts>"
-  echo "  action: enable | disable"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid action:string" "$@"
 
-ACTION="$1"
-START_CT_ID="$2"
-NUM_CTS="$3"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-if [[ "$ACTION" != "enable" && "$ACTION" != "disable" ]]; then
-  echo "Error: action must be either 'enable' or 'disable'."
-  exit 1
-fi
+    # Validate action
+    if [[ "$ACTION" != "enable" && "$ACTION" != "disable" ]]; then
+        __err__ "Invalid action: ${ACTION}. Must be 'enable' or 'disable'."
+        exit 1
+    fi
 
-if ! [[ "$START_CT_ID" =~ ^[0-9]+$ ]] || ! [[ "$NUM_CTS" =~ ^[0-9]+$ ]]; then
-  echo "Error: start_ct_id and num_cts must be positive integers."
-  exit 1
-fi
+    local protection_state=1
+    [[ "$ACTION" = "disable" ]] && protection_state=0
 
-###############################################################################
-# Determine Desired Protection State
-###############################################################################
-if [ "$ACTION" = "enable" ]; then
-  UNPRIV_STATE=1
-else
-  UNPRIV_STATE=0
-fi
+    __info__ "Bulk toggle protection mode: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Action: ${ACTION}"
 
-###############################################################################
-# Define Helper Function
-###############################################################################
-patch_conf() {
-  local ctid="$1"
-  local state="$2"
-  local conf="/etc/pve/lxc/${ctid}.conf"
+    toggle_protection_callback() {
+        local vmid="$1"
+        __ct_set_protection__ "$vmid" "$protection_state"
+    }
 
-  if [ ! -f "$conf" ]; then
-    echo "  CT $ctid: config not found - skipping."
-    return
-  fi
+    __bulk_ct_operation__ --name "Toggle Protection" --report "$START_VMID" "$END_VMID" toggle_protection_callback
 
-  if grep -qE '^[[:space:]]*unprivileged:' "$conf"; then
-    sed -i -E "s|^[[:space:]]*unprivileged:.*|unprivileged: $state|" "$conf"
-  else
-    echo "unprivileged: $state" >> "$conf"
-  fi
+    __bulk_summary__
 
-  echo "  CT $ctid: unprivileged set to $state"
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Protection mode updated successfully!"
 }
 
-###############################################################################
-# Main Loop
-###############################################################################
-for (( i=0; i<NUM_CTS; i++ )); do
-  CURRENT_CT_ID=$((START_CT_ID + i))
+main
 
-  if pct status "${CURRENT_CT_ID}" &> /dev/null; then
-    echo "Setting protection to '${ACTION}' for container ID '${CURRENT_CT_ID}'..."
-    patch_conf "$CURRENT_CT_ID" "$UNPRIV_STATE"
-    if [ $? -eq 0 ]; then
-      echo "Successfully set protection to '${ACTION}' for container ID '${CURRENT_CT_ID}'."
-    else
-      echo "Failed to set protection for container ID '${CURRENT_CT_ID}'."
-    fi
-  else
-    echo "Container ID '${CURRENT_CT_ID}' does not exist. Skipping."
-  fi
-done
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against PVE Guide Section 22.11 and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed: Changed int to vmid type for ArgumentParser validation
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-echo "Bulk protection configuration completed, please restart LXC containers."

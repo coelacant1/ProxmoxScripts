@@ -2,55 +2,84 @@
 #
 # BulkChangeUserPass.sh
 #
-# This script updates the Cloud-Init username and password for a range of 
-# virtual machines (VMs) within a Proxmox VE environment. It allows you to
-# set a new username (optional) and password (required) for each VM, then 
-# regenerates the Cloud-Init image to apply the changes.
+# Updates Cloud-Init username and password for virtual machines within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-#   ./BulkChangeUserPass.sh <start_vm_id> <end_vm_id> <password> [username]
+#   BulkChangeUserPass.sh <start_vmid> <end_vmid> <password> [username]
+#
+# Arguments:
+#   start_vmid - Starting VM ID
+#   end_vmid   - Ending VM ID
+#   password   - Password to set
+#   username   - Optional username to set
 #
 # Examples:
-#   # Update VMs 400 through 430 with a new password and new username
-#   ./BulkChangeUserPass.sh 400 430 myNewPassword newuser
+#   BulkChangeUserPass.sh 400 430 myNewPassword
+#   BulkChangeUserPass.sh 400 430 myNewPassword newuser
 #
-#   # Update VMs 400 through 430 with a new password only, preserving the existing username
-#   ./BulkChangeUserPass.sh 400 430 myNewPassword
+# Function Index:
+#   - main
 #
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid password:string username:string:?" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    change_userpass_callback() {
+        local vmid="$1"
+
+        local args="--cipassword ${PASSWORD}"
+        [[ -n "${USERNAME:-}" ]] && args="${args} --ciuser ${USERNAME}"
+
+        __vm_set_config__ "$vmid" $args
+        __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
+    }
+
+    __bulk_vm_operation__ --report "$START_VMID" "$END_VMID" change_userpass_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "User/password updated successfully!"
+}
+
+main
 
 ###############################################################################
-# Validate environment
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# - 2025-11-24: Fixed incorrect command - changed 'qm cloudinit dump' to
+#   'qm cloudinit update' to properly regenerate Cloud-Init config per PVE Guide
+# - 2025-11-24: Fixed ArgumentParser optional syntax - changed 'username?:string'
+#   to correct format 'username:string:?'
+#
+# Known issues:
+# -
+#
 
-###############################################################################
-# Assigning input arguments
-###############################################################################
-if [ "$#" -lt 3 ]; then
-    echo "Error: Missing required parameters."
-    echo "Usage: $0 <start_vm_id> <end_vm_id> <password> [username]"
-    exit 1
-fi
-
-START_VMID="$1"
-END_VMID="$2"
-PASSWORD="$3"
-USERNAME="${4:-}"
-
-###############################################################################
-# Update Cloud-Init settings for each VM in the specified range
-###############################################################################
-for (( VMID=START_VMID; VMID<=END_VMID; VMID++ )); do
-    if qm status "$VMID" &>/dev/null; then
-        echo "Updating Cloud-Init settings for VM ID: $VMID"
-        qm set "$VMID" --ciuser "$USERNAME" --cipassword "$PASSWORD"
-        qm cloudinit dump "$VMID"
-        echo " - Cloud-Init username and password updated for VM ID: $VMID."
-    else
-        echo "VM ID: $VMID does not exist. Skipping..."
-    fi
-done
-
-echo "Cloud-Init user and password update process completed!"

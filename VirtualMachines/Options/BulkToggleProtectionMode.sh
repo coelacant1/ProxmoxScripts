@@ -1,54 +1,79 @@
 #!/bin/bash
 #
-# This script toggles the protection mode for a range of virtual machines (VMs) within a Proxmox VE environment.
+# BulkToggleProtectionMode.sh
+#
+# Toggles protection mode for virtual machines within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-# ./ToggleProtectionMode.sh <start_vm_id> <end_vm_id> <enable|disable>
+#   BulkToggleProtectionMode.sh <start_vmid> <end_vmid> <enable|disable>
 #
 # Arguments:
-#   start_vm_id - The ID of the first VM to update.
-#   end_vm_id - The ID of the last VM to update.
-#   enable|disable - Set to 'enable' to enable protection, or 'disable' to disable it.
+#   start_vmid     - Starting VM ID
+#   end_vmid       - Ending VM ID
+#   enable|disable - Action to perform
 #
-# Example:
-#   ./ToggleProtectionMode.sh 400 430 enable
-#   ./ToggleProtectionMode.sh 400 430 disable
+# Examples:
+#   BulkToggleProtectionMode.sh 400 430 enable
+#   BulkToggleProtectionMode.sh 400 430 disable
+#
+# Function Index:
+#   - main
 #
 
-# Check if the required parameters are provided
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <start_vm_id> <end_vm_id> <enable|disable>"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-START_VM_ID=$1
-END_VM_ID=$2
-ACTION=$3
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Determine the appropriate setting based on the action
-if [ "$ACTION" == "enable" ]; then
-    PROTECTION_SETTING="1"
-elif [ "$ACTION" == "disable" ]; then
-    PROTECTION_SETTING="0"
-else
-    echo "Invalid action: $ACTION. Use 'enable' or 'disable'."
-    exit 1
-fi
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Loop to update protection mode for VMs in the specified range
-for (( VMID=START_VM_ID; VMID<=END_VM_ID; VMID++ )); do
-    # Check if the VM exists
-    if qm status $VMID &>/dev/null; then
-        echo "Updating protection mode for VM ID: $VMID"
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid action:choice(enable,disable)" "$@"
 
-        # Set the protection mode
-        qm set $VMID --protection $PROTECTION_SETTING
-        echo " - Protection mode set to '$ACTION' for VM ID: $VMID."
-    else
-        echo "VM ID: $VMID does not exist. Skipping..."
-    fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-done
+    local protection_value
+    [[ "$ACTION" == "enable" ]] && protection_value="1" || protection_value="0"
 
-echo "Protection mode toggle process completed!"
+    toggle_protection_callback() {
+        local vmid="$1"
+        __vm_set_config__ "$vmid" --protection "$protection_value"
+    }
+
+    __bulk_vm_operation__ --name "Toggle Protection (${ACTION})" --report "$START_VMID" "$END_VMID" toggle_protection_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Protection ${ACTION}d successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

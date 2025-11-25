@@ -1,45 +1,84 @@
 #!/bin/bash
 #
-# FindMacAddress.sh
+# FindVMFromMacAddress.sh
 #
-# This script retrieves the network configuration details for all virtual machines (VMs) across
-# all nodes in a Proxmox cluster. It outputs the MAC addresses associated with each VM, helping
-# in network configuration audits or inventory management.
+# Retrieves network configuration and MAC addresses for all VMs across cluster.
 #
 # Usage:
-#   ./FindMacAddress.sh
+#   FindVMFromMacAddress.sh
 #
-# Example:
-#   # Simply run this script on a Proxmox host within a cluster
-#   ./FindMacAddress.sh
+# Examples:
+#   FindVMFromMacAddress.sh
 #
-# The script uses 'pvesh' to fetch JSON data and parses it with 'jq'.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __install_or_prompt__ "jq"
+    __check_cluster_membership__
+
+    __info__ "Scanning VMs for MAC addresses (cluster-wide)"
+
+    local nodes
+    nodes=$(pvesh get /nodes --output-format=json | jq -r '.[] | .node')
+
+    local total_vms=0
+
+    for node in $nodes; do
+        __info__ "Checking node: $node"
+
+        local vm_ids
+        vm_ids=$(pvesh get /nodes/"$node"/qemu --output-format=json 2>/dev/null | jq -r '.[] | .vmid' || true)
+
+        for vm_id in $vm_ids; do
+            echo "  VMID $vm_id:"
+            pvesh get /nodes/"$node"/qemu/"$vm_id"/config 2>/dev/null \
+                | grep -i 'net' \
+                | grep -i 'macaddr' \
+                | sed 's/^/    /' || echo "    No MAC addresses found"
+            total_vms=$((total_vms + 1))
+        done
+    done
+
+    echo
+    __ok__ "MAC address scan completed"
+    __info__ "Total VMs scanned: $total_vms"
+    __prompt_keep_installed_packages__
+}
+
+main
 
 ###############################################################################
-# Pre-flight checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
-__install_or_prompt__ "jq"
-__check_cluster_membership__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+# - Added missing main() call
+#
+# Fixes:
+# - Fixed arithmetic increment syntax (line 54)
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Main Logic
-###############################################################################
-nodes="$(pvesh get /nodes --output-format=json | jq -r '.[] | .node')"
-
-for node in $nodes; do
-  echo "Checking node: \"$node\""
-  vmIds="$(pvesh get /nodes/"$node"/qemu --output-format=json | jq -r '.[] | .vmid')"
-  
-  for vmId in $vmIds; do
-    echo "VMID: \"$vmId\" on Node: \"$node\""
-    pvesh get /nodes/"$node"/qemu/"$vmId"/config \
-      | grep -i 'net' \
-      | grep -i 'macaddr'
-  done
-done

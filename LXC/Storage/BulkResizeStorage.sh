@@ -2,73 +2,81 @@
 #
 # BulkResizeStorage.sh
 #
-# This script resizes a specified disk (typically rootfs) of each LXC container
-# in a specified range to a new size (e.g., 20G or +5G).
+# Resizes a specified disk (e.g., rootfs) for a range of LXC containers.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkResizeStorage.sh <start_id> <end_id> <disk_id> <new_size>
+#   BulkResizeStorage.sh <start_ct_id> <end_ct_id> <disk_id> <new_size>
 #
 # Arguments:
-#   start_id   - The starting LXC ID
-#   end_id     - The ending LXC ID
-#   disk_id    - The disk identifier (e.g., 'rootfs' or 'mp0')
-#   new_size   - The new size or size increment (e.g., '20G' or '+5G')
+#   start_ct_id - Starting container ID
+#   end_ct_id   - Ending container ID
+#   disk_id     - Disk identifier (e.g., 'rootfs', 'mp0')
+#   new_size    - New size or increment (e.g., '20G', '+5G')
 #
-# Example:
-#   # Resizes the rootfs of LXCs 100..105 to 20G each
-#   ./BulkResizeStorage.sh 100 105 rootfs 20G
+# Examples:
+#   BulkResizeStorage.sh 100 105 rootfs 20G
+#   BulkResizeStorage.sh 100 105 rootfs +5G
 #
-#   # Increases the rootfs size of LXCs 100..105 by 5G
-#   ./BulkResizeStorage.sh 100 105 rootfs +5G
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid disk_id:string new_size:disk" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Bulk resize storage: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Disk: ${DISK_ID}, New size: ${NEW_SIZE}"
+
+    resize_storage_callback() {
+        local vmid="$1"
+        __ct_resize_disk__ "$vmid" "$DISK_ID" "$NEW_SIZE"
+    }
+
+    __bulk_ct_operation__ --name "Resize Storage" --report "$START_VMID" "$END_VMID" resize_storage_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Storage resized successfully!"
+}
+
+main
 
 ###############################################################################
-# Environment Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide v9.1-1 (Section 22.11 line 456-467) and CONTRIBUTING.md
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid, disk)
+#
+# Known issues:
+# - Pending validation
+#
 
-###############################################################################
-# Usage Check
-###############################################################################
-if [ $# -lt 4 ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <start_id> <end_id> <disk_id> <new_size>"
-  exit 1
-fi
-
-###############################################################################
-# Variable Initialization
-###############################################################################
-START_ID="$1"
-END_ID="$2"
-DISK_ID="$3"
-NEW_SIZE="$4"
-
-echo "=== Bulk Resize for LXC Containers ==="
-echo "Range: \"$START_ID\" to \"$END_ID\""
-echo "Disk: \"$DISK_ID\""
-echo "New size: \"$NEW_SIZE\""
-echo
-
-###############################################################################
-# Main Logic
-###############################################################################
-for ctId in $(seq "$START_ID" "$END_ID"); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Resizing \"$DISK_ID\" of LXC \"$ctId\" to \"$NEW_SIZE\"..."
-    pct resize "$ctId" "$DISK_ID" "$NEW_SIZE"
-    if [ $? -eq 0 ]; then
-      echo " - Successfully resized \"$DISK_ID\" of CT \"$ctId\"."
-    else
-      echo " - Failed to resize disk for CT \"$ctId\"."
-    fi
-    echo
-  else
-    echo "LXC \"$ctId\" does not exist. Skipping."
-  fi
-done
-
-echo "=== Bulk resize complete! ==="

@@ -1,52 +1,78 @@
 #!/bin/bash
 #
-# This script facilitates the migration of virtual machine (VM) disks across different storage backends on a Proxmox VE environment.
-# It iterates over a specified range of VM IDs and moves their primary disks (assumed to be 'sata0') to a designated target storage.
-# This is useful for managing storage utilization, upgrading to new storage hardware, or balancing loads across different storage systems.
+# BulkMoveDisk.sh
+#
+# Moves VM disks to different storage within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-# ./VMMoveDisk.sh start_vmid stop_vmid target_storage
-#   start_vmid - The starting VM ID from which disk migration begins.
-#   stop_vmid - The ending VM ID up to which disk migration is performed.
-#   target_storage - The identifier of the target storage where disks will be moved.
+#   BulkMoveDisk.sh <start_vmid> <end_vmid> <disk> <target_storage>
 #
-# Example:
-#   ./VMMoveDisk.sh 101 105 local-lvm
+# Arguments:
+#   start_vmid      - Starting VM ID
+#   end_vmid        - Ending VM ID
+#   disk            - Disk identifier (e.g., scsi0, virtio0, sata0)
+#   target_storage  - Target storage identifier
+#
+# Examples:
+#   BulkMoveDisk.sh 100 110 scsi0 local-lvm
 #
 # Function Index:
-#   - move_disk
+#   - main
 #
 
-# Usage Information
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 start_vmid stop_vmid target_storage"
-    echo "Example: $0 101 105 local-lvm"
-    exit 1
-fi
+set -euo pipefail
 
-START_VMID=$1
-STOP_VMID=$2
-TARGET_STORAGE=$3
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Function to move a disk
-move_disk() {
-    local vmid=$1
-    local storage=$2
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-    echo "Moving disk of VM $vmid to storage $storage..."
-    qm move-disk $vmid sata0 $storage
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid disk:string target_storage:string" "$@"
 
-    if [ $? -eq 0 ]; then
-        echo "Disk move successful for VMID $vmid"
-    else
-        echo "Failed to move disk for VMID $vmid"
-    fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Moving ${DISK} to storage: ${TARGET_STORAGE}"
+
+    move_disk_callback() {
+        local vmid="$1"
+        __vm_node_exec__ "$vmid" "qm move-disk {vmid} ${DISK} ${TARGET_STORAGE} --delete 1"
+    }
+
+    __bulk_vm_operation__ --name "Move Disk" --report "$START_VMID" "$END_VMID" move_disk_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Disk move completed successfully!"
 }
 
-# Main loop through the specified range of VMIDs
-for (( vmid=$START_VMID; vmid<=$STOP_VMID; vmid++ ))
-do
-    move_disk $vmid $TARGET_STORAGE
-done
+main
 
-echo "Disk move process completed for all specified VMs."
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

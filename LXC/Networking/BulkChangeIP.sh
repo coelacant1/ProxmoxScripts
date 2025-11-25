@@ -2,93 +2,101 @@
 #
 # BulkChangeIP.sh
 #
-# This script automates changing the IP addresses of a range of existing LXC containers on Proxmox VE.
-# Instead of specifying how many containers to update, you provide a start and end container ID.
-# It then assigns sequential IP addresses based on a starting IP/CIDR. An optional gateway can also be set.
+# Updates IP addresses for LXC containers within a Proxmox VE cluster.
+# Assigns incrementing IPs starting from a base IP address.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkChangeIP.sh <start_ct_id> <end_ct_id> <start_ip/cidr> <bridge> [gateway]
+#   BulkChangeIP.sh <start_ct_id> <end_ct_id> <start_ip/cidr> <bridge> [gateway]
 #
-# Example:
-#   # Updates containers 400..404 with IPs 192.168.1.50..54/24 on vmbr0, gateway 192.168.1.1
-#   ./BulkChangeIP.sh 400 404 192.168.1.50/24 vmbr0 192.168.1.1
+# Arguments:
+#   start_ct_id   - Starting container ID
+#   end_ct_id     - Ending container ID
+#   start_ip/cidr - Starting IP with CIDR (e.g., 192.168.1.50/24)
+#   bridge        - Network bridge (e.g., vmbr0)
+#   gateway       - Optional gateway IP address
 #
-#   # Same as above, but does not set a gateway.
-#   ./BulkChangeIP.sh 400 404 192.168.1.50/24 vmbr0
+# Examples:
+#   BulkChangeIP.sh 400 404 192.168.1.50/24 vmbr0
+#   BulkChangeIP.sh 400 404 192.168.1.50/24 vmbr0 192.168.1.1
 #
-# Notes:
-#   - Must be run as root on a Proxmox node.
-#   - 'pct' is part of the standard Proxmox LXC utilities.
-#   - IP increment logic uses the __ip_to_int__ and __int_to_ip__ functions from the sourced Utilities.
+# Function Index:
+#   - main
 #
 
-source "${UTILITYPATH}/Conversion.sh"
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid start_ip_cidr:cidr bridge:bridge gateway:gateway:?" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    # Parse IP and CIDR
+    IFS='/' read -r START_IP SUBNET_MASK <<<"$START_IP_CIDR"
+
+    __info__ "Bulk change IP: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Starting IP: ${START_IP}/${SUBNET_MASK}, Bridge: ${BRIDGE}"
+    [[ -n "${GATEWAY:-}" ]] && __info__ "Gateway: ${GATEWAY}"
+
+    local start_ip_int
+    start_ip_int=$(__ip_to_int__ "$START_IP")
+
+    change_ip_callback() {
+        local vmid="$1"
+
+        local current_ip_int=$((start_ip_int + vmid - START_VMID))
+        local new_ip
+        new_ip=$(__int_to_ip__ "$current_ip_int")
+
+        local net_config="name=eth0,bridge=${BRIDGE},ip=${new_ip}/${SUBNET_MASK}"
+        [[ -n "${GATEWAY:-}" ]] && net_config="${net_config},gw=${GATEWAY}"
+
+        __ct_set_network__ "$vmid" "$net_config"
+    }
+
+    __bulk_ct_operation__ --name "Change IP" --report "$START_VMID" "$END_VMID" change_ip_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "IP addresses updated successfully!"
+}
+
+main
 
 ###############################################################################
-# MAIN
+# Script notes:
 ###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against PVE Guide v9.1-1 (Chapter 11) and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed: Changed ArgumentParser types (vmid, cidr, bridge, gateway) for proper validation
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-# Parse and validate arguments
-if [[ $# -lt 4 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id> <start_ip/cidr> <bridge> [gateway]"
-  echo "Example:"
-  echo "  $0 400 404 192.168.1.50/24 vmbr0 192.168.1.1"
-  exit 1
-fi
-
-START_CT_ID="$1"
-END_CT_ID="$2"
-START_IP_CIDR="$3"
-BRIDGE="$4"
-GATEWAY="${5:-}"
-
-# Ensure we are root and on a Proxmox node
-__check_root__
-__check_proxmox__
-
-# Split IP and subnet
-IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
-if [[ -z "$START_IP" || -z "$SUBNET_MASK" ]]; then
-  echo "Error: Unable to parse start_ip/cidr: \"$START_IP_CIDR\". Format must be X.X.X.X/XX."
-  exit 1
-fi
-
-# Convert start IP to integer
-START_IP_INT="$(__ip_to_int__ "$START_IP")"
-
-# Summary
-echo "=== Starting IP update for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
-echo " - Starting IP: \"$START_IP/$SUBNET_MASK\""
-if [[ -n "$GATEWAY" ]]; then
-  echo " - Gateway: \"$GATEWAY\""
-else
-  echo " - No gateway specified"
-fi
-
-# Update IPs for each container in the specified range
-for (( ctId=START_CT_ID; ctId<=END_CT_ID; ctId++ )); do
-  offset=$(( ctId - START_CT_ID ))
-  currentIpInt=$(( START_IP_INT + offset ))
-  newIp="$(__int_to_ip__ "$currentIpInt")"
-
-  if pct config "$ctId" &>/dev/null; then
-    echo "Updating IP for container \"$ctId\" to \"$newIp/$SUBNET_MASK\" on \"$BRIDGE\"..."
-    if [[ -z "$GATEWAY" ]]; then
-      pct set "$ctId" -net0 name=eth0,bridge="$BRIDGE",ip="$newIp/$SUBNET_MASK"
-    else
-      pct set "$ctId" -net0 name=eth0,bridge="$BRIDGE",ip="$newIp/$SUBNET_MASK",gw="$GATEWAY"
-    fi
-
-    if [[ $? -eq 0 ]]; then
-      echo " - Successfully updated container \"$ctId\"."
-    else
-      echo " - Failed to update container \"$ctId\"."
-    fi
-  else
-    echo " - Container \"$ctId\" does not exist. Skipping."
-  fi
-done
-
-echo "=== Bulk IP change process complete! ==="
-echo "If containers are running, consider restarting them or reapplying networking."

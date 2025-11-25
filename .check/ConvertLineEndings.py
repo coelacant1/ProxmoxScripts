@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+"""
+ConvertLineEndings.py
+
+Recursively converts CRLF (Windows) line endings to LF (Unix) line endings.
+Automatically skips directories and files that should not be modified.
+
+Usage:
+    python3 ConvertLineEndings.py <directory>
+
+Skips:
+    - Directories: .git, .github, .site, .check
+    - Files: .gitattributes, .gitignore, ConvertLineEndings.py
+    - Binary files: images, archives, executables, compiled files
+
+Author: Coela
+"""
 
 import os
 import sys
@@ -7,20 +23,30 @@ def convert_line_endings_to_unix(directory):
     """
     Recursively walk `directory`, converting Windows-style line endings (\r\n)
     to Unix-style (\n) in all files EXCEPT:
-      - any folders named '.github'
-      - any files named '.gitattributes'
+      - Git folders: .git, .github
+      - Build/site folders: .site, .check, .docs
+      - Special files: .gitattributes, .gitignore
+      - This script itself
     """
+    # Directories to skip
+    skip_dirs = {".git", ".github", ".site", ".check"}
+    
+    # Files to skip
+    skip_files = {".gitattributes", ".gitignore", "ConvertLineEndings.py"}
+    
     for root, dirs, files in os.walk(directory):
-        # Skip the .github directory
-        if ".github" in dirs:
-            dirs.remove(".git")
-            dirs.remove(".github")
-            dirs.remove(".site")
-            dirs.remove(".check")
+        # Remove skip directories from dirs list (modifies in-place for os.walk)
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
 
         for filename in files:
-            # Skip .gitattributes files
-            if filename == ".gitattributes":
+            # Skip specific files
+            if filename in skip_files:
+                continue
+            
+            # Skip binary file types that should never be converted
+            if filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico', 
+                                  '.zip', '.tar', '.gz', '.bz2','.pyc', 
+                                  '.pyo', '.so', '.dylib')):
                 continue
 
             file_path = os.path.join(root, filename)

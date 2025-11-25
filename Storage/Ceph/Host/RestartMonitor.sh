@@ -7,8 +7,8 @@
 # `ceph-mon@<id>.service` units and restarts them safely with systemd.
 #
 # Usage:
-#   ./RestartMonitor.sh restart     # (default) Restart MON daemons
-#   ./RestartMonitor.sh status      # Show MON daemon status only
+#   RestartMonitor.sh restart     # (default) Restart MON daemons
+#   RestartMonitor.sh status      # Show MON daemon status only
 #
 # Function Index:
 #   - _find_mon_units
@@ -16,10 +16,17 @@
 #   - statusMon
 #
 
+set -euo pipefail
+
 ###############################################################################
 # Prerequisites
 ###############################################################################
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
 __check_root__
 __check_proxmox__
@@ -36,7 +43,8 @@ function _find_mon_units() {
 # Restart every ceph-mon unit found
 ###############################################################################
 function restartMon() {
-    local units=($(_find_mon_units))
+    local units
+    mapfile -t units < <(_find_mon_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mon units found on this host."
         exit 0
@@ -44,7 +52,7 @@ function restartMon() {
 
     echo "Restarting Ceph Monitor daemons..."
     for unit in "${units[@]}"; do
-        echo "  → Restarting $unit"
+        echo "  -> Restarting $unit"
         systemctl restart "$unit"
     done
     echo "All ceph-mon daemons have been restarted."
@@ -54,7 +62,8 @@ function restartMon() {
 # Display status for every ceph-mon unit
 ###############################################################################
 function statusMon() {
-    local units=($(_find_mon_units))
+    local units
+    mapfile -t units < <(_find_mon_units)
     if [[ ${#units[@]} -eq 0 ]]; then
         echo "No active ceph-mon units found on this host."
         exit 0
@@ -78,3 +87,20 @@ case "${1:-restart}" in
         exit 2
         ;;
 esac
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-21: Fixed array assignment to use mapfile (SC2207)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - 2025-11-21: Changed array assignment from `units=($(...))` to `mapfile -t units < <(...)`
+#
+# Known issues:
+# -
+#
+

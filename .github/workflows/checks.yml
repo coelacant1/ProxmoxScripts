@@ -1,0 +1,65 @@
+name: Repository Checks
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      
+      - name: Install shfmt
+        run: |
+          wget -qO /tmp/shfmt https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_amd64
+          chmod +x /tmp/shfmt
+          sudo mv /tmp/shfmt /usr/local/bin/shfmt
+      
+      - name: Install shellharden (optional)
+        continue-on-error: true
+        run: |
+          wget -qO /tmp/shellharden.tar.gz https://github.com/anordal/shellharden/releases/latest/download/shellharden-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf /tmp/shellharden.tar.gz -C /tmp
+          chmod +x /tmp/shellharden
+          sudo mv /tmp/shellharden /usr/local/bin/shellharden
+      
+      - name: Verify installations
+        run: |
+          echo "Python: $(python3 --version)"
+          echo "ShellCheck: $(shellcheck --version | head -2)"
+          echo "shfmt: $(shfmt --version)"
+          if command -v shellharden &> /dev/null; then
+            echo "shellharden: $(shellharden --version)"
+          else
+            echo "shellharden: not installed (optional)"
+          fi
+      
+      - name: Make scripts executable
+        run: chmod +x .check/_RunChecks.sh
+      
+      - name: Run repository checks
+        run: |
+          echo "Running repository checks..."
+          ./.check/_RunChecks.sh
+          
+      - name: Check results
+        run: |
+          # The script exits with 0 if all checks pass, 1 if any fail
+          # This step will fail if the previous step failed
+          echo "✓ All checks completed successfully"

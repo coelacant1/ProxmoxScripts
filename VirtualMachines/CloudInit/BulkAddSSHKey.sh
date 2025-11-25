@@ -2,55 +2,87 @@
 #
 # BulkAddSSHKey.sh
 #
-# This script adds an SSH public key to a range of virtual machines (VMs) 
-# within a Proxmox VE environment. It appends a new SSH public key for each VM 
-# and regenerates the Cloud-Init image to apply the changes.
+# Adds an SSH public key to virtual machines within a Proxmox VE cluster.
+# Appends key and regenerates Cloud-Init image to apply changes.
 #
 # Usage:
-#   ./BulkAddSSHKey.sh <start_vm_id> <end_vm_id> <ssh_public_key>
+#   BulkAddSSHKey.sh <start_vmid> <end_vmid> <ssh_public_key>
 #
-# Example:
-#   # Adds the specified SSH key to all VMs with IDs between 400 and 430
-#   ./BulkAddSSHKey.sh 400 430 "ssh-rsa AAAAB3Nza... user@host"
+# Arguments:
+#   start_vmid     - Starting VM ID
+#   end_vmid       - Ending VM ID
+#   ssh_public_key - SSH public key to add
+#
+# Examples:
+#   BulkAddSSHKey.sh 400 430 "ssh-rsa AAAAB3Nza... user@host"
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid ssh_public_key:string" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    local temp_file
+    temp_file="$(mktemp)"
+    trap 'rm -f "$temp_file"' EXIT
+
+    add_ssh_key_callback() {
+        local vmid="$1"
+
+        if __vm_node_exec__ "$vmid" "qm cloudinit dump {vmid} user" >"$temp_file" 2>/dev/null; then
+            echo "$SSH_PUBLIC_KEY" >>"$temp_file"
+            __vm_set_config__ "$vmid" --sshkeys "$temp_file"
+            __vm_node_exec__ "$vmid" "qm cloudinit update {vmid}" >/dev/null 2>&1 || true
+        else
+            return 1
+        fi
+    }
+
+    __bulk_vm_operation__ --name "Add SSH Key" --report "$START_VMID" "$END_VMID" add_ssh_key_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "SSH key added successfully!"
+}
+
+main
 
 ###############################################################################
-# Validate environment and arguments
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# - 2025-11-24: Fixed incorrect qm cloudinit command - changed 'qm cloudinit get'
+#   to 'qm cloudinit dump user' and 'qm cloudinit dump' to 'qm cloudinit update'
+#   per PVE Guide documentation
+#
+# Known issues:
+# -
+#
 
-if [ "$#" -ne 3 ]; then
-  echo "Error: Wrong number of arguments." >&2
-  echo "Usage: $0 <start_vm_id> <end_vm_id> <ssh_public_key>" >&2
-  exit 1
-fi
-
-START_VM_ID="$1"
-END_VM_ID="$2"
-SSH_PUBLIC_KEY="$3"
-
-###############################################################################
-# Main logic
-###############################################################################
-for (( vmId=START_VM_ID; vmId<=END_VM_ID; vmId++ )); do
-  if qm status "$vmId" &>/dev/null; then
-    echo "Adding SSH public key to VM ID: $vmId"
-    tempFile="$(mktemp)"
-    qm cloudinit get "$vmId" ssh-authorized-keys > "$tempFile"
-    echo "$SSH_PUBLIC_KEY" >> "$tempFile"
-    qm set "$vmId" --sshkeys "$tempFile"
-    rm "$tempFile"
-    qm cloudinit dump "$vmId"
-    echo " - SSH public key appended for VM ID: $vmId."
-  else
-    echo "VM ID: $vmId does not exist. Skipping..."
-  fi
-done
-
-###############################################################################
-# Wrap-up
-###############################################################################
-echo "SSH public key addition process completed!"

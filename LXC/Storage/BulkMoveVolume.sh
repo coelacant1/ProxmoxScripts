@@ -2,73 +2,81 @@
 #
 # BulkMoveVolume.sh
 #
-# This script moves the specified volume (e.g., 'rootfs', 'mp0') for each LXC
-# container in a given range to a new storage location using 'pct move-volume'.
+# Moves a specified volume (e.g., rootfs, mp0) for a range of LXC containers to new storage.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkMoveVolume.sh <start_id> <end_id> <source_volume> <target_storage>
+#   BulkMoveVolume.sh <start_ct_id> <end_ct_id> <volume> <target_storage>
 #
 # Arguments:
-#   start_id       - The starting LXC ID.
-#   end_id         - The ending LXC ID.
-#   source_volume    - The volume identifier to move (e.g. 'rootfs', 'mp0').
-#   target_storage - The storage name to move the volume onto (e.g. 'local-zfs').
+#   start_ct_id     - Starting container ID
+#   end_ct_id       - Ending container ID
+#   volume          - Volume identifier (e.g., 'rootfs', 'mp0')
+#   target_storage  - Target storage name (e.g., 'local-zfs')
 #
-# Example:
-#   ./BulkMoveVolume.sh 100 105 rootfs local-zfs
-#   This will move the 'rootfs' volume of LXCs 100..105 to 'local-zfs'.
+# Examples:
+#   BulkMoveVolume.sh 100 105 rootfs local-zfs
 #
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid volume:string target_storage:storage" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Bulk move volume: Containers ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Volume: ${VOLUME} -> Storage: ${TARGET_STORAGE}"
+
+    move_volume_callback() {
+        local vmid="$1"
+        __ct_move_volume__ "$vmid" "$VOLUME" "$TARGET_STORAGE"
+    }
+
+    __bulk_ct_operation__ --name "Move Volume" --report "$START_VMID" "$END_VMID" move_volume_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Volumes moved successfully!"
+}
+
+main
 
 ###############################################################################
-# Initial Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against PVE Guide v9.1-1 (Section 22.11) and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid, storage)
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Parse Arguments
-###############################################################################
-if [ $# -lt 4 ]; then
-  echo "Error: Insufficient arguments."
-  echo "Usage: $0 <start_id> <end_id> <source_volume> <target_storage>"
-  exit 1
-fi
-
-START_ID="$1"
-END_ID="$2"
-DISK_ID="$3"
-TARGET_STORAGE="$4"
-
-echo "=== Bulk Move Volume for LXC Containers ==="
-echo "Range: \"$START_ID\" to \"$END_ID\""
-echo "Volume to move: \"$DISK_ID\""
-echo "Target storage: \"$TARGET_STORAGE\""
-echo
-
-###############################################################################
-# Main Logic
-###############################################################################
-for ctId in $(seq "$START_ID" "$END_ID"); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Processing LXC \"$ctId\"..."
-    runningState=$(pct status "$ctId" | awk '{print $2}')
-    
-    if [ "$runningState" == "running" ]; then
-      echo " - Container \"$ctId\" is running. Stopping container..."
-      pct stop "$ctId"
-    fi
-
-    echo " - Moving \"$DISK_ID\" of CT \"$ctId\" to \"$TARGET_STORAGE\"..."
-    if pct move-volume "$ctId" "$DISK_ID" "$TARGET_STORAGE"; then
-      echo " - Successfully moved \"$DISK_ID\" of CT \"$ctId\" to \"$TARGET_STORAGE\"."
-    else
-      echo "Error: Failed to move volume for CT \"$ctId\"."
-    fi
-    echo
-  else
-    echo "LXC \"$ctId\" does not exist. Skipping."
-  fi
-done
-
-echo "=== Bulk volume move complete! ==="

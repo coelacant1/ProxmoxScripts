@@ -1,121 +1,162 @@
 #!/bin/bash
 #
-# InsertFirewallSecurityGroup.sh
+# BulkAddFirewallLXCVM.sh
 #
-# Inserts a specified datacenter firewall security group into a range of Proxmox
-# VMs/LXC containers. It also enables the firewall on each VM/Container and on
-# the correct network interface (the one with a gateway for LXC, net0 for VMs).
+# Adds a datacenter firewall security group to VMs/containers and enables firewall.
+# Automatically detects resource type and configures appropriate interfaces.
 #
 # Usage:
-#   ./InsertFirewallSecurityGroup.sh <startVmid> <endVmid> <datacenterGroupName>
+#   BulkAddFirewallLXCVM.sh <start_vmid> <end_vmid> <security_group>
 #
-# Example:
-#   # Insert 'MySecurityGroup' for IDs from 100 to 110
-#   ./InsertFirewallSecurityGroup.sh 100 110 MySecurityGroup
+# Arguments:
+#   start_vmid     - Starting VM/CT ID
+#   end_vmid       - Ending VM/CT ID
+#   security_group - Datacenter security group name
+#
+# Examples:
+#   BulkAddFirewallLXCVM.sh 100 110 MySecurityGroup
 #
 # Function Index:
-#   - enable_firewall_on_lxc_gw_iface
-#   - enable_firewall_on_vm_net0
-#   - enable_firewall_on_resource
+#   - enable_firewall_lxc
+#   - enable_firewall_vm
+#   - configure_resource_firewall
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
-###############################################################################
-# Checks
-###############################################################################
-__check_root__
-__check_proxmox__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Argument Parsing
-###############################################################################
-if [ $# -ne 3 ]; then
-  echo "Error: Invalid arguments."
-  echo "Usage: $0 <startVmid> <endVmid> <datacenterGroupName>"
-  exit 1
-fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid security_group:string" "$@"
 
-START_VMID="$1"
-END_VMID="$2"
-SECURITY_GROUP="$3"
+# --- enable_firewall_lxc -----------------------------------------------------
+enable_firewall_lxc() {
+    local vmid="$1"
+    local config_lines
+    config_lines=$(pct config "$vmid" 2>/dev/null)
 
-###############################################################################
-# Helper Functions
-###############################################################################
-enable_firewall_on_lxc_gw_iface() {
-  local vmid="$1"
-  local configLines
-  configLines="$(pct config "$vmid" 2>/dev/null)"
-  while read -r line; do
-    if [[ "$line" =~ ^net([0-9]+):.*gw= ]]; then
-      local nicIndex="${BASH_REMATCH[1]}"
-      local netLine
-      netLine="$(echo "$line" | sed -E 's/^net[0-9]+: //')"
-      if [[ "$netLine" =~ firewall= ]]; then
-        netLine="$(echo "$netLine" | sed -E 's/,?firewall=[^,]*/,firewall=1/g')"
-      else
-        netLine="${netLine},firewall=1"
-      fi
-      pct set "$vmid" -net"${nicIndex}" "$netLine" &>/dev/null
-    fi
-  done <<< "$configLines"
+    while read -r line; do
+        if [[ "$line" =~ ^net([0-9]+):.*gw= ]]; then
+            local nic_index="${BASH_REMATCH[1]}"
+            local net_line
+            net_line=$(echo "$line" | sed -E 's/^net[0-9]+: //')
 
-  # Ensure container-level firewall feature is on
-  pct set "$vmid" --features "firewall=1" &>/dev/null
+            if [[ "$net_line" =~ firewall= ]]; then
+                net_line=$(echo "$net_line" | sed -E 's/,?firewall=[^,]*/,firewall=1/g')
+            else
+                net_line="${net_line},firewall=1"
+            fi
+
+            pct set "$vmid" -net"${nic_index}" "$net_line" &>/dev/null
+        fi
+    done <<<"$config_lines"
 }
 
-enable_firewall_on_vm_net0() {
-  local vmid="$1"
-  local netLine
-  netLine="$(qm config "$vmid" 2>/dev/null | grep '^net0:' | sed -E 's/^net0: //')"
-  if [ -n "$netLine" ]; then
-    if [[ "$netLine" =~ firewall= ]]; then
-      netLine="$(echo "$netLine" | sed -E 's/,?firewall=[^,]*/,firewall=1/g')"
-    else
-      netLine="${netLine},firewall=1"
+# --- enable_firewall_vm ------------------------------------------------------
+enable_firewall_vm() {
+    local vmid="$1"
+    local net_line
+    net_line=$(qm config "$vmid" 2>/dev/null | grep '^net0:' | sed -E 's/^net0: //')
+
+    if [[ -n "$net_line" ]]; then
+        if [[ "$net_line" =~ firewall= ]]; then
+            net_line=$(echo "$net_line" | sed -E 's/,?firewall=[^,]*/,firewall=1/g')
+        else
+            net_line="${net_line},firewall=1"
+        fi
+        qm set "$vmid" --net0 "$net_line" &>/dev/null
     fi
-    qm set "$vmid" --net0 "$netLine" &>/dev/null
-  fi
 }
 
-enable_firewall_on_resource() {
-  local vmid="$1"
+# --- configure_resource_firewall ---------------------------------------------
+configure_resource_firewall() {
+    local vmid="$1"
 
-  if pct config "$vmid" &>/dev/null || qm config "$vmid" &>/dev/null; then
-    cat <<EOF >"/etc/pve/firewall/${vmid}.fw"
+    if pct config "$vmid" &>/dev/null || qm config "$vmid" &>/dev/null; then
+        cat <<EOF >"/etc/pve/firewall/${vmid}.fw"
 [OPTIONS]
 enable: 1
 
 [RULES]
 GROUP ${SECURITY_GROUP}
 EOF
-    echo "Set firewall configuration for ID '${vmid}' with security group '${SECURITY_GROUP}'."
-  else
-    echo "Skipping '${vmid}' - not a valid VM or LXC container."
-  fi
+        return 0
+    else
+        return 1
+    fi
 }
 
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Configuring firewall for VMs/CTs ${START_VMID} to ${END_VMID}"
+    __info__ "Security group: ${SECURITY_GROUP}"
+
+    local success=0
+    local failed=0
+
+    for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
+        __update__ "Processing ${vmid}"
+
+        if pct status "$vmid" &>/dev/null; then
+            # LXC container
+            if enable_firewall_lxc "$vmid" && configure_resource_firewall "$vmid"; then
+                __ok__ "CT ${vmid} configured"
+                ((success += 1))
+            else
+                __warn__ "Failed to configure CT ${vmid}"
+                ((failed += 1))
+            fi
+        elif qm config "$vmid" &>/dev/null; then
+            # VM
+            if enable_firewall_vm "$vmid" && configure_resource_firewall "$vmid"; then
+                __ok__ "VM ${vmid} configured"
+                ((success += 1))
+            else
+                __warn__ "Failed to configure VM ${vmid}"
+                ((failed += 1))
+            fi
+        else
+            __update__ "Skipped ${vmid} (not found)"
+        fi
+    done
+
+    echo
+    __info__ "Firewall Configuration Summary:"
+    __info__ "  Configured: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "Firewall configuration completed!"
+}
+
+main
+
 ###############################################################################
-# Main Logic
+# Script notes:
 ###############################################################################
-for (( vmid=START_VMID; vmid<=END_VMID; vmid++ )); do
-  # Check if this is a LXC container
-  if pct status "$vmid" &>/dev/null; then
-    enable_firewall_on_lxc_gw_iface "$vmid"
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - Firewall enabled via network interface settings only
+#
+# Fixes:
+# - 2025-11-20: Fixed invalid --features "firewall=1" usage per PVE Guide
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-    echo "Enabled firewall LXC net0 interface."
-
-    enable_firewall_on_resource "$vmid"
-  # Otherwise check if this is a QEMU VM
-  elif qm config "$vmid" &>/dev/null; then
-    enable_firewall_on_vm_net0 "$vmid"
-
-    echo "Enabled firewall VM net0 interface."
-
-    enable_firewall_on_resource "$vmid"
-  else
-    echo "Warning: '$vmid' is neither a valid container nor a VM. Skipping."
-  fi
-
-done

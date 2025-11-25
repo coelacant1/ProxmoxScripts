@@ -2,54 +2,75 @@
 #
 # BulkStart.sh
 #
-# This script starts multiple LXC containers in a range defined by a start ID and an end ID.
+# Starts LXC containers within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-#   ./BulkStart.sh <START_ID> <END_ID>
+#   BulkStart.sh <start_ctid> <end_ctid>
 #
-# Example:
-#   ./BulkStart.sh 200 202
-#   This will start containers 200, 201, and 202
+# Arguments:
+#   start_ctid - Starting container ID
+#   end_ctid   - Ending container ID
+#
+# Examples:
+#   BulkStart.sh 200 210
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_ctid:ctid end_ctid:ctid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    start_callback() {
+        local ctid="$1"
+        __ct_start__ "$ctid"
+    }
+
+    __bulk_ct_operation__ --name "Start Containers" --report "$START_CTID" "$END_CTID" start_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Start completed successfully!"
+}
+
+main
 
 ###############################################################################
-# Setup Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Compliant with BulkOperations framework and utility usage
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-###############################################################################
-# Main
-###############################################################################
-if [ "$#" -ne 2 ]; then
-  echo "Error: You must specify exactly two arguments: <START_ID> <END_ID>."
-  echo "Usage: $0 <START_ID> <END_ID>"
-  exit 1
-fi
-
-startId="$1"
-endId="$2"
-
-if [ "$startId" -gt "$endId" ]; then
-  echo "Error: START_ID cannot be greater than END_ID."
-  exit 1
-fi
-
-echo "=== Starting LXC containers from '${startId}' to '${endId}' ==="
-for (( ctId=startId; ctId<=endId; ctId++ )); do
-  if pct config "${ctId}" &>/dev/null; then
-    echo "Starting CT '${ctId}' ..."
-    pct start "${ctId}"
-    if [ "$?" -eq 0 ]; then
-      echo " - CT '${ctId}' started."
-    else
-      echo " - Failed to start CT '${ctId}'."
-    fi
-  else
-    echo " - CT '${ctId}' does not exist, skipping."
-  fi
-done
-
-echo "=== Bulk start process complete. ==="

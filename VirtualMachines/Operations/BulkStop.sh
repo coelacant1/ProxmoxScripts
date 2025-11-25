@@ -1,32 +1,74 @@
 #!/bin/bash
 #
-# This script stops a range of virtual machines (VMs) within a Proxmox VE environment.
+# BulkStop.sh
+#
+# Stops virtual machines within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-# ./BulkStop.sh <first_vm_id> <last_vm_id>
+#   BulkStop.sh <start_vmid> <end_vmid>
 #
 # Arguments:
-#   first_vm_id - The ID of the first VM to stop.
-#   last_vm_id - The ID of the last VM to stop.
+#   start_vmid - Starting VM ID
+#   end_vmid   - Ending VM ID
 #
-# Example:
-#   ./BulkStop.sh 400 430
+# Examples:
+#   BulkStop.sh 400 430
+#
+# Function Index:
+#   - main
 #
 
-# Check if the required parameters are provided
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <first_vm_id> <last_vm_id>"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-FIRST_VM_ID=$1
-LAST_VM_ID=$2
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Loop to stop VMs in the specified range
-for (( vm_id=FIRST_VM_ID; vm_id<=LAST_VM_ID; vm_id++ )); do
-    echo "Stopping VM ID: $vm_id"
-    qm stop $vm_id
-done
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-echo "Stopping completed!"
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    stop_callback() {
+        local vmid="$1"
+        __vm_stop__ "$vmid"
+    }
+
+    __bulk_vm_operation__ --name "Stop VMs" --report "$START_VMID" "$END_VMID" stop_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Stop completed successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

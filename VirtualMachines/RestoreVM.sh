@@ -2,98 +2,127 @@
 #
 # RestoreVM.sh
 #
-# Lists available backups for a given VMID on a *source* storage, then prompts
-# the user to select one for restore. If the backup is for a container
-# (PBS or local LXC-style backup), it prompts whether to restore it as
-# unprivileged and whether to ignore unpack errors. Finally, it restores
-# to a specified *target* storage.
+# Lists available backups for a VMID and restores to target storage.
+# Supports both VM and container backups with appropriate options.
 #
 # Usage:
-#   ./RestoreVM.sh <vmid> <source-storage> <target-storage>
+#   RestoreVM.sh <vmid> <source_storage> <target_storage>
+#
+# Arguments:
+#   vmid           - VM or container ID to restore
+#   source_storage - Storage containing backups
+#   target_storage - Storage for restored VM/CT
 #
 # Examples:
-#   # Restore backups for VMID 101 using 'IHKBackup' as source, restoring to 'local'
-#   ./RestoreVM.sh 101 IHKBackup local
+#   RestoreVM.sh 101 Storage local
+#   RestoreVM.sh 113 PBS-Backup local-lvm
 #
-#   # Restore backups for VMID 113 using 'IHKBackup' as source, restoring to 'local-lvm'
-#   ./RestoreVM.sh 113 IHKBackup local-lvm
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
 
-check_root
-check_proxmox
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-VMID="$1"
-SOURCE_STORAGE="$2"
-TARGET_STORAGE="$3"
+# Parse arguments
+__parse_args__ "vmid:vmid source_storage:string target_storage:string" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Searching for backups of VMID ${VMID} on storage ${SOURCE_STORAGE}"
+
+    # List matching backups
+    local -a backup_lines
+    mapfile -t backup_lines < <(pvesm list "$SOURCE_STORAGE" --content backup 2>/dev/null | awk -v vmid="$VMID" '$NF == vmid')
+
+    if [[ ${#backup_lines[@]} -eq 0 ]]; then
+        __err__ "No backups found for VMID ${VMID} on storage ${SOURCE_STORAGE}"
+        exit 1
+    fi
+
+    # Display backups
+    echo
+    echo "Available Backups:"
+    echo "=================="
+    local -a backups
+    local idx=0
+    for line in "${backup_lines[@]}"; do
+        local backup_path
+        backup_path=$(awk '{print $1}' <<<"$line")
+        backups+=("$backup_path")
+        echo "$idx) $backup_path"
+        ((idx += 1))
+    done
+    echo
+
+    # Select backup
+    local sel_index
+    while true; do
+        read -rp "Select backup index to restore (0-$((${#backups[@]} - 1))): " sel_index
+        if [[ "$sel_index" =~ ^[0-9]+$ ]] && [[ "$sel_index" -ge 0 ]] && [[ "$sel_index" -lt ${#backups[@]} ]]; then
+            break
+        fi
+        echo "Invalid selection"
+    done
+
+    local selected_backup="${backups[$sel_index]}"
+    local backup_type
+    backup_type=$(awk '{print $2}' <<<"${backup_lines[$sel_index]}")
+
+    __info__ "Selected: ${selected_backup}"
+
+    # Restore based on type
+    if [[ "$backup_type" == *"ct"* || "$selected_backup" == *"/ct/"* ]]; then
+        __info__ "Detected container backup"
+
+        local unprivileged=0
+        if __prompt_user_yn__ "Restore as unprivileged container?"; then
+            unprivileged=1
+        fi
+
+        local ignore_errors=""
+        if __prompt_user_yn__ "Ignore unpack errors?"; then
+            ignore_errors="--ignore-unpack-errors"
+        fi
+
+        __info__ "Restoring container ${VMID}"
+        pct restore "$VMID" "$selected_backup" --storage "$TARGET_STORAGE" --unprivileged "$unprivileged" $ignore_errors
+    else
+        __info__ "Detected VM backup"
+        __info__ "Restoring VM ${VMID}"
+        qmrestore "$selected_backup" "$VMID" --storage "$TARGET_STORAGE"
+    fi
+
+    __ok__ "Restore completed successfully!"
+}
+
+main
 
 ###############################################################################
-# Validate Input
+# Script notes:
 ###############################################################################
-if [[ -z "$VMID"  -z "$SOURCE_STORAGE"  -z "$TARGET_STORAGE" ]]; then
-  echo "Error: You must provide a VMID, a source storage, and a target storage."
-  echo "Usage: $0 <vmid> <source-storage> <target-storage>"
-  exit 1
-fi
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-24: Validated against PVE Guide Chapter 16 and qm/pct restore docs
+# - 2025-11-20: Updated to use ArgumentParser and utility functions
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-###############################################################################
-# List Matching Backups (parse by matching the last column to the VMID)
-###############################################################################
-# 'pvesm list <source-storage> --content backup' output fields typically:
-# 1) <STORAGE:backup/...>
-# 2) <type, e.g. pbs-ct, pbs-vm, vma, ...>
-# 3) <content, e.g. backup>
-# 4) <size in bytes>
-# 5) <VMID>
-###############################################################################
-mapfile -t backupLines < <(pvesm list "$SOURCE_STORAGE" --content backup | awk -v vmid="$VMID" '$NF == vmid')
-
-if [[ ${#backupLines[@]} -eq 0 ]]; then
-  echo "Error: No matching backups found for VMID \"$VMID\" on storage \"$SOURCE_STORAGE\"."
-  exit 1
-fi
-
-echo "Available Backups:"
-declare -a BACKUPS
-idx=0
-for line in "${backupLines[@]}"; do
-  backupPath="$(awk '{print $1}' <<< "$line")"
-  BACKUPS+=("$backupPath")
-  echo "$idx) $backupPath"
-  ((idx++))
-done
-
-read -rp "Select a backup index to restore: " selIndex
-if [[ -z "$selIndex"  "$selIndex" -lt 0  "$selIndex" -ge ${#BACKUPS[@]} ]]; then
-  echo "Invalid selection."
-  exit 1
-fi
-
-selectedBackup="${BACKUPS[$selIndex]}"
-
-###############################################################################
-# Determine if Backup is Container or VM and Perform Restore
-###############################################################################
-typeOfBackup="$(awk '{print $2}' <<< "${backupLines[$selIndex]}")"
-
-if [[ "$typeOfBackup" == *"ct"* || "$selectedBackup" == *"/ct/"* ]]; then
-  read -rp "Restore container as unprivileged? (y/n): " unprivChoice
-  read -rp "Ignore unpack errors? (y/n): " ignoreUnpackChoice
-
-  pctCmd=( pct restore "$VMID" "$selectedBackup" --storage "$TARGET_STORAGE" )
-  if [[ "$unprivChoice" == "y" ]]; then
-    pctCmd+=( --unprivileged 1 )
-  else
-    pctCmd+=( --unprivileged 0 )
-  fi
-  if [[ "$ignoreUnpackChoice" == "y" ]]; then
-    pctCmd+=( --ignore-unpack-errors )
-  fi
-
-  "${pctCmd[@]}"
-else
-  qmrestore "$selectedBackup" "$VMID" --storage "$TARGET_STORAGE"
-fi
-
-echo "Restore complete."

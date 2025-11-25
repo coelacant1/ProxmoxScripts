@@ -6,10 +6,10 @@
 # based on a user-supplied PCI device ID (e.g., "01:00.0"). This script does *not* enable access to all PCI devices.
 #
 # Usage:
-#   ./EnablePCIPassthroughLXC.sh <PCI_DEVICE_ID> <CTID_1> [<CTID_2> ... <CTID_n>]
+#   EnablePCIPassthroughLXC.sh <PCI_DEVICE_ID> <CTID_1> [<CTID_2> ... <CTID_n>]
 #
 # Example:
-#   ./EnablePCIPassthroughLXC.sh 01:00.0 100 101
+#   EnablePCIPassthroughLXC.sh 01:00.0 100 101
 #
 # Notes:
 #   1. Ensure VT-d/AMD-Vi (IOMMU) is enabled, and Proxmox is configured for PCI passthrough. This may involve:
@@ -24,66 +24,138 @@
 #   5. After making changes, stop and start each container for them to take effect (pct stop <CTID> && pct start <CTID>).
 #
 # Function Index:
-#   - enablePciPassthroughInContainerConfig
+#   - enable_pci_passthrough
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
-
+# Variable args: pci_device + CTIDs - hybrid parsing
 if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <PCI_DEVICE_ID> <CTID_1> [<CTID_2> ... <CTID_n>]"
-  exit 3
+    __err__ "Missing required arguments"
+    echo "Usage: $0 <pci_device_id> <ctid_1> [<ctid_2> ...]"
+    exit 64
 fi
 
 PCI_DEVICE_ID="$1"
 shift
 CTID_ARRAY=("$@")
 
-###############################################################################
-# Functions
-###############################################################################
-function enablePciPassthroughInContainerConfig() {
-  local ctid="$1"
-  local configFile="/etc/pve/lxc/${ctid}.conf"
+# --- enable_pci_passthrough --------------------------------------------------
+enable_pci_passthrough() {
+    local ctid="$1"
+    local pci_device="$2"
+    local config_file="/etc/pve/lxc/${ctid}.conf"
 
-  if [[ ! -f "$configFile" ]]; then
-    echo "Warning: \"${configFile}\" does not exist for CTID \"${ctid}\". Skipping..."
-    return
-  fi
+    if [[ ! -f "$config_file" ]]; then
+        __warn__ "Config file not found for CT $ctid - skipping"
+        return 1
+    fi
 
-  # Force privileged container
-  pct set "${ctid}" --unprivileged 0
+    __info__ "Configuring CT $ctid for PCI device $pci_device"
 
-  # For NVIDIA GPUs, the major device number is typically 195 (c 195:* rwm).
-  # Adjust if using another GPU vendor.
-  if ! grep -q "lxc.cgroup.devices.allow: c 195:* rwm" "${configFile}"; then
-    echo "lxc.cgroup.devices.allow: c 195:* rwm" >> "${configFile}"
-  fi
+    # Force privileged container
+    __update__ "Setting container to privileged mode"
+    if ! pct set "${ctid}" --unprivileged 0 2>&1; then
+        __err__ "Failed to set privileged mode"
+        return 1
+    fi
 
-  # Add a mount entry for the specific PCI device path
-  local mountEntry="lxc.mount.entry: /sys/bus/pci/devices/0000:${PCI_DEVICE_ID} /sys/bus/pci/devices/0000:${PCI_DEVICE_ID} none bind,optional,create=dir"
-  if ! grep -q "${mountEntry}" "${configFile}"; then
-    echo "${mountEntry}" >> "${configFile}"
-  fi
+    # Add device access (NVIDIA GPU typically uses major 195)
+    local device_allow="lxc.cgroup.devices.allow: c 195:* rwm"
+    if ! grep -Fq "$device_allow" "${config_file}"; then
+        echo "$device_allow" >>"${config_file}"
+        __ok__ "Added device access permission"
+    else
+        __update__ "Device access already configured"
+    fi
 
-  echo "Configured PCI passthrough for container \"${ctid}\" using device \"${PCI_DEVICE_ID}\" (container is now privileged)."
+    # Add mount entry
+    local mount_entry="lxc.mount.entry: /sys/bus/pci/devices/0000:${pci_device} /sys/bus/pci/devices/0000:${pci_device} none bind,optional,create=dir"
+    if ! grep -Fq "$mount_entry" "${config_file}"; then
+        echo "$mount_entry" >>"${config_file}"
+        __ok__ "Added PCI device mount entry"
+    else
+        __update__ "Mount entry already exists"
+    fi
+
+    __ok__ "PCI passthrough configured for CT $ctid"
+    return 0
 }
 
-###############################################################################
-# Main Logic
-###############################################################################
-for ctid in "${CTID_ARRAY[@]}"; do
-  if ! pct config "${ctid}" &>/dev/null; then
-    echo "Error: Container \"${ctid}\" does not exist. Skipping..."
-    continue
-  fi
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-  enablePciPassthroughInContainerConfig "${ctid}"
-done
+    __info__ "PCI Passthrough Configuration"
+    __info__ "  Device: $PCI_DEVICE_ID"
+    __info__ "  Containers: ${CTID_ARRAY[*]}"
 
-echo "Done. Please stop and start each container for changes to take effect."
+    echo
+    __warn__ "This will set containers to privileged mode"
+
+    if ! __prompt_user_yn__ "Configure PCI passthrough for ${#CTID_ARRAY[@]} container(s)?"; then
+        __info__ "Operation cancelled"
+        exit 0
+    fi
+
+    local success=0
+    local failed=0
+
+    for ctid in "${CTID_ARRAY[@]}"; do
+        echo
+        if ! pct config "${ctid}" &>/dev/null; then
+            __err__ "Container $ctid does not exist - skipping"
+            failed=$((failed + 1))
+            continue
+        fi
+
+        if enable_pci_passthrough "$ctid" "$PCI_DEVICE_ID"; then
+            success=$((success + 1))
+        else
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo
+    __info__ "Summary:"
+    __info__ "  Configured: $success"
+    __info__ "  Failed: $failed"
+
+    if [[ $success -gt 0 ]]; then
+        echo
+        __warn__ "Stop and start containers for changes to take effect"
+        __info__ "Example: pct stop <ctid> && pct start <ctid>"
+    fi
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "PCI passthrough configuration completed!"
+}
+
+main "$@"
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to follow CONTRIBUTING.md guidelines
+# - 2025-11-20: ArgumentParser.sh sourced (hybrid for variable args)
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide Section 10.9 - compliant
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
+

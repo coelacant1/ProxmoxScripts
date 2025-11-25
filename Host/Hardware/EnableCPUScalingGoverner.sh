@@ -9,39 +9,45 @@
 #   3. configure - Adjust CPU governor ("performance", "balanced", or "powersave") with optional min/max frequencies.
 #
 # Usage:
-#   ./EnableCPUScalingGoverner.sh install [performance|balanced|powersave] [opts]
-#   ./EnableCPUScalingGoverner.sh remove
-#   ./EnableCPUScalingGoverner.sh configure [performance|balanced|powersave] [opts]
+#   EnableCPUScalingGoverner.sh install
+#   EnableCPUScalingGoverner.sh install performance -m 1.2GHz -M 3.0GHz
+#   EnableCPUScalingGoverner.sh remove
+#   EnableCPUScalingGoverner.sh configure balanced
+#   EnableCPUScalingGoverner.sh configure powersave --min 800MHz
 #
-# Common options for "install" or "configure":
-#   -m, --min <freq>  Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)
-#   -M, --max <freq>  Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)
+# Arguments:
+#   action              - Action to perform: install, remove, or configure
+#   governor            - Optional governor: performance, balanced, or powersave
+#   -m, --min <freq>    - Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)
+#   -M, --max <freq>    - Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)
 #
-# Examples:
-#   ./EnableCPUScalingGoverner.sh install
-#   ./EnableCPUScalingGoverner.sh install performance -m 1.2GHz -M 3.0GHz
-#   ./EnableCPUScalingGoverner.sh remove
-#   ./EnableCPUScalingGoverner.sh configure balanced
-#   ./EnableCPUScalingGoverner.sh configure powersave --min 800MHz
-#
-# Further Explanation:
+# Notes:
 #   - "balanced" maps to either "ondemand" or "schedutil", whichever is available.
 #   - Installing will place this script into /usr/local/bin (so it's globally accessible).
 #   - Removing will attempt to restore default scaling governor (assuming 'ondemand' or 'schedutil').
-#   - This script will exit on any error (set -e).
 #
 # Dependencies:
 #   - cpupower (recommended) or sysfs-based access to CPU freq scaling.
 #
 # Function Index:
-#   - usage
+#   - convert_freq_to_khz
 #   - set_governor
 #   - do_install
 #   - do_remove
 #   - do_configure
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Globals / Defaults
@@ -52,9 +58,9 @@ TARGET_PATH="/usr/local/bin/${SCRIPT_NAME}"
 BALANCED_FALLBACK="ondemand"
 
 if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors ]]; then
-  if grep -qw "schedutil" /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors; then
-    BALANCED_FALLBACK="schedutil"
-  fi
+    if grep -qw "schedutil" /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors; then
+        BALANCED_FALLBACK="schedutil"
+    fi
 fi
 
 SYSTEM_DEFAULT="${BALANCED_FALLBACK}"
@@ -62,38 +68,60 @@ SYSTEM_DEFAULT="${BALANCED_FALLBACK}"
 ###############################################################################
 # Check Requirements
 ###############################################################################
-# We assume this script is used primarily on Proxmox. If run outside Proxmox, 
-# remove or comment out __check_proxmox__ as needed.
 __check_root__
 __check_proxmox__
 
 ###############################################################################
-# Usage Function
+# convert_freq_to_khz
 ###############################################################################
-usage() {
-  echo "Usage:"
-  echo "  ${SCRIPT_NAME} install [performance|balanced|powersave] [options]"
-  echo "  ${SCRIPT_NAME} remove"
-  echo "  ${SCRIPT_NAME} configure [performance|balanced|powersave] [options]"
-  echo
-  echo "Options for \"install\" or \"configure\":"
-  echo "  -m, --min <freq>  Minimum CPU frequency (e.g. 800MHz, 1.2GHz, 1200000)"
-  echo "  -M, --max <freq>  Maximum CPU frequency (e.g. 2.5GHz, 3.0GHz, 3000000)"
-  echo
-  echo "Examples:"
-  echo "  ${SCRIPT_NAME} install"
-  echo "  ${SCRIPT_NAME} install performance -m 1.2GHz -M 3.0GHz"
-  echo "  ${SCRIPT_NAME} remove"
-  echo "  ${SCRIPT_NAME} configure balanced"
-  echo "  ${SCRIPT_NAME} configure powersave --min 800MHz"
-  echo
-  echo "Description:"
-  echo "  install:   Installs dependencies (cpupower), copies this script to /usr/local/bin,"
-  echo "             and optionally sets a default governor."
-  echo "  remove:    Removes cpupower (if installed by this script) and attempts to restore"
-  echo "             system defaults. Also removes this script from /usr/local/bin."
-  echo "  configure: Manually sets CPU governor and optional min/max frequencies."
-  exit 1
+# Convert frequency from human-readable format to kHz integer
+# Usage: convert_freq_to_khz <freq>
+# Examples:
+#   "1.2GHz" -> "1200000"
+#   "800MHz" -> "800000"
+#   "1200000" -> "1200000" (already in kHz)
+convert_freq_to_khz() {
+    local freq="$1"
+    local khz_value
+
+    # If already a plain integer (assumed kHz), return as-is
+    if [[ "$freq" =~ ^[0-9]+$ ]]; then
+        echo "$freq"
+        return
+    fi
+
+    # Parse value and unit
+    if [[ "$freq" =~ ^([0-9.]+)([GMk]?Hz)$ ]]; then
+        local value="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+
+        case "$unit" in
+            GHz)
+                # Convert GHz to kHz: multiply by 1,000,000
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value * 1000000}")
+                ;;
+            MHz)
+                # Convert MHz to kHz: multiply by 1,000
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value * 1000}")
+                ;;
+            kHz)
+                # kHz stays as-is
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value}")
+                ;;
+            Hz)
+                # Hz converted to kHz (divide by 1000)
+                khz_value=$(awk "BEGIN {printf \"%.0f\", $value / 1000}")
+                ;;
+            *)
+                echo "Error: Unknown frequency unit in '$freq'" >&2
+                return 1
+                ;;
+        esac
+        echo "$khz_value"
+    else
+        echo "Error: Invalid frequency format '$freq'" >&2
+        return 1
+    fi
 }
 
 ###############################################################################
@@ -101,156 +129,179 @@ usage() {
 ###############################################################################
 # Usage: set_governor <governor> [min_freq] [max_freq]
 set_governor() {
-  local gov="$1"
-  local minFreq="$2"
-  local maxFreq="$3"
+    local gov="$1"
+    local minFreq="$2"
+    local maxFreq="$3"
 
-  if command -v cpupower &>/dev/null; then
-    cpupower frequency-set -g "${gov}" >/dev/null 2>&1 || {
-      echo "Error: Failed to set governor to '${gov}' via cpupower."
-      exit 1
-    }
-    [[ -n "${minFreq}" ]] && cpupower frequency-set -d "${minFreq}" >/dev/null 2>&1
-    [[ -n "${maxFreq}" ]] && cpupower frequency-set -u "${maxFreq}" >/dev/null 2>&1
-  else
-    echo "Warning: cpupower not found, using sysfs fallback..."
-    for cpuDir in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
-      if [[ -w "${cpuDir}/scaling_governor" ]]; then
-        echo "${gov}" > "${cpuDir}/scaling_governor" 2>/dev/null || {
-          echo "Error: Failed to set governor via sysfs."
-          exit 1
+    if command -v cpupower &>/dev/null; then
+        cpupower frequency-set -g "${gov}" >/dev/null 2>&1 || {
+            echo "Error: Failed to set governor to '${gov}' via cpupower."
+            exit 1
         }
-      fi
-      if [[ -n "${minFreq}" && -w "${cpuDir}/scaling_min_freq" ]]; then
-        echo "${minFreq}" > "${cpuDir}/scaling_min_freq"
-      fi
-      if [[ -n "${maxFreq}" && -w "${cpuDir}/scaling_max_freq" ]]; then
-        echo "${maxFreq}" > "${cpuDir}/scaling_max_freq"
-      fi
-    done
-  fi
+        [[ -n "${minFreq}" ]] && cpupower frequency-set -d "${minFreq}" >/dev/null 2>&1
+        [[ -n "${maxFreq}" ]] && cpupower frequency-set -u "${maxFreq}" >/dev/null 2>&1
+    else
+        echo "Warning: cpupower not found, using sysfs fallback..."
 
-  echo "CPU scaling governor set to '${gov}'."
-  [[ -n "${minFreq}" ]] && echo "Min frequency set to: ${minFreq}"
-  [[ -n "${maxFreq}" ]] && echo "Max frequency set to: ${maxFreq}"
+        # Convert frequencies to kHz for sysfs
+        local minFreqKhz maxFreqKhz
+        if [[ -n "${minFreq}" ]]; then
+            minFreqKhz=$(convert_freq_to_khz "${minFreq}") || {
+                echo "Error: Failed to convert min frequency '${minFreq}'"
+                exit 1
+            }
+        fi
+        if [[ -n "${maxFreq}" ]]; then
+            maxFreqKhz=$(convert_freq_to_khz "${maxFreq}") || {
+                echo "Error: Failed to convert max frequency '${maxFreq}'"
+                exit 1
+            }
+        fi
+
+        for cpuDir in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
+            if [[ -w "${cpuDir}/scaling_governor" ]]; then
+                echo "${gov}" >"${cpuDir}/scaling_governor" 2>/dev/null || {
+                    echo "Error: Failed to set governor via sysfs."
+                    exit 1
+                }
+            fi
+            if [[ -n "${minFreqKhz}" && -w "${cpuDir}/scaling_min_freq" ]]; then
+                echo "${minFreqKhz}" >"${cpuDir}/scaling_min_freq"
+            fi
+            if [[ -n "${maxFreqKhz}" && -w "${cpuDir}/scaling_max_freq" ]]; then
+                echo "${maxFreqKhz}" >"${cpuDir}/scaling_max_freq"
+            fi
+        done
+    fi
+
+    echo "CPU scaling governor set to '${gov}'."
+    [[ -n "${minFreq}" ]] && echo "Min frequency set to: ${minFreq}"
+    [[ -n "${maxFreq}" ]] && echo "Max frequency set to: ${maxFreq}"
 }
 
 ###############################################################################
 # Actions
 ###############################################################################
 do_install() {
-  local gov="$1"
-  local minFreq="$2"
-  local maxFreq="$3"
+    local gov="$1"
+    local minFreq="$2"
+    local maxFreq="$3"
 
-  echo "Installing 'linux-cpupower' if not already installed..."
-  __install_or_prompt__ "linux-cpupower"
+    echo "Installing 'linux-cpupower' if not already installed..."
+    __install_or_prompt__ "linux-cpupower"
 
-  echo "Copying script to '${TARGET_PATH}'..."
-  cp -f "$0" "${TARGET_PATH}"
-  chmod 755 "${TARGET_PATH}"
+    echo "Copying '${SCRIPT_NAME}' to ${TARGET_PATH} ..."
+    cp "$0" "${TARGET_PATH}"
+    chmod +x "${TARGET_PATH}"
+    echo "Installed to: ${TARGET_PATH}"
 
-  if [[ -n "${gov}" ]]; then
-    # If user specified "balanced", map to fallback
-    if [[ "${gov}" == "balanced" ]]; then
-      gov="${BALANCED_FALLBACK}"
+    if [[ -n "${gov}" ]]; then
+        set_governor "${gov}" "${minFreq}" "${maxFreq}"
+    else
+        echo "No default governor specified, leaving system defaults."
     fi
-    set_governor "${gov}" "${minFreq}" "${maxFreq}"
-  else
-    echo "No governor specified; skipping governor configuration."
-  fi
-
-  __prompt_keep_installed_packages__
-  echo "Install complete."
-  exit 0
+    exit 0
 }
 
 do_remove() {
-  echo "Attempting to remove 'linux-cpupower' if it was installed by this script..."
-  # We rely on __prompt_keep_installed_packages__ having been called in do_install to decide.
-  # If the package remains installed, we attempt to remove it here anyway.
-  if command -v cpupower &>/dev/null; then
-    apt-get -y remove linux-cpupower || echo "Warning: Could not remove linux-cpupower automatically."
-  fi
+    echo "Uninstalling 'linux-cpupower' (if installed by this script)..."
+    apt-get remove -y linux-cpupower 2>/dev/null || echo "Package not found or already removed."
 
-  echo "Restoring system default governor ('${SYSTEM_DEFAULT}')..."
-  set_governor "${SYSTEM_DEFAULT}"
+    echo "Attempting to restore system default governor: ${SYSTEM_DEFAULT}"
+    set_governor "${SYSTEM_DEFAULT}" "" ""
 
-  echo "Removing '${TARGET_PATH}'..."
-  rm -f "${TARGET_PATH}"
+    if [[ -f "${TARGET_PATH}" ]]; then
+        echo "Removing script from ${TARGET_PATH} ..."
+        rm -f "${TARGET_PATH}"
+    fi
 
-  echo "Removal complete."
-  exit 0
+    echo "Remove operation complete."
+    exit 0
 }
 
 do_configure() {
-  local gov="$1"
-  local minFreq="$2"
-  local maxFreq="$3"
+    local gov="$1"
+    local minFreq="$2"
+    local maxFreq="$3"
 
-  if [[ -z "${gov}" ]]; then
-    echo "Error: Missing governor. Must be one of 'performance', 'balanced', or 'powersave'."
-    exit 1
-  fi
+    if [[ -z "${gov}" ]]; then
+        echo "Error: No governor specified for 'configure' action."
+        echo "Usage: ${SCRIPT_NAME} configure [performance|balanced|powersave] [options]"
+        exit 1
+    fi
 
-  if [[ "${gov}" == "balanced" ]]; then
-    gov="${BALANCED_FALLBACK}"
-  fi
-
-  set_governor "${gov}" "${minFreq}" "${maxFreq}"
-  exit 0
+    set_governor "${gov}" "${minFreq}" "${maxFreq}"
+    exit 0
 }
 
 ###############################################################################
-# Main Logic
+# Main
 ###############################################################################
-if [[ $# -lt 1 ]]; then
-  usage
-fi
+main() {
+    # Parse arguments using ArgumentParser
+    __parse_args__ "action:string governor:string:? -m|--min:string:? -M|--max:string:?" "$@"
 
-action="$1"
-shift
+    # Validate action
+    case "${ACTION}" in
+        install | remove | configure) ;;
+        *)
+            echo "Error: Unknown action '${ACTION}'"
+            echo "Valid actions: install, remove, configure"
+            exit 64
+            ;;
+    esac
 
-govOpt=""
-minFreq=""
-maxFreq=""
+    # Validate governor if provided
+    if [[ -n "$GOVERNOR" ]]; then
+        case "${GOVERNOR}" in
+            performance | powersave | balanced) ;;
+            *)
+                echo "Error: Unknown governor '${GOVERNOR}'"
+                echo "Valid governors: performance, balanced, powersave"
+                exit 64
+                ;;
+        esac
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    performance|powersave|balanced)
-      govOpt="$1"
-      shift
-      ;;
-    -m|--min)
-      minFreq="$2"
-      shift 2
-      ;;
-    -M|--max)
-      maxFreq="$2"
-      shift 2
-      ;;
-    -h|--help)
-      usage
-      ;;
-    *)
-      echo "Error: Unknown option or argument '$1'"
-      usage
-      ;;
-  esac
-done
+        # Convert "balanced" to actual governor name
+        if [[ "${GOVERNOR}" == "balanced" ]]; then
+            GOVERNOR="${BALANCED_FALLBACK}"
+        fi
+    fi
 
-case "${action}" in
-  install)
-    do_install "${govOpt}" "${minFreq}" "${maxFreq}"
-    ;;
-  remove)
-    do_remove
-    ;;
-  configure)
-    do_configure "${govOpt}" "${minFreq}" "${maxFreq}"
-    ;;
-  *)
-    echo "Error: Unknown action '${action}'"
-    usage
-    ;;
-esac
+    # Execute action
+    case "${ACTION}" in
+        install)
+            do_install "${GOVERNOR}" "${MIN}" "${MAX}"
+            ;;
+        remove)
+            do_remove
+            ;;
+        configure)
+            do_configure "${GOVERNOR}" "${MIN}" "${MAX}"
+            ;;
+    esac
+}
+
+main "$@"
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-04: Refactored to use ArgumentParser.sh declarative parsing
+# - 2025-11-20: Removed manual usage() function
+# - 2025-11-20: Removed manual argument parsing in main
+# - 2025-11-20: Now uses __parse_args__ with automatic validation
+# - 2025-11-20: Handles subcommand pattern (install/remove/configure)
+# - 2025-11-20: Added frequency conversion for sysfs fallback (kHz integer format)
+# - 2025-11-20: Added Communication.sh and error trap per CONTRIBUTING.md Section 3.9
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

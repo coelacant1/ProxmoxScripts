@@ -2,62 +2,80 @@
 #
 # CreateCluster.sh
 #
-# Creates a new Proxmox cluster on a single host. This script requires:
-#   1) A cluster name (e.g. "MyCluster")
-#   2) A management (Corosync) IP for cluster communication
+# Creates a new Proxmox cluster on the current host.
 #
 # Usage:
-#   ./CreateCluster.sh <clustername> <mon-ip>
+#   CreateCluster.sh <cluster_name> <mon_ip>
 #
-# Example:
-#   # Create a cluster named 'myCluster' using 192.168.100.10 as Corosync IP
-#   ./CreateCluster.sh myCluster 192.168.100.10
+# Arguments:
+#   cluster_name - Name for the new cluster
+#   mon_ip       - Management/Corosync IP for cluster communication
 #
-# After running this script, you can join other Proxmox nodes to the cluster with:
-#   pvecm add <mon-ip-of-this-node>
+# Examples:
+#   CreateCluster.sh myCluster 192.168.100.10
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "cluster_name:string mon_ip:ip" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    # Check if host is already part of a cluster
+    if [[ -f "/etc/pve/.members" ]]; then
+        __warn__ "Existing cluster config detected (/etc/pve/.members)"
+        __warn__ "Creating a new cluster may cause conflicts"
+        if ! __prompt_user_yn__ "Continue anyway?"; then
+            __info__ "Operation cancelled"
+            exit 0
+        fi
+    fi
+
+    __info__ "Creating new Proxmox cluster: ${CLUSTER_NAME}"
+    __info__ "Using link0 address: ${MON_IP}"
+
+    if pvecm create "${CLUSTER_NAME}" --link0 "${MON_IP}" 2>&1; then
+        __ok__ "Cluster ${CLUSTER_NAME} created successfully!"
+        echo
+        __info__ "Verify with: pvecm status"
+        __info__ "To join other nodes: pvecm add ${MON_IP}"
+    else
+        __err__ "Failed to create cluster"
+        exit 1
+    fi
+}
+
+main "$@"
 
 ###############################################################################
-# Checks and Setup
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-21
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-19: Fixed --link0 parameter format
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-if [[ $# -lt 2 ]]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <clustername> <mon-ip>"
-  exit 1
-fi
-
-CLUSTER_NAME="$1"
-MON_IP="$2"
-
-# Check if host is already part of a cluster
-if [[ -f "/etc/pve/.members" ]]; then
-  echo "WARNING: This host appears to have an existing cluster config (/etc/pve/.members)."
-  echo "If it's already part of a cluster, creating a new one may cause conflicts."
-  echo "Press Ctrl-C to abort, or wait 5 seconds to continue..."
-  sleep 5
-fi
-
-###############################################################################
-# Main
-###############################################################################
-echo "Creating new Proxmox cluster: \"${CLUSTER_NAME}\""
-echo "Using IP for link0: \"${MON_IP}\""
-
-pvecm create "${CLUSTER_NAME}" --link0 address="${MON_IP}"
-
-echo
-echo "Cluster \"${CLUSTER_NAME}\" created with link0 address set to \"${MON_IP}\"."
-echo "To verify status:  pvecm status"
-echo "To join another node to this cluster (from that node):"
-echo "  pvecm add \"${MON_IP}\""
-
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node

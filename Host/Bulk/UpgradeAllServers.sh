@@ -2,68 +2,95 @@
 #
 # UpgradeAllServers.sh
 #
-# A script to update all servers in the Proxmox cluster by running:
-#   apt-get update && apt-get -y upgrade
-# on each node (local + remote).
+# Updates all servers in the Proxmox cluster with apt-get dist-upgrade.
 #
 # Usage:
-#   ./UpgradeAllServers.sh
+#   UpgradeAllServers.sh
 #
-# Description:
-#   1. Checks root privileges and confirms this is a Proxmox node.
-#   2. Prompts to install 'ssh' if not already installed (though it's usually present on Proxmox).
-#   3. Ensures the node is part of a cluster.
-#   4. Gathers remote cluster node IPs using __get_remote_node_ips__ (from our utility functions).
-#   5. Updates the local node and all remote nodes in the cluster.
-#   6. Prompts whether to keep or remove any newly installed packages.
+# Examples:
+#   UpgradeAllServers.sh
 #
-# Example:
-#   ./UpgradeAllServers.sh
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Communication.sh
 source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
+
+    __info__ "Upgrading all servers (cluster-wide)"
+    __warn__ "This may take several minutes per node"
+
+    # Get all node IPs
+    local local_node_ip
+    local_node_ip=$(hostname -I | awk '{print $1}')
+    local -a remote_node_ips
+    mapfile -t remote_node_ips < <(__get_remote_node_ips__)
+    local -a all_node_ips=("$local_node_ip" "${remote_node_ips[@]}")
+
+    local success=0
+    local failed=0
+
+    # Update all nodes
+    for node_ip in "${all_node_ips[@]}"; do
+        __update__ "Upgrading node ${node_ip}"
+
+        if [[ "${node_ip}" == "${local_node_ip}" ]]; then
+            if apt-get update -qq && apt-get -y dist-upgrade 2>&1; then
+                __ok__ "Local node upgraded"
+                success=$((success + 1))
+            else
+                __warn__ "Failed to upgrade local node"
+                failed=$((failed + 1))
+            fi
+        else
+            if ssh "root@${node_ip}" "apt-get update -qq && apt-get -y dist-upgrade" 2>&1; then
+                __ok__ "Node ${node_ip} upgraded"
+                success=$((success + 1))
+            else
+                __warn__ "Failed to upgrade node ${node_ip}"
+                failed=$((failed + 1))
+            fi
+        fi
+    done
+
+    echo
+    __info__ "Cluster Upgrade Summary:"
+    __info__ "  Successful: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "All servers upgraded successfully!"
+}
+
+main
 
 ###############################################################################
-# Preliminary Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+#
 
-###############################################################################
-# Gather Node Information
-###############################################################################
-LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
-readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
-ALL_NODE_IPS=("$LOCAL_NODE_IP" "${REMOTE_NODE_IPS[@]}")
-
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "Updating all servers in the Proxmox cluster..."
-
-for nodeIp in "${ALL_NODE_IPS[@]}"; do
-  echo "------------------------------------------------"
-  __info__ "Updating node at IP: \"${nodeIp}\""
-
-  if [[ "${nodeIp}" == "${LOCAL_NODE_IP}" ]]; then
-    apt-get update && apt-get -y upgrade
-    __ok__ "Local node update completed."
-  else
-    if ssh "root@${nodeIp}" "apt-get update && apt-get -y upgrade"; then
-      __ok__ "Remote node \"${nodeIp}\" update completed."
-    else
-      __err__ "Failed to update node \"${nodeIp}\"."
-    fi
-  fi
-done
-
-echo "All servers have been successfully updated."
-
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node

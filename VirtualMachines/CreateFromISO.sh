@@ -1,15 +1,14 @@
 #!/bin/bash
+set -euo pipefail
 #
 # CreateFromISO.sh
 #
 # Downloads an ISO if not present, picks storages by default (largest available),
 # and creates a Proxmox VM with user-specified or tier-based parameters.
 #
-# Usage (non-interactive example):
-#   ./CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso"
-#
-# More options:
-#   ./CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso" -s "local-lvm" -d 32 -b uefi -p t0h -v vmbr1
+# Usage:
+#   CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso"
+#   CreateFromISO.sh -n Win10 -L "http://example.com/windows10.iso" -s "local-lvm" -d 32 -b uefi -p t0h -v vmbr1
 #
 # Tier Profiles (memory in GiB, cores):
 #   t0h: 64GB, 20 cores, host CPU
@@ -74,7 +73,7 @@ function pick_largest_storage_for_content {
 
 ###############################################################################
 # parse_disk_size_gib:
-#   - Strips a trailing 'G' or 'g' from user input (e.g., "32G" → "32").
+#   - Strips a trailing 'G' or 'g' from user input (e.g., "32G" -> "32").
 #   - Checks if the remaining string is numeric.
 #   - If not numeric, prints error and exits.
 #   - Returns the numeric value (in GiB) to stdout.
@@ -98,8 +97,8 @@ function parse_disk_size_gib {
 # disk_volume_id: determines how to specify disk size for LVM vs. dir storages
 ###############################################################################
 function disk_volume_id {
-    local store="$1"    # e.g. 'local-lvm'
-    local sizeGib="$2"  # e.g. '32'
+    local store="$1"   # e.g. 'local-lvm'
+    local sizeGib="$2" # e.g. '32'
 
     # Check storage type
     local stType
@@ -167,14 +166,42 @@ function prompt_for_parameters {
     local cpuModel="default"
 
     case "$tier" in
-        t0h) memoryGiB=64; cores=20; cpuModel="host" ;;
-        t0 ) memoryGiB=64; cores=20 ;;
-        t1h) memoryGiB=32; cores=12; cpuModel="host" ;;
-        t1 ) memoryGiB=32; cores=12 ;;
-        t2h) memoryGiB=16; cores=8;  cpuModel="host" ;;
-        t2 ) memoryGiB=16; cores=8 ;;
-        t3h) memoryGiB=8;  cores=4;  cpuModel="host" ;;
-        t3 ) memoryGiB=8;  cores=4 ;;
+        t0h)
+            memoryGiB=64
+            cores=20
+            cpuModel="host"
+            ;;
+        t0)
+            memoryGiB=64
+            cores=20
+            ;;
+        t1h)
+            memoryGiB=32
+            cores=12
+            cpuModel="host"
+            ;;
+        t1)
+            memoryGiB=32
+            cores=12
+            ;;
+        t2h)
+            memoryGiB=16
+            cores=8
+            cpuModel="host"
+            ;;
+        t2)
+            memoryGiB=16
+            cores=8
+            ;;
+        t3h)
+            memoryGiB=8
+            cores=4
+            cpuModel="host"
+            ;;
+        t3)
+            memoryGiB=8
+            cores=4
+            ;;
         custom)
             echo -n "Enter memory in GiB (default: 8): " >&2
             read -r customMem
@@ -231,7 +258,7 @@ function find_csv_path {
 ###############################################################################
 function pick_iso_local_or_remote {
     local isoStore="$1"
-    local csvPath="$(find_csv_path)"  # either ./ISOList.csv or ./VirtualMachines/ISOList.csv
+    local csvPath="$(find_csv_path)" # either ./ISOList.csv or ./VirtualMachines/ISOList.csv
 
     # 1) Gather local ISOs from "isoStore"
     local -a localIsos=()
@@ -240,8 +267,8 @@ function pick_iso_local_or_remote {
         # We only want the short name after "iso/"
         local shortName="${volId#*:iso/}"
         # For local, we have no real "URL" to store, so use "(no link)"
-        localIsos+=( "Local: ${shortName}###(no link)" )
-    done < <( pvesm list "$isoStore" 2>/dev/null | awk '$3 == "iso" {print $1}' )
+        localIsos+=("Local: ${shortName}###(no link)")
+    done < <(pvesm list "$isoStore" 2>/dev/null | awk '$3 == "iso" {print $1}')
 
     # 2) Gather remote links from CSV (now with 2 columns)
     local -a remoteIsos=()
@@ -254,13 +281,13 @@ function pick_iso_local_or_remote {
             dispName="$(basename "$link")"
         fi
 
-        # We'll store the display name for the user, 
+        # We'll store the display name for the user,
         # but keep the real link after ### so we can still download from it
-        remoteIsos+=( "Remote: ${dispName}###${link}" )
-    done < <( tr -d '\r' < "$csvPath" | grep -v '^[[:space:]]*$' )
+        remoteIsos+=("Remote: ${dispName}###${link}")
+    done < <(tr -d '\r' <"$csvPath" | grep -v '^[[:space:]]*$')
 
     # 3) Merge both arrays
-    local -a allItems=( "${localIsos[@]}" "${remoteIsos[@]}" )
+    local -a allItems=("${localIsos[@]}" "${remoteIsos[@]}")
     local total="${#allItems[@]}"
     if [[ "$total" -eq 0 ]]; then
         echo >&2 "No local ISOs or CSV links found."
@@ -272,34 +299,34 @@ function pick_iso_local_or_remote {
     local page=0
 
     while true; do
-        local start=$(( page * pageSize ))
-        local end=$(( start + pageSize ))
-        (( end > total )) && end="$total"
+        local start=$((page * pageSize))
+        local end=$((start + pageSize))
+        ((end > total)) && end="$total"
 
         echo >&2 "Available ISOs (page $((page + 1))):"
-        for (( i=start; i<end; i++ )); do
-            local idx=$(( i + 1 ))
+        for ((i = start; i < end; i++)); do
+            local idx=$((i + 1))
             local displayPart="${allItems[$i]%%###*}"
             echo >&2 "  $idx) $displayPart"
         done
 
-        echo -n >&2 "Pick a number (n=next, p=prev, q=quit): "
+        echo -n "Pick a number (n=next, p=prev, q=quit): " >&2
         read -r choice
 
         case "$choice" in
-            n) (( page < (total-1)/pageSize )) && (( page++ )) ;;
-            p) (( page > 0 )) && (( page-- )) ;;
+            n) ((page < (total - 1) / pageSize)) && ((page++)) ;;
+            p) ((page > 0)) && ((page--)) ;;
             q)
                 echo >&2 "Aborted."
                 exit 1
                 ;;
-            ''|*[!0-9]*)
+            '' | *[!0-9]*)
                 echo >&2 "Invalid input. Please enter a number, or n/p/q."
                 ;;
             *)
-                local choiceNum=$(( choice ))
-                if (( choiceNum >= 1 && choiceNum <= total )); then
-                    local pickedIndex=$(( choiceNum - 1 ))
+                local choiceNum=$((choice))
+                if ((choiceNum >= 1 && choiceNum <= total)); then
+                    local pickedIndex=$((choiceNum - 1))
                     echo "${allItems[$pickedIndex]}"
                     return 0
                 else
@@ -327,14 +354,14 @@ __check_proxmox__
 #   -i / -I  => VM_ID
 while getopts ":n:N:l:L:s:S:d:D:b:B:p:P:v:V:i:I:" opt; do
     case "${opt}" in
-        n|N) VM_NAME="${OPTARG}" ;;
-        l|L) ISO_URL="${OPTARG}" ;;
-        s|S) VM_STORAGE="${OPTARG}" ;;
-        d|D) DISK_GIB="${OPTARG}" ;;
-        b|B) BIOS_TYPE="${OPTARG}" ;;
-        p|P) TIER="${OPTARG}" ;;
-        v|V) BRIDGE_NAME="${OPTARG}" ;;
-        i|I) VM_ID="${OPTARG}" ;;
+        n | N) VM_NAME="${OPTARG}" ;;
+        l | L) ISO_URL="${OPTARG}" ;;
+        s | S) VM_STORAGE="${OPTARG}" ;;
+        d | D) DISK_GIB="${OPTARG}" ;;
+        b | B) BIOS_TYPE="${OPTARG}" ;;
+        p | P) TIER="${OPTARG}" ;;
+        v | V) BRIDGE_NAME="${OPTARG}" ;;
+        i | I) VM_ID="${OPTARG}" ;;
         *)
             echo "Unknown option -${opt}" >&2
             exit 1
@@ -352,11 +379,11 @@ if [[ -z "$VM_NAME" || -z "$ISO_URL" ]]; then
     echo >&2 "Determining ISO storage..."
     localIsoStore=$(pick_largest_storage_for_content "iso")
     if [[ -z "$localIsoStore" ]]; then
-        mapfile -t isoStoreArray < <( pvesm status --content iso 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}' )
-        if (( ${#isoStoreArray[@]} == 1 )); then
+        mapfile -t isoStoreArray < <(pvesm status --content iso 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}')
+        if ((${#isoStoreArray[@]} == 1)); then
             localIsoStore="${isoStoreArray[0]}"
         else
-            if (( ${#isoStoreArray[@]} == 0 )); then
+            if ((${#isoStoreArray[@]} == 0)); then
                 echo >&2 "No storage with ISO support found."
                 echo -n "Enter storage ID for ISO files: " >&2
                 read -r userIsoStore
@@ -383,14 +410,14 @@ if [[ -z "$VM_NAME" || -z "$ISO_URL" ]]; then
     # "Remote: file.iso###https://cdimage.debian.org/...file.iso"
 
     # Split at "###"
-    labelPart="${pickedIso%%###*}"    # e.g. "Remote: file.iso"
-    linkPart="${pickedIso#*###}"      # e.g. "https://cdimage.debian.org/...file.iso" or "(no link)"
+    labelPart="${pickedIso%%###*}" # e.g. "Remote: file.iso"
+    linkPart="${pickedIso#*###}"   # e.g. "https://cdimage.debian.org/...file.iso" or "(no link)"
 
     # Distinguish local vs. remote
     if [[ "$labelPart" == Local:* ]]; then
         # e.g. "Local: ubuntu-24.04.iso"
         isoName="${labelPart#Local: }"
-        ISO_URL=""  # no remote link
+        ISO_URL="" # no remote link
     else
         # e.g. "Remote: file.iso"
         # Then the actual link is in linkPart
@@ -421,21 +448,49 @@ else
     if [[ -n "$ISO_URL" ]]; then
         isoName="$(basename "$ISO_URL")"
     fi
-    
+
     MEMORY_GIB="8"
     CPU_CORES="4"
     CPU_MODEL="default"
     case "$TIER" in
-        t0h) MEMORY_GIB=64; CPU_CORES=20; CPU_MODEL="host" ;;
-        t0 ) MEMORY_GIB=64; CPU_CORES=20 ;;
-        t1h) MEMORY_GIB=32; CPU_CORES=12; CPU_MODEL="host" ;;
-        t1 ) MEMORY_GIB=32; CPU_CORES=12 ;;
-        t2h) MEMORY_GIB=16; CPU_CORES=8;  CPU_MODEL="host" ;;
-        t2 ) MEMORY_GIB=16; CPU_CORES=8 ;;
-        t3h) MEMORY_GIB=8;  CPU_CORES=4;  CPU_MODEL="host" ;;
-        t3 ) MEMORY_GIB=8;  CPU_CORES=4 ;;
-        ""  ) ;;
-        *)  echo >&2 "Unknown tier '$TIER'; using default t3." ;;
+        t0h)
+            MEMORY_GIB=64
+            CPU_CORES=20
+            CPU_MODEL="host"
+            ;;
+        t0)
+            MEMORY_GIB=64
+            CPU_CORES=20
+            ;;
+        t1h)
+            MEMORY_GIB=32
+            CPU_CORES=12
+            CPU_MODEL="host"
+            ;;
+        t1)
+            MEMORY_GIB=32
+            CPU_CORES=12
+            ;;
+        t2h)
+            MEMORY_GIB=16
+            CPU_CORES=8
+            CPU_MODEL="host"
+            ;;
+        t2)
+            MEMORY_GIB=16
+            CPU_CORES=8
+            ;;
+        t3h)
+            MEMORY_GIB=8
+            CPU_CORES=4
+            CPU_MODEL="host"
+            ;;
+        t3)
+            MEMORY_GIB=8
+            CPU_CORES=4
+            ;;
+        "") ;;
+        *) echo >&2 "Unknown tier '$TIER'; using default t3." ;;
     esac
 fi
 
@@ -491,7 +546,7 @@ fi
 ###############################################################################
 # Convert memory from GiB to MiB, create the VM
 ###############################################################################
-MEMORY_MB=$(( MEMORY_GIB * 1024 ))
+MEMORY_MB=$((MEMORY_GIB * 1024))
 
 qm create "$VM_ID" --name "$VM_NAME" --memory "$MEMORY_MB" --cores "$CPU_CORES"
 
@@ -521,7 +576,6 @@ qm set "$VM_ID" --scsihw virtio-scsi-pci --scsi0 "${VOL_ID},discard=on,ssd=1,cac
 # If Windows, add TPM & secondary virtio
 if [[ "$OS_TYPE" == "windows" ]]; then
     qm set "$VM_ID" --tpmstate0 "$VM_STORAGE":1,size=4,version=v2.0
-    local virtioVolId
     virtioVolId="$(disk_volume_id "$VM_STORAGE" "4")"
     qm set "$VM_ID" --virtio0 "${virtioVolId},cache=none"
 fi
@@ -536,8 +590,8 @@ fi
 # 1) Make scsi0 the default boot device
 # 2) Enable hotplug for disk, network, USB, and memory
 qm set "$VM_ID" \
-  --boot order=scsi0 \
-  --hotplug disk,network,usb,memory
+    --boot order=scsi0 \
+    --hotplug disk,network,usb,memory
 
 # Network
 qm set "$VM_ID" --net0 "virtio,bridge=$BRIDGE_NAME,firewall=0"
@@ -552,3 +606,20 @@ qm set "$VM_ID" --agent enabled=1,fstrim_cloned_disks=1
 
 qm start "$VM_ID"
 echo >&2 "VM '$VM_NAME' (ID: $VM_ID) created and started."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-24: Fixed ShellCheck errors (local outside function)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

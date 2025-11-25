@@ -10,6 +10,7 @@ that script.
 Behavior:
 - Takes a single argument (path to a folder).
 - Recursively walks that folder, processing every file that ends with ".sh".
+- Skips .git, .github, .site, .check, .docs directories.
 - Identifies the top contiguous comment block (lines starting with '#').
 - Removes any existing lines from "Function Index:" to the end of that block.
 - Parses the entire file for function definitions (using a regex for patterns like
@@ -22,6 +23,8 @@ Usage:
 
 Example:
     python UpdateFunctionIndex.py /home/user/scripts
+
+Author: Coela
 """
 
 import sys
@@ -29,6 +32,9 @@ import os
 import re
 
 FUNCTION_INDEX_HEADER = "# Function Index:"
+
+# Directories to skip during traversal
+SKIP_DIRS = {".git", ".github", ".site", ".check", ".docs"}
 
 def parse_functions(lines):
     """
@@ -39,18 +45,22 @@ def parse_functions(lines):
       ^function <name>() { or
       ^<name>() {
     Ignores lines that begin with '#'.
+    Only detects top-level functions (not nested functions with indentation).
     """
     func_pattern = re.compile(r"""
-        ^\s*                      # Start of line, optional whitespace
-        (?:function\s+)?          # Optional 'function ' keyword
-        ([a-zA-Z_][a-zA-Z0-9_]*)  # Capture group for function name
-        \s*\(\s*\)\s*\{          # Required parentheses, then '{'
+        ^                             # Start of line (no leading whitespace)
+        (?:function\s+)?              # Optional 'function ' keyword
+        ([a-zA-Z_][a-zA-Z0-9_]*)      # Capture group for function name
+        \s*\(\s*\)\s*\{              # Required parentheses, then '{'
     """, re.VERBOSE)
 
     functions_found = []
     for line in lines:
         # Skip commented lines
         if line.strip().startswith("#"):
+            continue
+        # Only match if there's no leading whitespace (top-level functions only)
+        if line and line[0] in (' ', '\t'):
             continue
         match = func_pattern.match(line)
         if match:
@@ -99,13 +109,15 @@ def process_file(filepath):
     3. Parse entire file for function definitions.
     4. If functions are found, insert new function index lines.
     5. Reconstruct and rewrite the file.
+    
+    Returns True if file was updated, False otherwise.
     """
     try:
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
     except Exception as e:
-        print(f"Could not read file '{filepath}': {e}")
-        return
+        print(f"\nCould not read file '{filepath}': {e}")
+        return False
 
     # Identify top contiguous comment block
     top_comment_end = 0
@@ -135,12 +147,14 @@ def process_file(filepath):
 
         # Write back to the file
         try:
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.writelines(new_contents)
-            print(f"Updated '{filepath}' with new Function Index." if all_functions
-                else f"Processed '{filepath}' (no functions found, no index added).")
+            return True
         except Exception as e:
-            print(f"Could not write to file '{filepath}': {e}")
+            print(f"\nCould not write to file '{filepath}': {e}")
+            return False
+    
+    return False
 
 def main():
     # Expect exactly one argument: the path to the directory
@@ -153,12 +167,36 @@ def main():
         print(f"Error: '{folder_to_scan}' is not a directory.")
         sys.exit(1)
 
-    # Recursively walk the directory, process every .sh file
-    for root, _, files in os.walk(folder_to_scan):
+    # Collect all .sh files first for progress tracking
+    all_files = []
+    for root, dirs, files in os.walk(folder_to_scan):
+        # Skip specified directories
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        
         for filename in files:
             if filename.lower().endswith(".sh"):
-                filepath = os.path.join(root, filename)
-                process_file(filepath)
+                all_files.append(os.path.join(root, filename))
+    
+    total_files = len(all_files)
+    updated_count = 0
+    
+    print(f"Found {total_files} .sh files to process")
+    print("")
+    
+    # Process each file with progress indicator
+    for i, filepath in enumerate(all_files, 1):
+        # Show progress
+        progress = int((i / total_files) * 100)
+        print(f"Processing [{i}/{total_files}] ({progress}%): {os.path.basename(filepath)}", end='\r')
+        
+        if process_file(filepath):
+            updated_count += 1
+    
+    # Clear progress line and show summary
+    print(" " * 100, end='\r')
+    print(f"\nProcessed {total_files} files")
+    print(f"Updated {updated_count} files with function indices")
+    print(f"Skipped {total_files - updated_count} files (no functions or no changes needed)")
 
 if __name__ == "__main__":
     main()

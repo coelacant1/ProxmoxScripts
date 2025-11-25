@@ -2,52 +2,75 @@
 #
 # BulkStop.sh
 #
-# This script stops multiple LXC containers using a provided start and end ID.
-# It iterates through the range [START_ID ... END_ID] and attempts to stop each one.
+# Stops LXC containers within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-#   ./BulkStop.sh <START_ID> <END_ID>
+#   BulkStop.sh <start_ctid> <end_ctid>
 #
-# Example:
-#   ./BulkStop.sh 200 202
-#   This will stop containers 200, 201, and 202
+# Arguments:
+#   start_ctid - Starting container ID
+#   end_ctid   - Ending container ID
+#
+# Examples:
+#   BulkStop.sh 200 210
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_ctid:ctid end_ctid:ctid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    stop_callback() {
+        local ctid="$1"
+        __ct_stop__ "$ctid"
+    }
+
+    __bulk_ct_operation__ --name "Stop Containers" --report "$START_CTID" "$END_CTID" stop_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Stop completed successfully!"
+}
+
+main
 
 ###############################################################################
-# Initialization
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Compliant with BulkOperations framework and utility usage
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 <START_ID> <END_ID>"
-  exit 1
-fi
-
-START_ID="$1"
-END_ID="$2"
-
-###############################################################################
-# Main Logic
-###############################################################################
-echo "=== Stopping LXC containers in the range [$START_ID ... $END_ID] ==="
-for ctId in $(seq "$START_ID" "$END_ID"); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Stopping CT \"$ctId\" ..."
-    pct stop "$ctId"
-    if [ $? -eq 0 ]; then
-      echo " - CT \"$ctId\" stopped."
-    else
-      echo " - Failed to stop CT \"$ctId\"."
-    fi
-  else
-    echo " - CT \"$ctId\" does not exist, skipping."
-  fi
-done
-
-###############################################################################
-# End
-###############################################################################
-echo "=== Bulk stop process complete. ==="

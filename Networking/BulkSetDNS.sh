@@ -2,66 +2,114 @@
 #
 # BulkSetDNS.sh
 #
-# Sets the DNS servers and search domain for all nodes in the Proxmox VE cluster,
-# using the IPs reported from the Proxmox utilities (skipping the local node).
+# Sets DNS servers and search domain for all nodes in Proxmox cluster.
 #
 # Usage:
-#   ./BulkSetDNS.sh <dns_server_1> <dns_server_2> <search_domain>
+#   BulkSetDNS.sh <dns1> <dns2> <search_domain>
 #
-# Example:
-#   ./BulkSetDNS.sh 8.8.8.8 8.8.4.4 mydomain.local
+# Arguments:
+#   dns1 - Primary DNS server
+#   dns2 - Secondary DNS server
+#   search_domain - DNS search domain
 #
-# Explanation:
-#   - Retrieves the IP addresses of remote nodes in the Proxmox cluster.
-#   - Uses SSH to overwrite each remote node's /etc/resolv.conf with the specified
-#     DNS servers and search domain.
-#   - Also applies the same changes to the local node.
+# Examples:
+#   BulkSetDNS.sh 8.8.8.8 8.8.4.4 mydomain.local
+#   BulkSetDNS.sh 1.1.1.1 1.0.0.1 example.com
 #
+# Function Index:
+#   - main
+#
+
+set -euo pipefail
+
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "dns1:ip dns2:ip search_domain:fqdn" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
+
+    __warn__ "This script modifies /etc/resolv.conf directly"
+    __warn__ "If systemd-resolved is active, changes may be overwritten"
+    __info__ "To disable systemd-resolved: systemctl disable --now systemd-resolved"
+    echo
+
+    __info__ "Setting DNS cluster-wide"
+    __info__ "  DNS1: $DNS1"
+    __info__ "  DNS2: $DNS2"
+    __info__ "  Search domain: $SEARCH_DOMAIN"
+
+    # Get remote node IPs
+    local -a remote_nodes
+    mapfile -t remote_nodes < <(__get_remote_node_ips__)
+
+    local success=0
+    local failed=0
+
+    # Update DNS on remote nodes
+    for node_ip in "${remote_nodes[@]}"; do
+        __update__ "Setting DNS on $node_ip"
+        if ssh -o StrictHostKeyChecking=no "root@${node_ip}" \
+            "echo -e 'search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}' > /etc/resolv.conf" 2>&1; then
+            __ok__ "DNS configured on $node_ip"
+            success=$((success + 1))
+        else
+            __warn__ "Failed to configure DNS on $node_ip"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Update DNS on local node
+    __update__ "Setting DNS on local node"
+    if echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" >/etc/resolv.conf 2>&1; then
+        __ok__ "DNS configured on local node"
+        success=$((success + 1))
+    else
+        __warn__ "Failed to configure DNS on local node"
+        failed=$((failed + 1))
+    fi
+
+    echo
+    __info__ "DNS Configuration Summary:"
+    __info__ "  Successful: $success"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: $failed" || __info__ "  Failed: $failed"
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "DNS configured on all nodes!"
+}
+
+main "$@"
 
 ###############################################################################
-# Check environment and validate arguments
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+#
+# Fixes:
+# - Fixed arithmetic increment syntax (lines 62, 65, 73, 76)
+# - Fixed: Added warning about systemd-resolved conflicts
+# - Note: Direct /etc/resolv.conf modification may be overwritten by systemd-resolved
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 <dns_server_1> <dns_server_2> <search_domain>"
-  exit 1
-fi
-
-DNS1="$1"
-DNS2="$2"
-SEARCH_DOMAIN="$3"
-
-###############################################################################
-# Get remote node IPs
-###############################################################################
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
-
-###############################################################################
-# Update DNS on each remote node
-###############################################################################
-for nodeIp in "${REMOTE_NODES[@]}"; do
-  echo "-----------------------------------------------------------"
-  echo "Setting DNS on remote node IP: \"${nodeIp}\""
-  echo "  DNS1=\"${DNS1}\", DNS2=\"${DNS2}\", SEARCH_DOMAIN=\"${SEARCH_DOMAIN}\""
-
-  ssh -o StrictHostKeyChecking=no "root@${nodeIp}" \
-    "echo -e 'search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}' > /etc/resolv.conf"
-  if [ $? -eq 0 ]; then
-    echo "  - DNS configured successfully on \"${nodeIp}\""
-  else
-    echo "  - Failed to configure DNS on \"${nodeIp}\""
-  fi
-  echo
-done
-
-###############################################################################
-# Update DNS on the local node
-###############################################################################
-echo "-----------------------------------------------------------"
-echo "Setting DNS on the local node:"
-echo "  DNS1=\"${DNS1}\", DNS2=\"${DNS2}\", SEARCH_DOMAIN=\"${SEARCH_DOMAIN}\""
-echo -e "search ${SEARCH_DOMAIN}\nnameserver ${DNS1}\nnameserver ${DNS2}" > /etc/resol

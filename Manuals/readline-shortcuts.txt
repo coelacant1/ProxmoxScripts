@@ -1,0 +1,102 @@
+================================================================================
+READLINE KEYBOARD SHORTCUTS
+================================================================================
+
+When entering script parameters in the GUI, you can use these keyboard 
+shortcuts for easier editing.
+
+Note: Advanced features like history and Alt-key combinations may not work 
+      in all terminals. This guide focuses on shortcuts that work reliably.
+
+================================================================================
+BASIC NAVIGATION
+================================================================================
+
+Left/Right Arrow Keys       Move cursor left/right one character
+Home / End           Jump to beginning/end of line
+Ctrl+A / Ctrl+E      Alternative: Jump to beginning/end
+Ctrl+B / Ctrl+F      Move backward/forward one character
+
+================================================================================
+DELETING TEXT
+================================================================================
+
+Backspace            Delete character before cursor
+Delete               Delete character at cursor
+Ctrl+K               Delete from cursor to end of line
+Ctrl+U               Delete from cursor to beginning (clear line)
+Ctrl+W               Delete word before cursor
+
+================================================================================
+OTHER
+================================================================================
+
+Tab                  Attempt filename/path completion
+Ctrl+C               Cancel current input
+Ctrl+L               Clear screen (redraw prompt)
+
+================================================================================
+TIPS
+================================================================================
+
+1. Use Ctrl+A / Ctrl+E for quick jumps instead of holding arrow keys
+2. Use Ctrl+U to quickly clear and restart if you make multiple mistakes
+3. Use Ctrl+K to delete trailing parameters without backspacing
+4. Use Tab for path/filename completion to avoid typos
+5. Use Ctrl+W to remove the last parameter quickly
+
+================================================================================
+EXAMPLE
+================================================================================
+
+Command: pbs Template 192.168.1.100 --username root --password wrongpass
+
+Fix password:
+  1. Press Ctrl+W (deletes "wrongpass")
+  2. Type: correctpass
+  3. Press Enter
+
+Fix IP address in middle:
+  1. Press Ctrl+A (jump to start)
+  2. Press Left Arrow until you reach the IP
+  3. Edit the IP
+  4. Press Ctrl+E (jump to end)
+
+================================================================================
+LIMITATIONS
+================================================================================
+
+Not Available:
+  - Parameter history (Up/Down arrows don't recall previous inputs)
+  - Reverse search (Ctrl+R)
+  - Word-by-word navigation (Alt+B/F may not work in all terminals)
+  - Case conversion (Alt+U/L/C)
+  - Multi-line editing
+
+Works But Terminal-Dependent:
+  - Alt key combinations often captured by terminal/desktop environment
+  - Some SSH clients may not pass all key combinations
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Arrow keys print ^[[A or similar:
+  - Terminal doesn't support readline properly
+  - Use Ctrl+B/F instead of arrow keys
+  - Use Ctrl+A/E instead of Home/End
+
+Ctrl keys don't work:
+  - Try in a different terminal emulator
+  - Some environments may intercept these shortcuts
+
+Nothing works:
+  - Verify you're using bash (not sh)
+  - Check terminal supports ANSI escape sequences
+  - Try a standard terminal like xterm or gnome-terminal
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================

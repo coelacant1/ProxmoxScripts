@@ -5,16 +5,23 @@
 # Restarts every Ceph Monitor (mon) on the cluster one at a time.
 #
 # Usage:
-#   ./RestartMonitors.sh
+#   RestartMonitors.sh
 #
 # This script retrieves the Ceph monitor information from the cluster and
 # restarts each monitor service sequentially from the main node. The service
 # names use the format ceph-mon@<nodeName>.
 #
+# Function Index:
+#   - wait_for_mon_active
+#
+
+set -euo pipefail
 
 source "${UTILITYPATH}/Communication.sh"
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
 
 ###############################################################################
 # Check prerequisites: root privileges and Proxmox environment
@@ -30,8 +37,7 @@ __install_or_prompt__ "jq"
 ###############################################################################
 # Retrieve Ceph monitor information in JSON format
 ###############################################################################
-monJSON=$(ceph mon dump --format json 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$monJSON" ]; then
+if ! monJSON=$(ceph mon dump --format json 2>/dev/null) || [ -z "$monJSON" ]; then
     __err__ "Failed to retrieve Ceph monitor dump. Ensure Ceph is running."
     exit 1
 fi
@@ -57,7 +63,7 @@ while read -r name addr; do
 
     monNames+=("$name")
     monIPs+=("$monIP")
-done <<< "$monInfo"
+done <<<"$monInfo"
 
 totalMons="${#monNames[@]}"
 if [ "$totalMons" -eq 0 ]; then
@@ -68,29 +74,12 @@ fi
 __info__ "Found ${totalMons} Ceph monitor(s). Restarting them one at a time."
 
 ###############################################################################
-# Function: is_local_ip
-# Checks if the provided IP address is one of the local system's IPs.
-###############################################################################
-is_local_ip(){
-    local ipToCheck="$1"
-    local localIPs
-    local ip
-    localIPs=$(hostname -I)
-    for ip in $localIPs; do
-        if [ "$ip" = "$ipToCheck" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-###############################################################################
 # Function: wait_for_mon_active
 # Waits until the ceph-mon@<monName> service is active on the given target host
 # (either local or remote) or a timeout is reached.
 # Timeout is set to 120 seconds.
 ###############################################################################
-wait_for_mon_active(){
+wait_for_mon_active() {
     local targetHost="$1"
     local monName="$2"
     local timeout=120
@@ -106,7 +95,7 @@ wait_for_mon_active(){
             break
         fi
         sleep 5
-        elapsed=$((elapsed+5))
+        elapsed=$((elapsed + 5))
         if [ $elapsed -ge $timeout ]; then
             __err__ "Monitor ceph-mon@${monName} did not become active after restart on ${targetHost}."
             break
@@ -126,29 +115,27 @@ for index in "${!monNames[@]}"; do
     __update__ "Processing monitor ${currentMon} of ${totalMons}: ceph-mon@${monName}"
 
     # Determine the target host for the monitor service.
-    if is_local_ip "$monIP"; then
+    if __is_local_ip__ "$monIP"; then
         targetHost="local"
     else
         # Resolve remote monitor IP using the initialized node mapping.
         targetHost="$(__get_ip_from_name__ "$monName")"
         if [ -z "$targetHost" ]; then
             __err__ "Failed to resolve IP for monitor '$monName'. Skipping."
-            currentMon=$((currentMon+1))
+            currentMon=$((currentMon + 1))
             continue
         fi
     fi
 
     # Restart the monitor service on the appropriate host.
     if [ "$targetHost" = "local" ]; then
-        systemctl restart "ceph-mon@${monName}"
-        if [ $? -eq 0 ]; then
+        if systemctl restart "ceph-mon@${monName}"; then
             __ok__ "Successfully restarted ceph-mon@${monName} on local."
         else
             __err__ "Failed to restart ceph-mon@${monName} on local."
         fi
     else
-        ssh root@"${targetHost}" "systemctl restart ceph-mon@${monName}"
-        if [ $? -eq 0 ]; then
+        if ssh root@"${targetHost}" "systemctl restart ceph-mon@${monName}"; then
             __ok__ "Successfully restarted ceph-mon@${monName} on ${targetHost}."
         else
             __err__ "Failed to restart ceph-mon@${monName} on ${targetHost}."
@@ -159,7 +146,25 @@ for index in "${!monNames[@]}"; do
     wait_for_mon_active "${targetHost}" "${monName}"
 
     sleep 5
-    currentMon=$((currentMon+1))
+    currentMon=$((currentMon + 1))
 done
 
 __ok__ "All Ceph monitors processed."
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-24: Deep technical validation - fixed exit code check patterns
+# - 2025-11-21: Validated against PVE Guide Chapter 8 and Section 22.06
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - 2025-11-24: Changed $? checks to direct command checks per shellcheck SC2181 (3 occurrences)
+#
+# Known issues:
+# -
+#
+

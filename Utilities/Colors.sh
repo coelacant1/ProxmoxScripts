@@ -5,12 +5,28 @@
 # Provides 24-bit gradient printing and asynchronous "blink" simulation.
 #
 # Function Index:
+#   - __color_log__
 #   - __int_lerp__
 #   - __gradient_print__
 #   - __line_gradient__
 #   - __line_rgb__
 #   - __simulate_blink_async__
 #
+
+# Source Logger for structured logging
+if [[ -n "${UTILITYPATH:-}" && -f "${UTILITYPATH}/Logger.sh" ]]; then
+    # shellcheck source=Utilities/Logger.sh
+    source "${UTILITYPATH}/Logger.sh"
+fi
+
+# Safe logging wrapper
+__color_log__() {
+    local level="$1"
+    local message="$2"
+    if declare -f __log__ >/dev/null 2>&1; then
+        __log__ "$level" "$message" "COLOR"
+    fi
+}
 
 ###############################################################################
 # GLOBALS
@@ -37,6 +53,7 @@ __int_lerp__() {
     local fraction=$3
     local diff=$((end - start))
     local val=$((start + (diff * fraction) / 100))
+    __color_log__ "TRACE" "Lerp: $start -> $end @ $fraction% = $val"
     echo "$val"
 }
 
@@ -64,20 +81,22 @@ __gradient_print__() {
     local R2="$5"
     local G2="$6"
     local B2="$7"
-    local excluded_chars="${8:-}"  # string of characters to exclude from coloring
+    local excluded_chars="${8:-}" # string of characters to exclude from coloring
+
+    __color_log__ "DEBUG" "Printing gradient: RGB($R1,$G1,$B1) -> RGB($R2,$G2,$B2)"
 
     # Read multiline input into an array
-    mapfile -t lines <<< "$text"
+    mapfile -t lines <<<"$text"
 
     local total_lines=${#lines[@]}
-    if (( total_lines <= 1 )); then
+    if ((total_lines <= 1)); then
         # If only 1 line, just print it in the end color (except excludes)
         local lineColorPrefix="\033[38;2;${R2};${G2};${B2}m"
         local lineColorSuffix="\033[0m"
         local single_line="${lines[0]}"
-        
+
         # Print char by char, skipping excludes
-        for (( i=0; i<${#single_line}; i++ )); do
+        for ((i = 0; i < ${#single_line}; i++)); do
             local ch="${single_line:i:1}"
             if [[ "$excluded_chars" == *"$ch"* ]]; then
                 # Print excluded char with no color
@@ -92,13 +111,16 @@ __gradient_print__() {
     fi
 
     # Multiple lines => top-to-bottom gradient
-    for (( i=0; i<total_lines; i++ )); do
-        local fraction=$(( i * 100 / (total_lines - 1) ))
-        
+    for ((i = 0; i < total_lines; i++)); do
+        local fraction=$((i * 100 / (total_lines - 1)))
+
         # Interpolate color
-        local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
-        local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
-        local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
+        local R
+        local G
+        local B
+        R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+        G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+        B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
         # Color codes for the line
         local lineColorPrefix="\033[38;2;${R};${G};${B}m"
@@ -106,9 +128,9 @@ __gradient_print__() {
 
         # Print line char by char, skipping excludes
         local line="${lines[$i]}"
-        for (( j=0; j<${#line}; j++ )); do
+        for ((j = 0; j < ${#line}; j++)); do
             local ch="${line:j:1}"
-            
+
             # If ch is in the excluded list, print it uncolored
             if [[ "$excluded_chars" == *"$ch"* ]]; then
                 echo -n "$ch"
@@ -136,35 +158,40 @@ __gradient_print__() {
 #   For __line_gradient__ "Hello" 255 0 0 0 0 255,
 #   the output is "Hello" printed with a gradient transitioning from red to blue.
 __line_gradient__() {
-  local text="$1"
-  local R1="$2"
-  local G1="$3"
-  local B1="$4"
-  local R2="$5"
-  local G2="$6"
-  local B2="$7"
+    local text="$1"
+    local R1="$2"
+    local G1="$3"
+    local B1="$4"
+    local R2="$5"
+    local G2="$6"
+    local B2="$7"
 
-  local length=${#text}
+    __color_log__ "DEBUG" "Line gradient: '$text' RGB($R1,$G1,$B1) -> RGB($R2,$G2,$B2)"
 
-  # If empty or a single character, just print in end color
-  if (( length <= 1 )); then
-    echo -e "\033[38;2;${R2};${G2};${B2}m${text}${RESET}"
-    return
-  fi
+    local length=${#text}
 
-  for (( i=0; i<length; i++ )); do
-    local fraction=$(( i * 100 / (length - 1) ))
-    local R=$(__int_lerp__ "$R1" "$R2" "$fraction")
-    local G=$(__int_lerp__ "$G1" "$G2" "$fraction")
-    local B=$(__int_lerp__ "$B1" "$B2" "$fraction")
+    # If empty or a single character, just print in end color
+    if ((length <= 1)); then
+        echo -e "\033[38;2;${R2};${G2};${B2}m${text}${RESET}"
+        return
+    fi
 
-    # Extract single character
-    local c="${text:$i:1}"
-    echo -en "\033[38;2;${R};${G};${B}m${c}"
-  done
+    for ((i = 0; i < length; i++)); do
+        local fraction=$((i * 100 / (length - 1)))
+        local R
+        local G
+        local B
+        R=$(__int_lerp__ "$R1" "$R2" "$fraction")
+        G=$(__int_lerp__ "$G1" "$G2" "$fraction")
+        B=$(__int_lerp__ "$B1" "$B2" "$fraction")
 
-  # Newline + reset
-  echo -e "${RESET}"
+        # Extract single character
+        local c="${text:$i:1}"
+        echo -en "\033[38;2;${R};${G};${B}m${c}"
+    done
+
+    # Newline + reset
+    echo -e "${RESET}"
 }
 
 # --- __line_rgb__ ------------------------------------------------------------
@@ -180,12 +207,14 @@ __line_gradient__() {
 #   For __line_rgb__ "Static Text" 0 255 0,
 #   the output is "Static Text" printed in bright green.
 __line_rgb__() {
-  local text="$1"
-  local R="$2"
-  local G="$3"
-  local B="$4"
+    local text="$1"
+    local R="$2"
+    local G="$3"
+    local B="$4"
 
-  echo -e "\033[38;2;${R};${G};${B}m${text}${RESET}"
+    __color_log__ "TRACE" "RGB print: '$text' RGB($R,$G,$B)"
+
+    echo -e "\033[38;2;${R};${G};${B}m${text}${RESET}"
 }
 
 # --- __simulate_blink_async__ ------------------------------------------------
@@ -206,6 +235,8 @@ __simulate_blink_async__() {
     local text="$1"
     local times="${2:-5}"
     local delay="${3:-0.3}"
+
+    __color_log__ "DEBUG" "Starting async blink: '$text' x$times delay=$delay"
 
     local BRIGHT="\033[1m"
     local DIM="\033[2m"
@@ -230,3 +261,24 @@ __simulate_blink_async__() {
         echo -e "${RESET}${text}"
     ) &
 }
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-24: Fixed ShellCheck SC2155 warnings (separated variable declaration
+#   and assignment in __gradient_print__ and __line_gradient__)
+# - 2025-11-24: Removed duplicate variable assignments in __simulate_blink_async__
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - 2025-11-24: Fixed SC2155 - Separated local declaration and assignment to
+#   avoid masking return values in color interpolation loops
+# - 2025-11-24: Removed duplicate local variable declarations (lines 234-236)
+#
+# Known issues:
+# -
+#
+

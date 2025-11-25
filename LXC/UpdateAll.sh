@@ -2,74 +2,102 @@
 #
 # UpdateAll.sh
 #
-# A script to apply package updates to all Linux containers (LXC) on every host
-# in a Proxmox cluster. Requires root privileges and passwordless SSH between nodes.
+# Updates packages (apt-get update && upgrade) for all LXC containers across the entire cluster.
+# Containers must be running for updates to work. Supports Debian/Ubuntu (apt-get), Alpine (apk), and Fedora (dnf) distributions.
 #
 # Usage:
-#   ./UpdateAll.sh
+#   UpdateAll.sh
 #
-# Example:
-#   ./UpdateAll.sh
+# Examples:
+#   UpdateAll.sh
 #
-# Description:
-#   1. Checks if this script is run as root (__check_root__).
-#   2. Verifies this node is a Proxmox node (__check_proxmox__).
-#   3. Installs 'ssh' if missing (__install_or_prompt__ "ssh").
-#   4. Ensures the node is part of a Proxmox cluster (__check_cluster_membership__).
-#   5. Finds the local node IP and remote node IPs.
-#   6. Iterates over all nodes (local + remote), enumerates their LXC containers,
-#      and applies package updates inside each container.
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
-###############################################################################
-# Preliminary Checks via Utilities
-###############################################################################
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Gather Node IP Addresses
-###############################################################################
-LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-# Gather remote node IPs (excludes the local node)
-readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
+    __info__ "Updating all LXC containers across the cluster"
+    __warn__ "Containers must be running for updates to work"
 
-# Combine local + remote IPs
-ALL_NODE_IPS=("$LOCAL_NODE_IP" "${REMOTE_NODE_IPS[@]}")
+    # Get all containers in cluster
+    local -a all_cts
+    mapfile -t all_cts < <(__get_cluster_cts__)
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "Updating LXC containers on all nodes in the cluster..."
-
-# Iterate over all node IPs
-for nodeIp in "${ALL_NODE_IPS[@]}"; do
-  echo "--------------------------------------------------"
-  echo "Processing LXC containers on node: \"${nodeIp}\""
-
-  # 'pct list' header is removed by tail -n +2
-  containers="$(ssh "root@${nodeIp}" "pct list | tail -n +2 | awk '{print \$1}'" 2>/dev/null)"
-
-  if [[ -z "$containers" ]]; then
-    echo "  No LXC containers found on \"${nodeIp}\""
-    continue
-  fi
-
-  # Update each container
-  while read -r containerId; do
-    [[ -z "$containerId" ]] && continue
-    echo "  Updating container CTID: \"${containerId}\" on node \"${nodeIp}\"..."
-    if ssh "root@${nodeIp}" "pct exec ${containerId} -- apt-get update && apt-get upgrade -y"; then
-      echo "    Update complete for CTID: \"${containerId}\""
-    else
-      echo "    Update failed for CTID: \"${containerId}\""
+    if [[ ${#all_cts[@]} -eq 0 ]]; then
+        __info__ "No LXC containers found in cluster"
+        exit 0
     fi
-  done <<< "$containers"
-done
 
-echo "All LXC containers have been updated across the cluster."
+    __info__ "Found ${#all_cts[@]} container(s) in cluster"
+
+    local success=0
+    local failed=0
+
+    for vmid in "${all_cts[@]}"; do
+        __update__ "Updating container ${vmid}..."
+
+        if __ct_update_packages__ "$vmid"; then
+            success=$((success + 1))
+        else
+            __warn__ "Failed to update container ${vmid}"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Display summary
+    echo ""
+    __info__ "Update Summary:"
+    __info__ "  Total: ${#all_cts[@]}"
+    __info__ "  Success: ${success}"
+    if [[ $failed -gt 0 ]]; then
+        __warn__ "  Failed: ${failed}"
+    else
+        __info__ "  Failed: ${failed}"
+    fi
+
+    if [[ $failed -gt 0 ]]; then
+        __err__ "Some updates failed. Check the messages above for details."
+        exit 1
+    fi
+
+    __ok__ "All containers updated successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Validated against PVE Guide v9.1-1 and CONTRIBUTING.md
+#
+# Fixes:
+# - Fixed arithmetic increment syntax per CONTRIBUTING.md Section 3.7
+# - Fixed if-then-else pattern per shellcheck SC2015
+#
+# Known issues:
+# - Containers must be running for updates to work
+# - Pending validation
+#
+

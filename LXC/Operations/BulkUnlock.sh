@@ -2,59 +2,83 @@
 #
 # BulkUnlock.sh
 #
-# This script unlocks a range of LXC containers (CT) by ID, from a start ID to an end ID.
+# Unlocks a range of LXC containers within a Proxmox VE environment.
+# Automatically detects which node each container is on and executes the operation cluster-wide.
 #
 # Usage:
-#   ./BulkUnlock.sh <start_ct_id> <end_ct_id>
+#   BulkUnlock.sh <first_ct_id> <last_ct_id>
+#
+# Arguments:
+#   first_ct_id - The ID of the first container to unlock.
+#   last_ct_id  - The ID of the last container to unlock.
 #
 # Examples:
-#   # Unlock containers 100 through 105
-#   ./BulkUnlock.sh 100 105
+#   BulkUnlock.sh 100 105
+#   This will unlock containers 100-105 regardless of which nodes they are on
 #
-# Notes:
-#   - Must be run as root on a Proxmox node.
-#   - 'pct' is required (part of the PVE/LXC utilities).
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __info__ "Bulk unlock (cluster-wide): Containers ${START_VMID} to ${END_VMID}"
+
+    # Local callback for bulk operation
+    unlock_ct_callback() {
+        local vmid="$1"
+        __ct_unlock__ "$vmid"
+    }
+
+    # Use BulkOperations framework
+    __bulk_ct_operation__ --name "Unlock" --report "$START_VMID" "$END_VMID" unlock_ct_callback
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All containers unlocked successfully!"
+}
+
+main
 
 ###############################################################################
-# MAIN
+# Script notes:
 ###############################################################################
-# --- Parse arguments -------------------------------------------------------
-if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <start_ct_id> <end_ct_id>"
-  echo "Example:"
-  echo "  $0 100 105"
-  echo "  (Unlocks containers 100..105)"
-  exit 1
-fi
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide Chapter 11
+# - Uses __ct_unlock__ utility function per Section 11.12 (line 988)
+#
+# Fixes:
+# - Fixed ArgumentParser types (vmid instead of int)
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-START_CT_ID="$1"
-END_CT_ID="$2"
-
-# --- Basic checks ----------------------------------------------------------
-__check_root__
-__check_proxmox__
-
-# --- Display summary -------------------------------------------------------
-echo "=== Starting unlock process for containers from \"$START_CT_ID\" to \"$END_CT_ID\" ==="
-
-# --- Main Loop -------------------------------------------------------------
-for (( ctId=START_CT_ID; ctId<=END_CT_ID; ctId++ )); do
-  if pct config "$ctId" &>/dev/null; then
-    echo "Unlocking container \"$ctId\"..."
-    if pct unlock "$ctId"; then
-      echo " - Successfully unlocked CT \"$ctId\"."
-    else
-      echo " - Failed to unlock CT \"$ctId\"."
-    fi
-  else
-    echo " - Container \"$ctId\" does not exist. Skipping."
-  fi
-done
-
-echo "=== Bulk unlock process complete! ==="
-
-# --- Prompt to remove installed packages if any were installed in this session
-__prompt_keep_installed_packages__

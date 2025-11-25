@@ -1,32 +1,74 @@
 #!/bin/bash
 #
-# This script resets a range of virtual machines (VMs) within a Proxmox VE environment.
+# BulkReset.sh
+#
+# Resets virtual machines within a Proxmox VE cluster.
+# Uses BulkOperations framework for cluster-wide execution.
 #
 # Usage:
-# ./BulkReset.sh <first_vm_id> <last_vm_id>
+#   BulkReset.sh <start_vmid> <end_vmid>
 #
 # Arguments:
-#   first_vm_id - The ID of the first VM to reset.
-#   last_vm_id - The ID of the last VM to reset.
+#   start_vmid - Starting VM ID
+#   end_vmid   - Ending VM ID
 #
-# Example:
-#   ./BulkReset.sh 400 430
+# Examples:
+#   BulkReset.sh 400 430
+#
+# Function Index:
+#   - main
 #
 
-# Check if the required parameters are provided
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <first_vm_id> <last_vm_id>"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-FIRST_VM_ID=$1
-LAST_VM_ID=$2
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
-# Loop to reset VMs in the specified range
-for (( vm_id=FIRST_VM_ID; vm_id<=LAST_VM_ID; vm_id++ )); do
-    echo "Resetting VM ID: $vm_id"
-    qm reset $vm_id
-done
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-echo "Resetting completed!"
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    reset_callback() {
+        local vmid="$1"
+        __vm_reset__ "$vmid"
+    }
+
+    __bulk_vm_operation__ --name "Reset VMs" --report "$START_VMID" "$END_VMID" reset_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Reset completed successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+

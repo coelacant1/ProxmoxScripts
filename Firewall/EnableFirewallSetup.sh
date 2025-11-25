@@ -12,230 +12,225 @@
 #   3. (Optional) Sets default inbound policy to DROP for the datacenter firewall (commented by default).
 #
 # Usage:
-#   ./EnableFirewallSetup.sh <management_subnet/netmask>
+#   EnableFirewallSetup.sh <management_subnet/netmask>
 #
 # Example Usage:
 #   # Allow SSH/Web GUI from 192.168.1.0/24
-#   ./EnableFirewallSetup.sh 192.168.1.0/24
+#   EnableFirewallSetup.sh 192.168.1.0/24
 #
 # Function Index:
 #   - ipset_contains_cidr
 #   - rule_exists_by_comment
 #   - create_rule_once
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
-source "$UTILITIES"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Discovery.sh
+source "${UTILITYPATH}/Discovery.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # CONFIGURATION
 ###############################################################################
-CLUSTER_INTERFACE="vmbr0"  # Interface for cluster/storage network
-VXLAN_PORT="4789"          # Default VXLAN UDP port
+CLUSTER_INTERFACE="vmbr0" # Interface for cluster/storage network
+VXLAN_PORT="4789"         # Default VXLAN UDP port
 
-###############################################################################
-# HELPER FUNCTIONS
-###############################################################################
-
+# --- ipset_contains_cidr -----------------------------------------------------
 ipset_contains_cidr() {
-  # Check if a given CIDR is already in the proxmox-nodes IP set
-  local cidr="$1"
-  local existingCidrs=$(
-    pvesh get /cluster/firewall/ipset/proxmox-nodes --output-format json 2>/dev/null \
-      | jq -r '.[].cidr'
-  )
-  if echo "${existingCidrs}" | grep -qx "${cidr}"; then
-    return 0
-  else
-    return 1
-  fi
+    local cidr="$1"
+    local existing_cidrs
+    existing_cidrs=$(
+        pvesh get /cluster/firewall/ipset/proxmox-nodes --output-format json 2>/dev/null \
+            | jq -r '.[].cidr'
+    )
+    echo "${existing_cidrs}" | grep -qx "${cidr}"
 }
 
+# --- rule_exists_by_comment --------------------------------------------------
 rule_exists_by_comment() {
-  # Check if a firewall rule with a particular comment already exists
-  local comment="$1"
-  local existingComments=$(
-    pvesh get /cluster/firewall/rules --output-format json 2>/dev/null \
-      | jq -r '.[].comment // empty'
-  )
-  if echo "${existingComments}" | grep -Fxq "${comment}"; then
-    return 0
-  else
-    return 1
-  fi
+    local comment="$1"
+    local existing_comments
+    existing_comments=$(
+        pvesh get /cluster/firewall/rules --output-format json 2>/dev/null \
+            | jq -r '.[].comment // empty'
+    )
+    echo "${existing_comments}" | grep -Fxq "${comment}"
 }
 
+# --- create_rule_once --------------------------------------------------------
 create_rule_once() {
-  # Create a firewall rule only if it doesn't already exist (based on comment)
-  local comment="$1"
-  shift
-  if rule_exists_by_comment "${comment}"; then
-    echo " - Rule with comment '${comment}' already exists, skipping."
-  else
-    pvesh create /cluster/firewall/rules "$@" --comment "${comment}"
-    echo " - Created new rule: ${comment}"
-  fi
+    local comment="$1"
+    shift
+    if rule_exists_by_comment "${comment}"; then
+        __update__ "Rule '${comment}' already exists, skipping"
+    else
+        pvesh create /cluster/firewall/rules "$@" --comment "${comment}"
+        __ok__ "Created rule: ${comment}"
+    fi
 }
 
-###############################################################################
-# MAIN SCRIPT
-###############################################################################
+# Parse arguments
+__parse_args__ "management_subnet:cidr" "$@"
 
-# 1. Ensure we have the necessary privileges and environment
-__check_root__
-__check_proxmox__
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __install_or_prompt__ "jq"
+    __check_cluster_membership__
 
-# 2. Make sure we have the needed commands (jq is not installed by default on Proxmox)
-__install_or_prompt__ "jq"
+    __info__ "Management Subnet: ${MANAGEMENT_SUBNET}"
+    __info__ "Cluster Interface: ${CLUSTER_INTERFACE}"
 
-# 3. Verify we are in a cluster
-__check_cluster_membership__
+    # Gather node IPs
+    local local_node_ip
+    local_node_ip=$(hostname -I | awk '{print $1}')
+    local -a remote_node_ips
+    mapfile -t remote_node_ips < <(__get_remote_node_ips__)
+    local -a node_ips=("${local_node_ip}" "${remote_node_ips[@]}")
 
-# 4. Parse management subnet
-if [ -z "$1" ]; then
-  echo "Usage: $0 <management_subnet/netmask>"
-  echo "Example: $0 192.168.1.0/24"
-  exit 1
-fi
-MANAGEMENT_SUBNET="$1"
+    # Create and populate proxmox-nodes IP set
+    __info__ "Creating IP set 'proxmox-nodes'"
+    if ! pvesh get /cluster/firewall/ipset --output-format json 2>/dev/null \
+        | jq -r '.[].name' | grep -qx 'proxmox-nodes'; then
+        pvesh create /cluster/firewall/ipset --name proxmox-nodes \
+            --comment "IP set for Proxmox nodes"
+        __ok__ "Created IP set 'proxmox-nodes'"
+    else
+        __update__ "IP set 'proxmox-nodes' already exists"
+    fi
 
-echo "Management Subnet: \"${MANAGEMENT_SUBNET}\""
-echo "Cluster Interface: \"${CLUSTER_INTERFACE}\""
-echo
+    __info__ "Adding node IPs to IP set"
+    for ip_addr in "${node_ips[@]}"; do
+        if ipset_contains_cidr "${ip_addr}/32"; then
+            __update__ "${ip_addr}/32 already in IP set"
+        else
+            pvesh create /cluster/firewall/ipset/proxmox-nodes --cidr "${ip_addr}/32"
+            __ok__ "Added ${ip_addr}/32 to IP set"
+        fi
+    done
 
-# 5. Gather node IPs (local + remote)
-LOCAL_NODE_IP="$(hostname -I | awk '{print $1}')"
-readarray -t REMOTE_NODE_IPS < <( __get_remote_node_ips__ )
-NODE_IPS=("${LOCAL_NODE_IP}" "${REMOTE_NODE_IPS[@]}")
+    # Create firewall rules
+    __info__ "Creating firewall rules"
 
-###############################################################################
-# Create and populate 'proxmox-nodes' IP set
-###############################################################################
-if ! pvesh get /cluster/firewall/ipset --output-format json 2>/dev/null \
-   | jq -r '.[].name' | grep -qx 'proxmox-nodes'; then
-  echo "Creating IP set 'proxmox-nodes'..."
-  pvesh create /cluster/firewall/ipset --name proxmox-nodes \
-    --comment "IP set for Proxmox nodes"
-else
-  echo "IP set 'proxmox-nodes' already exists, skipping creation."
-fi
-echo
-
-echo "=== Adding Node IPs to IP set 'proxmox-nodes' ==="
-for ipAddr in "${NODE_IPS[@]}"; do
-  if ipset_contains_cidr "${ipAddr}/32"; then
-    echo " - \"${ipAddr}/32\" is already in the IP set, skipping."
-  else
-    pvesh create /cluster/firewall/ipset/proxmox-nodes --cidr "${ipAddr}/32"
-    echo " - Added \"${ipAddr}/32\" to IP set 'proxmox-nodes'."
-  fi
-done
-echo
-
-###############################################################################
-# Create firewall rules
-###############################################################################
-create_rule_once \
-  "Allow all traffic within Proxmox nodes IP set" \
-  --action ACCEPT \
-  --type ipset \
-  --source proxmox-nodes \
-  --dest proxmox-nodes \
-  --enable 1
-echo
-
-create_rule_once \
-  "Allow SSH from ${MANAGEMENT_SUBNET}" \
-  --action ACCEPT \
-  --source "${MANAGEMENT_SUBNET}" \
-  --dest '+' \
-  --dport 22 \
-  --proto tcp \
-  --enable 1
-
-create_rule_once \
-  "Allow Web GUI from ${MANAGEMENT_SUBNET}" \
-  --action ACCEPT \
-  --source "${MANAGEMENT_SUBNET}" \
-  --dest '+' \
-  --dport 8006 \
-  --proto tcp \
-  --enable 1
-echo
-
-# Attempt to allow VXLAN traffic
-if [ -n "${NODE_IPS[0]}" ]; then
-  FIRST_NODE_IP="${NODE_IPS[0]}"
-  NODE_SUBNET=$(ip route | grep "${FIRST_NODE_IP}" \
-    | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}\b' | head -n1)
-  if [ -n "${NODE_SUBNET}" ]; then
     create_rule_once \
-      "Allow VXLAN for ${NODE_SUBNET}" \
-      --action ACCEPT \
-      --source "${NODE_SUBNET}" \
-      --dest "${NODE_SUBNET}" \
-      --proto udp \
-      --dport "${VXLAN_PORT}" \
-      --enable 1
-    echo " - Allowed VXLAN (UDP ${VXLAN_PORT}) traffic for subnet: \"${NODE_SUBNET}\""
-  else
-    echo "WARNING: Could not determine node subnet from \"${FIRST_NODE_IP}\"; skipping VXLAN rule."
-  fi
-fi
-echo
+        "Allow all traffic within Proxmox nodes IP set" \
+        --action ACCEPT \
+        --source +proxmox-nodes \
+        --dest +proxmox-nodes \
+        --enable 1
 
-# Allow Ceph traffic among nodes
-echo "=== Creating Ceph rules among node IPs ==="
-for ipAddr in "${NODE_IPS[@]}"; do
-  create_rule_once \
-    "Allow Ceph MON 6789 from ${ipAddr}" \
-    --action ACCEPT \
-    --source "${ipAddr}/32" \
-    --dest proxmox-nodes \
-    --proto tcp \
-    --dport 6789 \
-    --enable 1
+    create_rule_once \
+        "Allow SSH from ${MANAGEMENT_SUBNET}" \
+        --action ACCEPT \
+        --source "${MANAGEMENT_SUBNET}" \
+        --dest '+' \
+        --dport 22 \
+        --proto tcp \
+        --enable 1
 
-  create_rule_once \
-    "Allow Ceph MON 3300 from ${ipAddr}" \
-    --action ACCEPT \
-    --source "${ipAddr}/32" \
-    --dest proxmox-nodes \
-    --proto tcp \
-    --dport 3300 \
-    --enable 1
+    create_rule_once \
+        "Allow Web GUI from ${MANAGEMENT_SUBNET}" \
+        --action ACCEPT \
+        --source "${MANAGEMENT_SUBNET}" \
+        --dest '+' \
+        --dport 8006 \
+        --proto tcp \
+        --enable 1
 
-  create_rule_once \
-    "Allow Ceph OSD 6800-7300 from ${ipAddr}" \
-    --action ACCEPT \
-    --source "${ipAddr}/32" \
-    --dest proxmox-nodes \
-    --proto tcp \
-    --dport 6800:7300 \
-    --enable 1
-done
-echo
+    # VXLAN rule
+    if [[ -n "${node_ips[0]}" ]]; then
+        local first_node_ip="${node_ips[0]}"
+        local node_subnet
+        node_subnet=$(ip route | grep "${first_node_ip}" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}\b' | head -n1)
+        if [[ -n "${node_subnet}" ]]; then
+            create_rule_once \
+                "Allow VXLAN for ${node_subnet}" \
+                --action ACCEPT \
+                --source "${node_subnet}" \
+                --dest "${node_subnet}" \
+                --proto udp \
+                --dport "${VXLAN_PORT}" \
+                --enable 1
+        fi
+    fi
+
+    # Ceph rules
+    __info__ "Creating Ceph rules"
+    for ip_addr in "${node_ips[@]}"; do
+        create_rule_once \
+            "Allow Ceph MON 6789 from ${ip_addr}" \
+            --action ACCEPT \
+            --source "${ip_addr}/32" \
+            --dest +proxmox-nodes \
+            --proto tcp \
+            --dport 6789 \
+            --enable 1
+
+        create_rule_once \
+            "Allow Ceph MON 3300 from ${ip_addr}" \
+            --action ACCEPT \
+            --source "${ip_addr}/32" \
+            --dest +proxmox-nodes \
+            --proto tcp \
+            --dport 3300 \
+            --enable 1
+
+        create_rule_once \
+            "Allow Ceph OSD 6800-7300 from ${ip_addr}" \
+            --action ACCEPT \
+            --source "${ip_addr}/32" \
+            --dest +proxmox-nodes \
+            --proto tcp \
+            --dport 6800:7300 \
+            --enable 1
+    done
+
+    # Enable firewall on datacenter
+    __info__ "Enabling datacenter firewall"
+    pvesh set /cluster/firewall/options --enable 1
+    __ok__ "Datacenter firewall enabled"
+
+    # Enable firewall on all nodes
+    __info__ "Enabling node firewalls"
+    for ip_addr in "${node_ips[@]}"; do
+        local node_name
+        node_name=$(__get_name_from_ip__ "${ip_addr}")
+        pvesh set "/nodes/${node_name}/firewall/options" --enable 1
+        __ok__ "Firewall enabled on ${node_name}"
+    done
+
+    __ok__ "Firewall setup completed successfully!"
+}
+
+main
 
 ###############################################################################
-# Optional default policy settings
+# Script notes:
 ###############################################################################
-# Uncomment to set the default inbound policy to DROP on the datacenter:
-# pvesh set /cluster/firewall/options --policy_in DROP --policy_out ACCEPT
-# echo "Default inbound policy set to DROP."
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions and ArgumentParser
+# - 2025-11-20: Pending validation
+# - Utility function parameters verified correct
+#
+# Fixes:
+# - 2025-11-20: Fixed ipset reference syntax to use +ipsetname format per PVE Guide 13.3
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-###############################################################################
-# Enable firewall on datacenter and all nodes
-###############################################################################
-pvesh set /cluster/firewall/options --enable 1
-echo "Firewall enabled for datacenter."
-
-echo "Enabling firewall for each node:"
-for ipAddr in "${NODE_IPS[@]}"; do
-  nodeName=$(__get_name_from_ip__ "${ipAddr}")
-  pvesh set "/nodes/${nodeName}/firewall/options" --enable 1
-  echo " - Firewall enabled for node: \"${nodeName}\"."
-done
-
-echo
-echo "=== Firewall setup and enablement completed for all nodes and datacenter! ==="

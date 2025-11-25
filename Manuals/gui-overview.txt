@@ -1,0 +1,264 @@
+================================================================================
+GUI.SH - COMPLETE OVERVIEW
+================================================================================
+
+Interactive terminal interface for managing Proxmox with ProxmoxScripts
+
+================================================================================
+QUICK START
+================================================================================
+
+Launch GUI
+----------
+./GUI.sh
+
+Command-Line Options
+--------------------
+./GUI.sh -c         # Clear logs before starting
+./GUI.sh -d         # Debug level output (verbose)
+./GUI.sh -v         # Info level output (default)
+./GUI.sh -q         # Quiet mode (errors only)
+./GUI.sh -h         # Show help
+
+================================================================================
+MAIN SCREEN
+================================================================================
+
+Top Status Bar
+--------------
+EXECUTION: [Local/Single Remote/Multiple Remote]
+TARGET: [This System / Node Name / X nodes]
+LOG LEVEL: [DEBUG/INFO/ERROR]
+
+Navigation
+----------
+Numbers or Arrow Keys    Select item
+Enter                    Confirm selection
+'b'                      Go back / Exit
+'e'                      Exit immediately
+'h' or '?'               Show manuals
+'l'                      Change log level (remote only)
+
+Script Listing
+--------------
+Folders shown with '/'
+Scripts without extension
+Color-coded for easy identification
+
+================================================================================
+EXECUTION MODES
+================================================================================
+
+Three Modes Available
+---------------------
+1. Local Execution      - Run on this system
+2. Single Remote Node   - Run on one Proxmox node
+3. Multiple Remote      - Run on multiple nodes
+
+Select from main menu or press corresponding number
+
+See: execution-modes.txt for detailed information
+
+================================================================================
+NODE MANAGEMENT
+================================================================================
+
+Access Node Manager
+-------------------
+From execution mode menu, press 'm'
+
+Functions
+---------
+1. List nodes       - View all configured nodes
+2. Add node         - Add new node to nodes.json
+3. Remove node      - Remove node from config
+
+See: node-management.txt for detailed information
+
+================================================================================
+MANUAL SYSTEM
+================================================================================
+
+Access Manuals
+--------------
+Press 'h' or '?' from any menu
+
+Available Manuals
+-----------------
+- getting-started      Quick start guide
+- gui-overview         This document
+- execution-modes      Local/Remote execution details
+- node-management      Managing nodes.json
+- troubleshooting      Common issues and fixes
+- readline-shortcuts   Parameter editing shortcuts
+
+Navigation
+----------
+Enter number to view manual
+'b' to return to menu
+'e' to exit manual system
+
+================================================================================
+SCRIPT EXECUTION
+================================================================================
+
+Browse Scripts
+--------------
+1. Navigate folders with numbers/arrows
+2. Select script with Enter
+3. Use 'b' to go back up folders
+
+Enter Parameters
+----------------
+When prompted:
+  - Type parameters
+  - Use readline shortcuts (see readline-shortcuts.txt)
+  - Press Enter to execute
+  - Type 'c' to cancel
+
+Parameter Editing
+-----------------
+Arrow keys          Move cursor
+Ctrl+A / Ctrl+E     Jump to start/end
+Ctrl+K              Delete to end
+Ctrl+U              Clear line
+↑/↓                 History (previous parameters)
+
+View Output
+-----------
+  - Real-time output displayed
+  - Logs saved to /tmp/
+  - Press Enter to continue after completion
+
+================================================================================
+FEATURES
+================================================================================
+
+Auto-Complete
+-------------
+Tab completion for file paths in parameters
+
+History
+-------
+↑/↓ arrows recall previous parameters for same script
+History persists during GUI session only
+
+Log Management
+--------------
+./GUI.sh -c         Clear logs on startup
+Logs location:
+  Local:  /tmp/gui_execution.log
+  Remote: /tmp/ProxmoxScripts_gui/ (on each node)
+
+Script Usage Help
+-----------------
+Select script and press 'h' to see usage without running
+
+Real-Time Output
+----------------
+All script output displayed immediately
+Colors preserved from scripts
+Progress indicators shown
+
+================================================================================
+KEYBOARD SHORTCUTS
+================================================================================
+
+Global
+------
+b           Go back / Exit to previous menu
+e           Exit immediately
+h or ?      Show manual system
+l           Change log level (remote execution only)
+
+Navigation
+----------
+Numbers     Select item directly
+↑/↓         Navigate up/down
+Enter       Confirm selection
+
+Parameter Entry
+---------------
+See readline-shortcuts.txt for complete list
+Ctrl+A      Jump to start
+Ctrl+E      Jump to end
+Ctrl+U      Clear line
+↑           Previous parameters
+
+================================================================================
+ADVANCED FEATURES
+================================================================================
+
+Remote Execution
+----------------
+  - Scripts copied to remote /tmp/
+  - Executed with all utilities
+  - Output streamed back
+  - Cleaned up automatically
+
+Parallel Multi-Node
+-------------------
+  - Execute on multiple nodes simultaneously
+  - Independent logging per node
+  - Failure on one node doesn't stop others
+  - Summary shows per-node results
+
+Automatic Utilities
+-------------------
+All scripts have access to:
+  - Colors.sh
+  - Communication.sh
+  - All utility functions
+  - No manual includes needed
+
+================================================================================
+TIPS & TRICKS
+================================================================================
+
+Testing Scripts
+---------------
+1. Test locally first
+2. Then test on single remote node
+3. Finally run on multiple nodes
+
+Efficient Navigation
+--------------------
+  - Use numbers for direct selection
+  - Remember folder structure for speed
+  - Use 'b' to quickly navigate up
+
+Parameter History
+-----------------
+Running same script multiple times?
+Press ↑ to recall previous parameters
+
+Log Levels
+----------
+Start with -q (quiet) for production
+Use -d (debug) only when troubleshooting
+
+Quick Access
+------------
+  - Press 'h' anywhere for help
+  - Press 'e' for immediate exit
+  - Use Tab for path completion
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+For detailed troubleshooting, see: troubleshooting.txt
+
+Quick Fixes
+-----------
+GUI won't start       : chmod +x GUI.sh
+Can't connect remote  : Check ping, SSH, credentials
+Scripts fail          : Check /tmp/gui_execution.log
+No manuals showing    : Verify Manuals/ directory exists
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================
+

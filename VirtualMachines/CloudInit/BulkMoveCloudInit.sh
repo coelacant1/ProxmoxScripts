@@ -1,218 +1,224 @@
 #!/bin/bash
 #
-# This script automates the migration of Cloud-Init disks for LXC containers or VMs within a Proxmox VE environment.
-# It allows bulk migration by specifying a range of VM IDs or selecting all VMs.
-# The script backs up existing Cloud-Init parameters, deletes the current Cloud-Init disk, and recreates it on the target storage.
-# This is particularly useful for reorganizing storage resources or moving Cloud-Init configurations to a different storage backend.
+# BulkMoveCloudInit.sh
+#
+# Automates migration of Cloud-Init disks for LXC containers or VMs within a Proxmox VE environment.
+# Allows bulk migration by specifying a range of VM IDs or selecting all VMs.
+# Backs up existing Cloud-Init parameters, deletes current Cloud-Init disk, and recreates it on target storage.
+# Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-# ./BulkMoveCloudInit.sh <start_vmid|ALL> <end_vmid|target_storage> [target_storage]
+#   BulkMoveCloudInit.sh <start_vmid|ALL> <end_vmid|target_storage> [target_storage]
 #
 # Arguments:
 #   start_vmid      - The starting VM ID for migration. Use "ALL" to target all VMs.
-#   end_vmid        - If start_vmid is a number, this is the ending VM ID for migration.
+#   end_vmid        - If start_vmid is a number, this is the ending VM ID.
 #                     If start_vmid is "ALL", this argument becomes the target storage.
-#   target_storage  - (Optional) The target storage for the Cloud-Init disk. Required if start_vmid is not "ALL".
+#   target_storage  - The target storage for the Cloud-Init disk.
 #
 # Examples:
-#   ./BulkMoveCloudInit.sh 100 200 local-lvm
-#   This command will migrate Cloud-Init disks for VMs with IDs from 100 to 200 to the "local-lvm" storage.
+#   BulkMoveCloudInit.sh 100 200 local-lvm
+#   BulkMoveCloudInit.sh ALL ceph-storage
 #
-#   ./BulkMoveCloudInit.sh ALL ceph-storage
-#   This command will migrate Cloud-Init disks for all VMs to the "ceph-storage" storage.
-#
-# Important Notes:
-#   - Ensure that the target storage exists and has sufficient space.
-#   - The script assumes that the Cloud-Init disk is attached as "sata1". Modify the script if your setup differs.
-#   - Always back up your VM configurations before performing bulk operations.
-#   - Execute the script with appropriate permissions (typically as root or a user with sufficient privileges).
-#
-# Permissions and Execution:
-#   Ensure the script has execute permissions:
-#     chmod +x BulkMoveCloudInit.sh
-#   Execute the script as shown in the usage examples.
 # Function Index:
-#   - usage
 #   - check_storage_exists
 #   - get_current_storage
-#   - migrate_cloud_init_disk
+#   - main
 #
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+set -euo pipefail
 
-# Function to display usage information
-usage() {
-    echo "Usage: $0 <start_vmid|ALL> <end_vmid|target_storage> [target_storage]"
-    echo
-    echo "Arguments:"
-    echo "  start_vmid      - The starting VM ID for migration. Use 'ALL' to target all VMs."
-    echo "  end_vmid        - If start_vmid is a number, this is the ending VM ID for migration."
-    echo "                   If start_vmid is 'ALL', this argument becomes the target storage."
-    echo "  target_storage  - (Optional) The target storage for the Cloud-Init disk."
-    echo
-    echo "Examples:"
-    echo "  $0 100 200 local-lvm"
-    echo "  $0 ALL ceph-storage"
-}
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
-# Function to check if a storage exists
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+# Parse arguments (handle special case: ALL for all VMs)
+if [[ $# -ge 1 ]] && [[ "$1" == "ALL" ]]; then
+    # ALL <target_storage>
+    __parse_args__ "all:keyword target_storage:storage" "$@"
+    START_VMID="ALL"
+    END_VMID=""
+else
+    # <start_vmid> <end_vmid> <target_storage>
+    __parse_args__ "start_vmid:vmid end_vmid:vmid target_storage:storage" "$@"
+fi
+
+# --- check_storage_exists ----------------------------------------------------
+# @function check_storage_exists
+# @description Checks if a storage exists.
+# @param 1 Storage name
 check_storage_exists() {
     local storage=$1
-    if ! pvesh get /storage | grep -qw "$storage"; then
-        echo "Error: Storage '$storage' does not exist."
+    if ! pvesh get /storage 2>/dev/null | grep -qw "$storage"; then
+        __err__ "Storage '${storage}' does not exist"
         exit 1
     fi
 }
 
-# Function to get the current Cloud-Init disk storage
+# --- get_current_storage -----------------------------------------------------
 get_current_storage() {
     local vmid=$1
-    # Attempt to find the Cloud-Init disk (commonly attached as sata1 or ide2)
+    local node=$2
     local storage
-    storage=$(qm config "$vmid" | grep -E 'sata1:|ide2:' | awk -F ':' '{print $2}' | awk -F',' '{print $1}' | awk -F' ' '{print $1}')
+    storage=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -E 'sata1:|ide2:' | awk -F ':' '{print $2}' | awk -F',' '{print $1}' | awk -F' ' '{print $1}')
     echo "$storage"
 }
 
-# Function to migrate the Cloud-Init disk
-migrate_cloud_init_disk() {
-    local vmid=$1
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-    echo "Processing VM ID: $vmid"
+    # Validate that TARGET_STORAGE exists
+    check_storage_exists "$TARGET_STORAGE"
 
-    # Check if the VM exists
-    if ! qm list | awk 'NR>1 {print $1}' | grep -qw "^$vmid$"; then
-        echo "VM ID $vmid does not exist. Skipping."
-        return
-    fi
+    __info__ "Bulk move Cloud-Init: Target storage ${TARGET_STORAGE} (cluster-wide)"
 
-    # Get current Cloud-Init disk storage
-    CURRENT_STORAGE=$(get_current_storage "$vmid")
-
-    if [ -z "$CURRENT_STORAGE" ]; then
-        echo "VM $vmid does not have a Cloud-Init disk attached. Skipping."
-        return
-    fi
-
-    # Check if the Cloud-Init disk is already on the target storage
-    if [ "$CURRENT_STORAGE" == "$TARGET_STORAGE" ]; then
-        echo "Cloud-Init disk for VM $vmid is already on $TARGET_STORAGE. Skipping migration."
-        return
-    fi
-
-    # Backup Cloud-Init parameters
-    echo "Backing up Cloud-Init parameters for VM $vmid..."
-    CI_USER=$(qm config "$vmid" | grep -oP '(?<=^ciuser: ).*')
-    CI_PASSWORD=$(qm config "$vmid" | grep -oP '(?<=^cipassword: ).*')
-    CI_IPCONFIG=$(qm config "$vmid" | grep -oP '(?<=^ipconfig0: ).*')
-    CI_NAMESERVER=$(qm config "$vmid" | grep -oP '(?<=^nameserver: ).*')
-    CI_SEARCHDOMAIN=$(qm config "$vmid" | grep -oP '(?<=^searchdomain: ).*')
-    CI_SSHKEYS=$(qm config "$vmid" | grep -oP '(?<=^sshkeys: ).*' | sed 's/%0A/\n/g' | sed 's/%20/ /g')
-
-    if [ -z "$CI_USER" ] && [ -z "$CI_IPCONFIG" ]; then
-        echo "VM $vmid does not have Cloud-Init parameters. Skipping migration."
-        return
-    fi
-
-    echo "Cloud-Init parameters backed up successfully."
-
-    # Delete the existing Cloud-Init disk
-    echo "Deleting existing Cloud-Init disk for VM $vmid..."
-    qm set "$vmid" --delete sata1 2>/dev/null || qm set "$vmid" --delete ide2
-
-    echo "Cloud-Init disk for VM $vmid deleted successfully."
-
-    # Re-create Cloud-Init disk on the target storage using the same interface
-    # Determine which interface was used
-    if qm config "$vmid" | grep -q "^sata1:"; then
-        CI_INTERFACE="sata1"
-    elif qm config "$vmid" | grep -q "^ide2:"; then
-        CI_INTERFACE="ide2"
+    # Determine VM IDs to process
+    local -a vm_ids=()
+    if [[ "$START_VMID" == "ALL" ]]; then
+        __info__ "Processing all VMs in cluster"
+        local all_vms
+        all_vms=$(__get_cluster_vms__)
+        read -r -a vm_ids <<<"$all_vms"
     else
-        # Default to sata1 if unable to determine
-        CI_INTERFACE="sata1"
+        __info__ "Processing VMs ${START_VMID} to ${END_VMID}"
+        for ((vmid = START_VMID; vmid <= END_VMID; vmid++)); do
+            vm_ids+=("$vmid")
+        done
     fi
 
-    echo "Re-creating Cloud-Init disk for VM $vmid on $TARGET_STORAGE using interface $CI_INTERFACE..."
-    qm set "$vmid" --"${CI_INTERFACE%%[0-9]*}" "$TARGET_STORAGE:cloudinit"
+    # Local callback for bulk operation
+    migrate_cloud_init_callback() {
+        local vmid="$1"
+        local node
 
-    echo "Cloud-Init disk for VM $vmid created successfully on $TARGET_STORAGE."
+        node=$(__get_vm_node__ "$vmid")
 
-    # Restore Cloud-Init parameters
-    echo "Restoring Cloud-Init parameters for VM $vmid..."
+        if [[ -z "$node" ]]; then
+            __update__ "VM ${vmid} not found in cluster"
+            return 1
+        fi
 
-    # Prepare SSH keys if they exist and are valid
-    if [[ -n "$CI_SSHKEYS" && "$CI_SSHKEYS" =~ ^ssh-(rsa|dss|ed25519|ecdsa) ]]; then
-        TEMP_SSH_FILE=$(mktemp)
-        echo -e "$CI_SSHKEYS" > "$TEMP_SSH_FILE"
-        SSHKEYS_OPTION="sshkeys=$(cat "$TEMP_SSH_FILE")"
-    else
-        SSHKEYS_OPTION=""
-        echo "No valid SSH keys found for VM $vmid. Skipping SSH key restoration."
-    fi
+        # Get current Cloud-Init disk storage
+        local current_storage
+        current_storage=$(get_current_storage "$vmid" "$node")
 
-    # Apply the restored parameters
-    qm set "$vmid" \
-        --ciuser "$CI_USER" \
-        --cipassword "$CI_PASSWORD" \
-        --ipconfig0 "$CI_IPCONFIG" \
-        --nameserver "$CI_NAMESERVER" \
-        --searchdomain "$CI_SEARCHDOMAIN" \
-        ${SSHKEYS_OPTION:+--sshkeys "$SSHKEYS_OPTION"}
+        if [[ -z "$current_storage" ]]; then
+            __update__ "VM ${vmid} does not have a Cloud-Init disk attached"
+            return 1
+        fi
 
-    if [ $? -eq 0 ]; then
-        echo "Cloud-Init parameters for VM $vmid restored successfully."
-    else
-        echo "Failed to restore Cloud-Init parameters for VM $vmid."
-    fi
+        # Check if already on target storage
+        if [[ "$current_storage" == "$TARGET_STORAGE" ]]; then
+            __update__ "VM ${vmid} Cloud-Init disk already on ${TARGET_STORAGE}"
+            return 0
+        fi
 
-    # Clean up temporary SSH key file
-    if [ -n "$TEMP_SSH_FILE" ] && [ -f "$TEMP_SSH_FILE" ]; then
-        rm "$TEMP_SSH_FILE"
-    fi
+        __update__ "Backing up Cloud-Init parameters for VM ${vmid}..."
+        local ci_user ci_password ci_ipconfig ci_nameserver ci_searchdomain ci_sshkeys
+        ci_user=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^ciuser: ).*' || true)
+        ci_password=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^cipassword: ).*' || true)
+        ci_ipconfig=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^ipconfig0: ).*' || true)
+        ci_nameserver=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^nameserver: ).*' || true)
+        ci_searchdomain=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^searchdomain: ).*' || true)
+        ci_sshkeys=$(qm config "$vmid" --node "$node" 2>/dev/null | grep -oP '(?<=^sshkeys: ).*' | sed 's/%0A/\n/g' | sed 's/%20/ /g' || true)
+
+        if [[ -z "$ci_user" ]] && [[ -z "$ci_ipconfig" ]]; then
+            __update__ "VM ${vmid} does not have Cloud-Init parameters"
+            return 0
+        fi
+
+        __update__ "Deleting existing Cloud-Init disk for VM ${vmid}..."
+        if qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^sata1:"; then
+            qm set "$vmid" --delete sata1 --node "$node" 2>/dev/null || true
+        elif qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^ide2:"; then
+            qm set "$vmid" --delete ide2 --node "$node" 2>/dev/null || true
+        fi
+
+        # Determine which interface to use for re-creation
+        local ci_interface="ide2"
+        if qm config "$vmid" --node "$node" 2>/dev/null | grep -q "^sata"; then
+            ci_interface="ide2"
+        fi
+
+        __update__ "Re-creating Cloud-Init disk for VM ${vmid} on ${TARGET_STORAGE}..."
+        qm set "$vmid" --"${ci_interface}" "${TARGET_STORAGE}:cloudinit" --node "$node" 2>/dev/null
+
+        __update__ "Restoring Cloud-Init parameters for VM ${vmid}..."
+
+        # Prepare SSH keys if they exist and are valid
+        local temp_ssh_file=""
+        local sshkeys_option=""
+        if [[ -n "$ci_sshkeys" ]] && [[ "$ci_sshkeys" =~ ^ssh-(rsa|dss|ed25519|ecdsa) ]]; then
+            temp_ssh_file=$(mktemp)
+            echo -e "$ci_sshkeys" >"$temp_ssh_file"
+            sshkeys_option="--sshkeys ${temp_ssh_file}"
+        fi
+
+        # Apply the restored parameters
+        local cmd="qm set \"$vmid\" --node \"$node\""
+        [[ -n "$ci_user" ]] && cmd="$cmd --ciuser \"$ci_user\""
+        [[ -n "$ci_password" ]] && cmd="$cmd --cipassword \"$ci_password\""
+        [[ -n "$ci_ipconfig" ]] && cmd="$cmd --ipconfig0 \"$ci_ipconfig\""
+        [[ -n "$ci_nameserver" ]] && cmd="$cmd --nameserver \"$ci_nameserver\""
+        [[ -n "$ci_searchdomain" ]] && cmd="$cmd --searchdomain \"$ci_searchdomain\""
+        [[ -n "$sshkeys_option" ]] && cmd="$cmd $sshkeys_option"
+
+        local result=0
+        if ! eval "$cmd" 2>/dev/null; then
+            result=1
+        fi
+
+        # Clean up temporary SSH key file
+        [[ -n "$temp_ssh_file" ]] && [[ -f "$temp_ssh_file" ]] && rm "$temp_ssh_file"
+
+        return $result
+    }
+
+    # Use BulkOperations framework
+    BULK_OPERATION_NAME="Cloud-Init Migration"
+    for vmid in "${vm_ids[@]}"; do
+        if migrate_cloud_init_callback "$vmid"; then
+            ((BULK_SUCCESS += 1))
+        else
+            ((BULK_FAILED += 1))
+            BULK_FAILED_IDS+=("$vmid")
+        fi
+    done
+
+    # Display summary
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Cloud-Init disk migration completed successfully!"
 }
 
-# Check if the minimum required parameters are provided
-if [ "$#" -lt 2 ]; then
-    usage
-    exit 1
-fi
+main
 
-# Assign command-line arguments to variables
-START_VMID=$1
-END_VMID=$2
-TARGET_STORAGE=$3
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# - 2025-11-24: Fixed Cloud-Init disk recreation logic - PVE Guide shows the full
+#   parameter (--ide2, --sata1) should be used, not just the interface type
+#
+# Known issues:
+# -
+#
 
-# Determine VM IDs and target storage based on the first argument
-if [ "$START_VMID" == "ALL" ]; then
-    if [ "$#" -lt 2 ]; then
-        echo "Error: When using 'ALL', you must specify the target storage."
-        usage
-        exit 1
-    fi
-    VMIDS=$(qm list | awk 'NR>1 {print $1}')
-    TARGET_STORAGE=$END_VMID
-else
-    if [ "$#" -lt 3 ]; then
-        echo "Error: When specifying VM ID range, target storage must be provided."
-        usage
-        exit 1
-    fi
-    # Validate that START_VMID and END_VMID are integers
-    if ! [[ "$START_VMID" =~ ^[0-9]+$ ]] || ! [[ "$END_VMID" =~ ^[0-9]+$ ]]; then
-        echo "Error: start_vmid and end_vmid must be positive integers."
-        usage
-        exit 1
-    fi
-    VMIDS=$(seq "$START_VMID" "$END_VMID")
-fi
-
-# Validate that TARGET_STORAGE exists
-check_storage_exists "$TARGET_STORAGE"
-
-# Loop through each VMID and migrate the Cloud-Init disk
-for VMID in $VMIDS; do
-    migrate_cloud_init_disk "$VMID"
-done
-
-echo "Cloud-Init disk migration process completed."

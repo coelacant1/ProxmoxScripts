@@ -1,92 +1,170 @@
 #!/bin/bash
 #
-# This script automates the process of cloning virtual machines (VMs) within a Proxmox VE environment. It clones a source VM into
-# a specified number of new VMs, assigning them unique IDs, names based on a user-provided base name, and assigns cloud-init IP addresses. 
-# Adding cloned VMs to a designated pool is optional. This script is particularly useful for quickly deploying multiple VMs based on a 
-# standardized configuration.
+# BulkCloneCloudInit.sh
+#
+# Clones a source VM into multiple new VMs with sequential IDs, names, and
+# Cloud-Init network configuration (IP, gateway, bridge). All clones are
+# created on the same node as the source VM.
 #
 # Usage:
-# ./BulkCloneCloudInit.sh <source_vm_id> <base_vm_name> <start_vm_id> <num_vms> <start_ip/cidr> <bridge> [gateway] [pool_name]
+#   BulkCloneCloudInit.sh <source_vmid> <base_name> <start_vmid> <count> <start_ip> <bridge> [--gateway <gateway>] [--pool <pool_name>]
 #
 # Arguments:
-#   source_vm_id - The ID of the VM that will be cloned.
-#   base_vm_name - The base name for the new VMs, which will be appended with a numerical index.
-#   start_vm_id - The starting VM ID for the first clone.
-#   num_vms - The number of VMs to clone.
-#   start_ip/cidr - The new IP address and subnet mask of the VM
-#   bridge - The network bridge to be used for the cloned VMs.
-#   gateway - Optional. The gateway for the IP configuration
-#   pool_name - Optional. The name of the pool to which the new VMs will be added. If not provided, VMs are not added to any pool.
+#   source_vmid - The ID of the VM to be cloned.
+#   base_name   - Base name for new VMs (appended with sequential number).
+#   start_vmid  - Starting VM ID for the first clone.
+#   count       - Number of VMs to clone.
+#   start_ip    - Starting IP address in CIDR notation (e.g., 192.168.1.50/24).
+#   bridge      - Network bridge to use (e.g., vmbr0).
+#   --gateway   - Optional gateway IP address for network configuration.
+#   --pool      - Optional pool name to add cloned VMs to.
 #
-# Example:
-#   ./BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 192.168.1.1 PoolName
-#   ./BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 # Without specifying a gateway or pool
+# Examples:
+#   BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0
+#   BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 --gateway 192.168.1.1
+#   BulkCloneCloudInit.sh 110 Ubuntu-2C-20GB 400 30 192.168.1.50/24 vmbr0 --gateway 192.168.1.1 --pool PoolName
 #
 # Function Index:
-#   - __ip_to_int__
-#   - __int_to_ip__
+#   - main
 #
 
-# Check if the minimum required parameters are provided
-if [ "$#" -lt 6 ]; then
-    echo "Usage: $0 <source_vm_id> <base_vm_name> <start_vm_id> <num_vms> <start_ip/cidr> <bridge> [gateway] [pool_name]"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-SOURCE_VM_ID=$1
-BASE_VM_NAME=$2
-START_VM_ID=$3
-NUM_VMS=$4
-START_IP_CIDR=$5
-BRIDGE=$6  # Network bridge, required
-GATEWAY=${7:-}  # Optional gateway, default to an empty string if not provided
-POOL_NAME=${8:-}  # Optional pool name, default to an empty string if not provided
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Conversion.sh
+source "${UTILITYPATH}/Conversion.sh"
 
-# Extract the IP address and CIDR from the start_ip/cidr
-IFS='/' read -r START_IP SUBNET_MASK <<< "$START_IP_CIDR"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-# Convert IP address to an integer
-__ip_to_int__() {
-    local a b c d
-    IFS=. read -r a b c d <<< "$1"
-    echo "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
-}
+# Parse arguments using declarative API
+__parse_args__ "source_vmid:vmid base_name:string start_vmid:vmid count:number start_ip:cidr bridge:bridge --gateway:gateway:? --pool:string:?" "$@"
 
-# Convert integer to IP address
-__int_to_ip__() {
-    local ip
-    ip=$(printf "%d.%d.%d.%d" "$((($1 >> 24) & 255))" "$((($1 >> 16) & 255))" "$((($1 >> 8) & 255))" "$((($1 & 255))")
-    echo "$ip"
-}
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-# Get the starting IP as an integer
-START_IP_INT=$(__ip_to_int__ "$START_IP")
-
-# Loop to create clones
-for (( i=0; i<$NUM_VMS; i++ )); do
-    TARGET_VM_ID=$((START_VM_ID + i))
-    NAME_INDEX=$((i + 1))
-    VM_NAME="${BASE_VM_NAME}${NAME_INDEX}"
-
-    # Increment the IP address
-    CURRENT_IP_INT=$((START_IP_INT + i))
-    NEW_IP=$(__int_to_ip__ "$CURRENT_IP_INT")
-
-    # Clone the VM and set the constructed name
-    qm clone $SOURCE_VM_ID $TARGET_VM_ID --name $VM_NAME
-
-    # Set the static IP, subnet mask, and gateway using Cloud-Init
-    qm set $TARGET_VM_ID --ipconfig0 ip=${NEW_IP}/${SUBNET_MASK},gw=${GATEWAY}
-
-    # Set the network bridge
-    qm set $TARGET_VM_ID --net0 virtio,bridge=$BRIDGE
-
-    # Check if a pool name was provided and add VM to the pool if it was
-    if [ -n "$POOL_NAME" ]; then
-        qm set $TARGET_VM_ID --pool $POOL_NAME
+    # Verify source VM exists
+    if ! __vm_exists__ "$SOURCE_VMID"; then
+        __err__ "Source VM ID ${SOURCE_VMID} not found"
+        exit 1
     fi
 
-done
+    # Get source VM node for remote execution
+    local source_node
+    source_node=$(__get_vm_node__ "$SOURCE_VMID")
 
-echo "Cloning completed!"
+    # Extract IP address and subnet mask from CIDR notation
+    IFS='/' read -r start_ip_addr subnet_mask <<<"$START_IP"
+
+    # Convert starting IP to integer for incrementing
+    local start_ip_int
+    start_ip_int=$(__ip_to_int__ "$start_ip_addr")
+
+    # Calculate end VMID
+    local end_vmid=$((START_VMID + COUNT - 1))
+
+    __info__ "Cloning VM ${SOURCE_VMID} (on node ${source_node}) to create ${COUNT} new VMs (${START_VMID}-${end_vmid})"
+    __info__ "Network: ${START_IP} on bridge ${BRIDGE}"
+    [[ -n "$GATEWAY" ]] && __info__ "Gateway: ${GATEWAY}"
+    [[ -n "$POOL" ]] && __info__ "VMs will be added to pool: ${POOL}"
+
+    # Track success and failures
+    local success=0
+    local failed=0
+
+    # Clone VMs sequentially
+    for ((i = 0; i < COUNT; i++)); do
+        local target_vmid=$((START_VMID + i))
+        local name_index=$((i + 1))
+        local vm_name="${BASE_NAME}${name_index}"
+        local current=$((i + 1))
+
+        # Calculate current IP address
+        local current_ip_int=$((start_ip_int + i))
+        local current_ip
+        current_ip=$(__int_to_ip__ "$current_ip_int")
+
+        __update__ "Cloning VM ${target_vmid} (${current}/${COUNT}) with IP ${current_ip}..."
+
+        # Build clone command
+        local clone_cmd="qm clone ${SOURCE_VMID} ${target_vmid} --name ${vm_name}"
+
+        # Execute clone on source VM's node
+        if ! __node_exec__ "$source_node" "$clone_cmd" &>/dev/null; then
+            __warn__ "Failed to clone VM ${target_vmid}"
+            ((failed += 1))
+            continue
+        fi
+
+        # Configure Cloud-Init network settings
+        local ipconfig="ip=${current_ip}/${subnet_mask}"
+        [[ -n "$GATEWAY" ]] && ipconfig+=",gw=${GATEWAY}"
+
+        if ! __node_exec__ "$source_node" "qm set ${target_vmid} --ipconfig0 ${ipconfig}" &>/dev/null; then
+            __warn__ "Failed to set IP config for VM ${target_vmid}"
+            ((failed += 1))
+            continue
+        fi
+
+        # Set network bridge
+        if ! __node_exec__ "$source_node" "qm set ${target_vmid} --net0 virtio,bridge=${BRIDGE}" &>/dev/null; then
+            __warn__ "Failed to set network bridge for VM ${target_vmid}"
+            ((failed += 1))
+            continue
+        fi
+
+        # Add to pool if specified
+        if [[ -n "$POOL" ]]; then
+            if ! __node_exec__ "$source_node" "qm set ${target_vmid} --pool ${POOL}" &>/dev/null; then
+                __warn__ "Failed to add VM ${target_vmid} to pool ${POOL}"
+                # Don't count this as a failure since VM was cloned successfully
+            fi
+        fi
+
+        ((success += 1))
+    done
+
+    # Display summary
+    echo ""
+    __info__ "Cloning Summary:"
+    __info__ "  Total: ${COUNT}"
+    __info__ "  Success: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    if [[ $failed -gt 0 ]]; then
+        __err__ "Some clones failed. Check the messages above for details."
+        exit 1
+    fi
+
+    __ok__ "Cloning completed successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-11-20: Pending validation on Proxmox VE cluster
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation on Proxmox VE cluster
+# -
+#
+

@@ -2,73 +2,94 @@
 #
 # ProxmoxEnableMicrocode.sh
 #
-# This script enables microcode updates for all nodes in a Proxmox VE cluster.
+# Enables microcode updates (Intel/AMD) on all nodes in a Proxmox cluster.
 #
 # Usage:
-#   ./ProxmoxEnableMicrocode.sh
+#   ProxmoxEnableMicrocode.sh
 #
-# Example:
-#   ./ProxmoxEnableMicrocode.sh
-#
-# Description:
-#   1. Checks prerequisites (root privileges, Proxmox environment, cluster membership).
-#   2. Installs microcode packages on each node (remote + local).
-#   3. Prompts to keep or remove installed packages afterward.
+# Examples:
+#   ProxmoxEnableMicrocode.sh
 #
 # Function Index:
-#   - enable_microcode
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
 
-###############################################################################
-# Preliminary Checks
-###############################################################################
-__check_root__
-__check_proxmox__
-__check_cluster_membership__
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-###############################################################################
-# Function to enable microcode updates
-###############################################################################
-enable_microcode() {
-    echo "Enabling microcode updates on node: $(hostname)"
-    apt-get update
-    apt-get install -y intel-microcode amd64-microcode
-    echo " - Microcode updates enabled."
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+    __check_cluster_membership__
+
+    __info__ "Enabling microcode updates (cluster-wide)"
+
+    # Get remote node IPs
+    local -a remote_nodes
+    mapfile -t remote_nodes < <(__get_remote_node_ips__)
+
+    local success=0
+    local failed=0
+
+    # Enable on remote nodes
+    for node_ip in "${remote_nodes[@]}"; do
+        __update__ "Enabling microcode on ${node_ip}"
+        if ssh "root@${node_ip}" "apt-get update -qq && apt-get install -y -qq intel-microcode amd64-microcode" 2>&1; then
+            __ok__ "Microcode enabled on ${node_ip}"
+            success=$((success + 1))
+        else
+            __warn__ "Failed to enable microcode on ${node_ip}"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Enable on local node
+    __update__ "Enabling microcode on local node"
+    if apt-get update -qq && apt-get install -y -qq intel-microcode amd64-microcode 2>&1; then
+        __ok__ "Microcode enabled on local node"
+        success=$((success + 1))
+    else
+        __warn__ "Failed to enable microcode on local node"
+        failed=$((failed + 1))
+    fi
+
+    echo
+    __info__ "Microcode Update Summary:"
+    __info__ "  Successful: ${success}"
+    [[ $failed -gt 0 ]] && __warn__ "  Failed: ${failed}" || __info__ "  Failed: ${failed}"
+
+    __prompt_keep_installed_packages__
+
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "Microcode updates enabled on all nodes!"
 }
 
-###############################################################################
-# Main Script Logic
-###############################################################################
-echo "Gathering remote node IPs..."
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
-
-if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
-    echo " - No remote nodes detected; this might be a single-node cluster."
-fi
-
-for nodeIp in "${REMOTE_NODES[@]}"; do
-    echo "Connecting to node: \"${nodeIp}\""
-    ssh root@"${nodeIp}" "$(declare -f enable_microcode); enable_microcode"
-    echo " - Microcode update completed for node: \"${nodeIp}\""
-    echo
-done
-
-enable_microcode
-echo "Microcode updates enabled on the local node."
+main
 
 ###############################################################################
-# Cleanup Prompt
+# Script notes:
 ###############################################################################
-__prompt_keep_installed_packages__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-echo "Microcode updates have been enabled on all nodes!"
-
-
-###############################################################################
-# Testing status
-###############################################################################
-# Tested single-node
-# Tested multi-node

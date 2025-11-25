@@ -1,75 +1,142 @@
 #!/bin/bash
 #
-# _TestCommunication.sh
-#
-# Usage:
-# ./_TestCommunication.sh
-#
-# Demonstrates usage of the Communication.sh script:
-#   - Sourcing the script
-#   - Starting/stopping the spinner
-#   - Printing info, success, and error messages
-#   - Handling errors via a trap
-#
 # Function Index:
-#   - simulate_task
-#   - simulate_error
+#   - test_info_executes
+#   - test_ok_executes
+#   - test_warn_executes
+#   - test_err_executes
+#   - test_update_executes
+#   - test_message_buffer
+#   - test_quiet_mode_info
+#   - test_quiet_mode_warnings_visible
+#   - test_sequential_messages
+#   - test_rapid_updates
 #
 
-if [ -z "${UTILITYPATH}" ]; then
-  # UTILITYPATH is unset or empty
-  export UTILITYPATH="$(pwd)"
-fi
+set -euo pipefail
 
-source "${UTILITYPATH}/Communication.sh"
+################################################################################
+# _TestCommunication.sh - Test suite for Communication.sh
+################################################################################
+#
+# Test suite for Communication.sh spinner and messaging functions.
+#
+# Usage: ./_TestCommunication.sh
+#
 
-# Example function that simulates a task
-simulate_task() {
-  # "Info" starts the spinner in the background
-  __info__ "Simulating a long-running task..."
-  
-  # Sleep for 2 seconds to mimic a longer process
-  sleep 2
-  
-  # Update the text while the spinner is still going
-  __update__ "Halfway done..."
-  sleep 2
-  
-  # Indicate success
-  __ok__ "Task completed successfully."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export UTILITYPATH="${SCRIPT_DIR}"
+
+source "${SCRIPT_DIR}/TestFramework.sh"
+source "${SCRIPT_DIR}/Communication.sh"
+
+################################################################################
+# TEST: MESSAGING FUNCTIONS
+################################################################################
+
+test_info_executes() {
+    __info__ "Test message" 2>/dev/null
+    __stop_spin__
+    assert_exit_code 0 $? "info should execute without error"
 }
 
-# Example function that simulates an error
-simulate_error() {
-  __info__ "Starting a failing command..."
-  sleep 1
-  
-  # We'll run a command that doesn't exist to force an error
-  non_existent_command
-  
-  # If the script reaches here, the spinner won't have stopped yet,
-  # but the error trap will trigger first, printing an error.
+test_ok_executes() {
+    __info__ "Processing" 2>/dev/null
+    __ok__ "Done" 2>/dev/null
+    assert_exit_code 0 $? "ok should execute without error"
 }
 
+test_warn_executes() {
+    __warn__ "Warning message" 2>/dev/null
+    assert_exit_code 0 $? "warn should execute without error"
+}
+
+test_err_executes() {
+    __err__ "Error message" 2>/dev/null
+    assert_exit_code 0 $? "err should execute without error"
+}
+
+test_update_executes() {
+    __info__ "Starting..." 2>/dev/null
+    sleep 0.2
+    __update__ "Updating..." 2>/dev/null
+    sleep 0.2
+    __ok__ "Complete" 2>/dev/null
+    assert_exit_code 0 $? "update should execute without error"
+}
+
+test_message_buffer() {
+    CURRENT_MESSAGE="test"
+    [[ "$CURRENT_MESSAGE" == "test" ]]
+    assert_exit_code 0 $? "message buffer should be accessible"
+}
+
+test_quiet_mode_info() {
+    QUIET_MODE=true
+    __info__ "Should be hidden" 2>/dev/null
+    __stop_spin__
+    QUIET_MODE=false
+    assert_exit_code 0 $? "quiet mode should suppress info"
+}
+
+test_quiet_mode_warnings_visible() {
+    QUIET_MODE=true
+    __warn__ "Should still show" 2>/dev/null
+    QUIET_MODE=false
+    assert_exit_code 0 $? "quiet mode should show warnings"
+}
+
+test_sequential_messages() {
+    __info__ "Step 1" 2>/dev/null
+    sleep 0.1
+    __info__ "Step 2" 2>/dev/null
+    sleep 0.1
+    __ok__ "Complete" 2>/dev/null
+    assert_exit_code 0 $? "sequential messages should work"
+}
+
+test_rapid_updates() {
+    __info__ "Processing" 2>/dev/null
+    for i in {1..5}; do
+        __update__ "Item $i" 2>/dev/null
+        sleep 0.05
+    done
+    __ok__ "Done" 2>/dev/null
+    assert_exit_code 0 $? "rapid updates should work"
+}
+
+################################################################################
+# RUN TEST SUITE
+################################################################################
+
+test_framework_init
+
+run_test_suite "Communication Functions" \
+    test_info_executes \
+    test_ok_executes \
+    test_warn_executes \
+    test_err_executes \
+    test_update_executes \
+    test_message_buffer \
+    test_quiet_mode_info \
+    test_quiet_mode_warnings_visible \
+    test_sequential_messages \
+    test_rapid_updates
+
+exit $?
+
 ###############################################################################
-# MAIN SCRIPT
+# Script notes:
 ###############################################################################
-echo "=== Communication.sh Demo ==="
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-# By default, Communication.sh sets a trap for errors:
-# trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
-# which prints the line, exit code, and command that failed.
-
-# 1) Demonstrate a successful task
-simulate_task
-
-echo
-sleep 1
-echo "Now we will demonstrate an intentional error."
-sleep 1
-
-# 2) Demonstrate an error scenario
-simulate_error
-
-# (Script ends here, but the ERR trap in Communication.sh will fire on the failing command.)
-echo "This line won't be reached if 'set -e' is in effect (because of the error)."

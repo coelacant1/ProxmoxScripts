@@ -1,77 +1,95 @@
 #!/bin/bash
 #
-# CephSparsifyVMDisks.sh
+# SparsifyDisk.sh
 #
-# This script is designed to sparsify (compact) *all* RBD disk(s) associated with a specific VM
-# in a specified Ceph storage pool. By zeroing out unused space in the VM and using the
-# 'rbd sparsify' command, any zeroed blocks are reclaimed in the Ceph pool, making the space
-# available for other uses.
+# Sparsifies (compacts) all RBD disks associated with a VM in a Ceph storage pool.
+# Zeroed blocks are reclaimed, making space available for reuse.
 #
 # Usage:
-#   ./CephSparsifyVMDisks.sh <pool_name> <vm_id>
-#     pool_name - The name of the Ceph storage pool where the VM disk(s) reside.
-#     vm_id     - The numeric ID of the VM whose disk(s) will be sparsified.
+#   SparsifyDisk.sh <pool_name> <vm_id>
 #
-# Example:
-#   ./CephSparsifyVMDisks.sh mypool 101
+# Arguments:
+#   pool_name - Name of the Ceph storage pool
+#   vm_id     - VM ID whose disks will be sparsified
+#
+# Examples:
+#   SparsifyDisk.sh mypool 101
 #
 # Notes:
-# 1. This script assumes that the RBD image names follow the convention "vm-<vm_id>-disk-<X>".
-#    Adjust the grep pattern and/or logic if your naming differs.
-# 2. Ensure you have already zeroed out unused space within the VM (e.g., sdelete -z in Windows
-#    or fstrim in Linux) before running this script.
-# 3. Verify you have the necessary permissions to run 'rbd sparsify' on the target pool/image.
+#   - Assumes RBD image naming: vm-<vm_id>-disk-<X>
+#   - Zero out unused space in VM first (sdelete -z on Windows, fstrim on Linux)
+#   - Requires permissions to run 'rbd sparsify'
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "pool_name:string vm_id:vmid" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __update__ "Querying RBD disks for VM $VM_ID in pool '$POOL_NAME'"
+
+    local images
+    images=$(rbd ls "$POOL_NAME" | grep "vm-${VM_ID}-disk-" || true)
+
+    if [[ -z "$images" ]]; then
+        __info__ "No disks found for VM $VM_ID in pool '$POOL_NAME'"
+        exit 0
+    fi
+
+    __info__ "Found disk(s): $images"
+
+    local success=0
+    local failed=0
+
+    while IFS= read -r image_name; do
+        [[ -z "$image_name" ]] && continue
+
+        __update__ "Sparsifying ${POOL_NAME}/${image_name}"
+        if rbd sparsify "${POOL_NAME}/${image_name}" &>/dev/null; then
+            __ok__ "Sparsified ${image_name}"
+            success=$((success + 1))
+        else
+            __warn__ "Failed to sparsify ${image_name}"
+            failed=$((failed + 1))
+        fi
+    done <<<"$images"
+
+    __info__ "Success: $success, Failed: $failed"
+    [[ $failed -gt 0 ]] && exit 1
+    __ok__ "Disk sparsification complete for VM $VM_ID"
+}
+
+main
 
 ###############################################################################
-# Check prerequisites
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-21
+#
+# Changes:
+# - 2025-11-21: Fixed arithmetic increment syntax (CONTRIBUTING.md Section 3.7)
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
 
-###############################################################################
-# Validate arguments
-###############################################################################
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Error: Missing arguments."
-  echo "Usage: $0 <pool_name> <vm_id>"
-  exit 1
-fi
-
-POOL_NAME="$1"
-VM_ID="$2"
-
-echo "Querying all RBD disks for VM ID '${VM_ID}' in pool '${POOL_NAME}'..."
-
-###############################################################################
-# Main Logic
-###############################################################################
-images=$(rbd ls "${POOL_NAME}" | grep "vm-${VM_ID}-disk-")
-if [ -z "${images}" ]; then
-  echo "No disks found for VM ID '${VM_ID}' in pool '${POOL_NAME}'."
-  exit 0
-fi
-
-echo "Found the following disk(s):"
-echo "${images}"
-echo
-
-for imageName in ${images}; do
-  echo "Attempting to sparsify disk '${POOL_NAME}/${imageName}'..."
-  rbd sparsify "${POOL_NAME}/${imageName}"
-  sparsifyExitCode=$?
-
-  if [ ${sparsifyExitCode} -eq 0 ]; then
-    echo "Successfully sparsified '${POOL_NAME}/${imageName}'."
-  else
-    echo "Failed to sparsify '${POOL_NAME}/${imageName}'."
-    echo "Please check if the image name is correct and that you have the necessary permissions."
-    # Uncomment the line below if one failure should stop the entire script:
-    # exit ${sparsifyExitCode}
-  fi
-  echo
-done
-
-echo "Disk sparsification process is complete for VM ID '${VM_ID}' in pool '${POOL_NAME}'."

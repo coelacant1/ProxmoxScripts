@@ -1,52 +1,84 @@
 #!/bin/bash
 #
-# This script enables the QEMU guest agent for a range of virtual machines (VMs) within a Proxmox VE environment.
-# Optionally, it can restart the VMs after enabling the guest agent.
+# BulkEnableGuestAgent.sh
+#
+# Enables QEMU guest agent for virtual machines within a Proxmox VE cluster.
+# Optionally restarts VMs after enabling to apply changes.
 #
 # Usage:
-# ./EnableGuestAgent.sh <start_vm_id> <end_vm_id> [restart]
+#   BulkEnableGuestAgent.sh <start_vmid> <end_vmid> [--restart]
 #
 # Arguments:
-#   start_vm_id - The ID of the first VM to update.
-#   end_vm_id - The ID of the last VM to update.
-#   restart - Optional. Set to 'restart' to restart the VMs after enabling the guest agent.
+#   start_vmid - Starting VM ID
+#   end_vmid   - Ending VM ID
+#   --restart  - Optional flag to restart VMs after enabling
 #
-# Example:
-#   ./EnableGuestAgent.sh 400 430
-#   ./EnableGuestAgent.sh 400 430 restart
+# Examples:
+#   BulkEnableGuestAgent.sh 400 430
+#   BulkEnableGuestAgent.sh 400 430 --restart
+#
+# Function Index:
+#   - main
 #
 
-# Check if the required parameters are provided
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-    echo "Usage: $0 <start_vm_id> <end_vm_id> [restart]"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-START_VM_ID=$1
-END_VM_ID=$2
-RESTART_OPTION=${3:-}
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
 
-# Loop to enable QEMU guest agent for VMs in the specified range
-for (( VMID=START_VM_ID; VMID<=END_VM_ID; VMID++ )); do
-    # Check if the VM exists
-    if qm status $VMID &>/dev/null; then
-        echo "Enabling QEMU guest agent for VM ID: $VMID"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-        # Enable the QEMU guest agent
-        qm set $VMID --agent 1
-        echo " - QEMU guest agent enabled for VM ID: $VMID."
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid --restart:flag" "$@"
 
-        # Optionally restart the VM if the 'restart' option is provided
-        if [ "$RESTART_OPTION" == "restart" ]; then
-            echo "Restarting VM ID: $VMID"
-            qm restart $VMID
-            echo " - VM ID: $VMID restarted."
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    enable_agent_callback() {
+        local vmid="$1"
+
+        __vm_set_config__ "$vmid" --agent "enabled=1"
+
+        if [[ "$RESTART" == "true" ]]; then
+            if __vm_is_running__ "$vmid"; then
+                __vm_restart__ "$vmid"
+            fi
         fi
-    else
-        echo "VM ID: $VMID does not exist. Skipping..."
-    fi
+    }
 
-done
+    __bulk_vm_operation__ --name "Enable Guest Agent" --report "$START_VMID" "$END_VMID" enable_agent_callback
 
-echo "QEMU guest agent enable process completed!"
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "Guest agent enabled successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-24
+#
+# Changes:
+# - 2025-10-28: Updated to follow contributing guidelines with BulkOperations framework
+#
+# Fixes:
+# - 2025-11-24: Changed __vm_reset__ to __vm_restart__ for graceful restart (PVE Guide
+#   10.2.11 requires "fresh start" - graceful shutdown+start is safer than hard reset)
+#
+# Known issues:
+# -
+#
+

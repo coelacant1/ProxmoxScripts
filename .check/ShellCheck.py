@@ -1,4 +1,24 @@
 #!/usr/bin/env python3
+"""
+ShellCheck.py
+
+Runs ShellCheck on all .sh files in a directory tree, or falls back to
+basic validation checks if ShellCheck is not installed.
+
+Usage:
+    python3 ShellCheck.py <directory>
+
+Checks performed:
+    - ShellCheck analysis (if available)
+    - Shebang validation
+    - Execute permission check
+
+Skips:
+    - .git, .github, .site, .check directories
+    - This script itself
+
+Author: Coela
+"""
 
 # Requires Shellcheck: https://github.com/koalaman/shellcheck#user-content-installing
 
@@ -7,14 +27,24 @@ import sys
 import subprocess
 import shutil
 
+# Directories to skip during traversal
+SKIP_DIRS = {".git", ".github", ".site", ".check", ".docs"}
+
 def find_sh_files(base_dir):
     """
-    Recursively find all .sh files under base_dir.
+    Recursively find all .sh files under base_dir, skipping certain directories.
     Returns a list of file paths.
     """
     sh_files = []
     for root, dirs, files in os.walk(base_dir):
+        # Skip specified directories
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        
         for filename in files:
+            # Skip this script itself
+            if filename == "ShellCheck.py":
+                continue
+                
             if filename.endswith(".sh"):
                 sh_files.append(os.path.join(root, filename))
     return sh_files

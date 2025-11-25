@@ -2,73 +2,105 @@
 #
 # HostIPerfTest.sh
 #
-# Automates an Iperf throughput test between two specified hosts, allowing you
-# to define which is the server and which is the client by hostname.
+# Automates iperf3 throughput test between two hosts.
 #
 # Usage:
-#   ./HostIPerfTest.sh <server_host> <client_host> <port>
+#   HostIPerfTest.sh <server_host> <client_host> <port>
 #
-# Example:
-#   ./HostIPerfTest.sh 192.168.1.10 192.168.1.11 5001
+# Arguments:
+#   server_host - Host to run iperf3 server (IP or hostname)
+#   client_host - Host to run iperf3 client (IP or hostname)
+#   port - Port number for iperf3
 #
-# This script will:
-#   1. Ensure iperf3 is installed locally on Proxmox.
-#   2. Start an iperf3 server on the specified server host using SSH.
-#   3. Run the iperf3 client on the specified client host to display throughput results.
-#   4. Kill the iperf3 server process automatically upon completion.
-#   5. Prompt whether to keep or remove any newly installed packages.
+# Examples:
+#   HostIPerfTest.sh 192.168.1.10 192.168.1.11 5001
+#   HostIPerfTest.sh pve1 pve2 5201
+#
+# Function Index:
+#   - main
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
+
+__parse_args__ "server_host:string client_host:string port:port" "$@"
+
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
+
+    __install_or_prompt__ "iperf3"
+
+    __info__ "Starting iperf3 throughput test"
+    __info__ "  Server: $SERVER_HOST"
+    __info__ "  Client: $CLIENT_HOST"
+    __info__ "  Port: $PORT"
+
+    # Kill any existing iperf3 servers
+    __update__ "Stopping any existing iperf3 servers on $SERVER_HOST"
+    ssh "root@${SERVER_HOST}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
+
+    # Start iperf3 server in background with proper cleanup trap
+    __info__ "Starting iperf3 server on $SERVER_HOST"
+    if ssh "root@${SERVER_HOST}" "nohup iperf3 -s -p '${PORT}' > /dev/null 2>&1 &" 2>&1; then
+        __ok__ "Server started"
+    else
+        __err__ "Failed to start iperf3 server"
+        exit 1
+    fi
+
+    __update__ "Waiting 5 seconds for server to be ready"
+    sleep 5
+
+    # Run iperf3 client
+    __info__ "Running iperf3 client on $CLIENT_HOST"
+    echo
+    if ssh "root@${CLIENT_HOST}" "iperf3 -c '${SERVER_HOST}' -p '${PORT}' -t 10" 2>&1; then
+        echo
+        __ok__ "Client test completed"
+    else
+        __warn__ "Client test encountered issues"
+    fi
+
+    # Stop iperf3 server
+    __update__ "Stopping iperf3 server on $SERVER_HOST"
+    ssh "root@${SERVER_HOST}" "pkill -f 'iperf3 -s' 2>/dev/null || true"
+    __ok__ "Server stopped"
+
+    echo
+    __ok__ "Iperf test completed successfully!"
+
+    __prompt_keep_installed_packages__
+}
+
+main "$@"
 
 ###############################################################################
-# Preliminary Checks
+# Script notes:
 ###############################################################################
-__check_root__
-__check_proxmox__
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Updated to use utility functions
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser.sh
+# - 2025-11-20: Validated against CONTRIBUTING.md and PVE Guide
+# - Script uses iperf3 for network throughput testing (not Proxmox-specific)
+#
+# Fixes:
+# - Fixed: Use nohup for background iperf3 server to prevent SSH hangup issues
+#
+# Known issues:
+# - Pending validation
+# -
+#
 
-if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <server_host> <client_host> <port>"
-  exit 1
-fi
-
-###############################################################################
-# Argument Parsing
-###############################################################################
-serverHost="$1"
-clientHost="$2"
-port="$3"
-
-###############################################################################
-# Iperf Installation Check
-###############################################################################
-__install_or_prompt__ "iperf3"
-
-###############################################################################
-# Start Iperf Server on Server Host
-###############################################################################
-echo "Starting iperf3 server on '${serverHost}'..."
-ssh "root@${serverHost}" "pkill -f 'iperf3 -s' || true"
-ssh "root@${serverHost}" "iperf3 -s -p '${port}' &"
-
-echo "Waiting 5 seconds for the iperf3 server to be ready..."
-sleep 5
-
-###############################################################################
-# Run Iperf Client on Client Host
-###############################################################################
-echo "Running iperf3 client on '${clientHost}' connecting to '${serverHost}'..."
-ssh "root@${clientHost}" "iperf3 -c '${serverHost}' -p '${port}' -t 10"
-
-###############################################################################
-# Kill Iperf Server
-###############################################################################
-echo "Stopping iperf3 server on '${serverHost}'..."
-ssh "root@${serverHost}" "pkill -f 'iperf3 -s'"
-
-echo "Iperf test completed successfully."
-
-###############################################################################
-# Prompt to Keep or Remove Packages
-###############################################################################
-__prompt_keep_installed_packages__

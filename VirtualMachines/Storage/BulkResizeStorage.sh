@@ -1,45 +1,80 @@
 #!/bin/bash
 #
-# This script resizes the storage for a range of virtual machines (VMs) within a Proxmox VE environment.
+# BulkResizeStorage.sh
+#
+# Resizes storage for a range of virtual machines (VMs) within a Proxmox VE environment.
+# Automatically detects which node each VM is on and executes the operation cluster-wide.
 #
 # Usage:
-# ./ResizeStorage.sh <start_vm_id> <end_vm_id> <disk> <size>
+#   BulkResizeStorage.sh <start_vm_id> <end_vm_id> <disk> <size>
 #
 # Arguments:
-#   start_vm_id - The ID of the first VM to update.
-#   end_vm_id - The ID of the last VM to update.
-#   disk - The disk to resize (e.g., 'scsi0', 'virtio0').
-#   size - The new size to set for the disk (e.g., '+10G' to add 10GB).
+#   start_vm_id  - The ID of the first VM to update.
+#   end_vm_id    - The ID of the last VM to update.
+#   disk         - The disk to resize (e.g., 'scsi0', 'virtio0', 'sata0').
+#   size         - The size change (e.g., '+10G' to add 10GB).
 #
-# Example:
-#   ./ResizeStorage.sh 400 430 scsi0 +10G
+# Examples:
+#   BulkResizeStorage.sh 400 430 scsi0 +10G
+#
+# Function Index:
+#   - main
 #
 
-# Check if the required parameters are provided
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 <start_vm_id> <end_vm_id> <disk> <size>"
-    exit 1
-fi
+set -euo pipefail
 
-# Assigning input arguments
-START_VM_ID=$1
-END_VM_ID=$2
-DISK=$3
-SIZE=$4
+# shellcheck source=Utilities/Prompts.sh
+source "${UTILITYPATH}/Prompts.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+# shellcheck source=Utilities/ArgumentParser.sh
+source "${UTILITYPATH}/ArgumentParser.sh"
+# shellcheck source=Utilities/BulkOperations.sh
+source "${UTILITYPATH}/BulkOperations.sh"
+# shellcheck source=Utilities/Operations.sh
+source "${UTILITYPATH}/Operations.sh"
 
-# Loop to resize storage for VMs in the specified range
-for (( VMID=START_VM_ID; VMID<=END_VM_ID; VMID++ )); do
-    # Check if the VM exists
-    if qm status $VMID &>/dev/null; then
-        echo "Resizing storage for VM ID: $VMID"
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
-        # Resize the specified disk
-        qm resize $VMID $DISK $SIZE
-        echo " - Disk $DISK resized by $SIZE for VM ID: $VMID."
-    else
-        echo "VM ID: $VMID does not exist. Skipping..."
-    fi
+# Parse arguments
+__parse_args__ "start_vmid:vmid end_vmid:vmid disk:string size:string" "$@"
 
-done
+# --- main --------------------------------------------------------------------
+main() {
+    __check_root__
+    __check_proxmox__
 
-echo "Storage resize process completed!"
+    __info__ "Bulk resize storage: VMs ${START_VMID} to ${END_VMID} (cluster-wide)"
+    __info__ "Resizing ${DISK} by ${SIZE}"
+
+    resize_storage_callback() {
+        local vmid="$1"
+        __vm_resize_disk__ "$vmid" "$DISK" "$SIZE"
+    }
+
+    __bulk_vm_operation__ --name "Resize Storage" --report "$START_VMID" "$END_VMID" resize_storage_callback
+
+    __bulk_summary__
+
+    [[ $BULK_FAILED -gt 0 ]] && exit 1
+    __ok__ "All storage resizes completed successfully!"
+}
+
+main
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: 2025-11-20
+#
+# Changes:
+# - 2025-11-20: Pending validation
+# - 2025-11-20: Updated to use ArgumentParser and BulkOperations framework
+#
+# Fixes:
+# -
+#
+# Known issues:
+# - Pending validation
+#
+

@@ -1,0 +1,118 @@
+================================================================================
+PROXMOXSCRIPTS - GETTING STARTED
+================================================================================
+
+WELCOME
+
+ProxmoxScripts is a comprehensive framework for managing and automating Proxmox
+VE environments. This guide will help you get started quickly.
+
+================================================================================
+QUICK START
+================================================================================
+
+1. Launch the GUI
+
+    From the repository directory:
+    
+        ./GUI.sh
+
+2. Select Execution Mode
+
+    Choose where scripts will run:
+    
+    - Local Execution      : Run on this system
+    - Single Remote Node   : Run on one Proxmox node
+    - Multiple Remote Nodes: Run on multiple nodes simultaneously
+
+3. Browse and Select Script
+
+    Navigate through folders using:
+    
+    - Arrow keys or numbers to move
+    - Enter to select
+    - 'b' to go back
+    - 'e' to exit
+
+4. Enter Parameters
+
+    When prompted, enter required parameters for the script.
+    Use arrow keys to edit, Enter to confirm.
+
+5. Review and Execute
+
+    Review the summary and confirm execution.
+
+================================================================================
+EXECUTION MODES
+================================================================================
+
+LOCAL EXECUTION
+    Scripts run on the current system where GUI.sh is launched.
+    Use for: Local diagnostics, configuration, maintenance
+
+SINGLE REMOTE NODE
+    Scripts execute on one remote Proxmox node via SSH.
+    Use for: Configuring individual nodes, targeted operations
+
+MULTIPLE REMOTE NODES
+    Scripts execute on multiple nodes simultaneously.
+    Use for: Cluster-wide updates, bulk operations
+
+================================================================================
+MANAGING NODES
+================================================================================
+
+From the main menu, type 'm' to manage nodes:
+
+- List nodes    : View all configured nodes
+- Add node      : Add a new Proxmox node
+- Remove node   : Remove a configured node
+
+Nodes are stored in nodes.json in the repository root.
+
+================================================================================
+LOG LEVELS
+================================================================================
+
+Control output verbosity:
+
+    ./GUI.sh            # Normal (INFO and above)
+    ./GUI.sh --verbose  # Verbose (DEBUG and above)
+    ./GUI.sh --quiet    # Quiet (WARN and above)
+    ./GUI.sh --debug    # Debug (all messages)
+
+Or change interactively from the main menu: type 'l' for log level.
+
+================================================================================
+GETTING HELP
+================================================================================
+
+From GUI:
+    Press 'h' or '?' from the main menu
+
+From Command Line:
+    ./GUI.sh --help
+    less Manuals/gui-overview.txt
+
+Online:
+    https://github.com/coelacant1/ProxmoxScripts
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+See Manuals/troubleshooting.txt for solutions to common issues.
+
+Quick checks:
+
+1. Are you running as root? (required for most operations)
+2. Is SSH access configured for remote nodes?
+3. Are node credentials correct in nodes.json?
+4. Check log files in /tmp/ for detailed error messages
+
+================================================================================
+
+Press 'q' to return back.
+
+================================================================================

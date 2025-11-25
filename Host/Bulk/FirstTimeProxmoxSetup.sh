@@ -9,10 +9,10 @@
 #   3. Disables the subscription nag for all nodes in the cluster.
 #
 # Usage:
-#   ./FirstTimeProxmoxSetup.sh
+#   FirstTimeProxmoxSetup.sh
 #
 # Example:
-#   ./FirstTimeProxmoxSetup.sh
+#   FirstTimeProxmoxSetup.sh
 #
 # Further details:
 #   This script will attempt to gather the IP addresses of all remote nodes in
@@ -26,8 +26,16 @@
 #   - disable_subscription_nag
 #
 
+set -euo pipefail
+
+# shellcheck source=Utilities/Prompts.sh
 source "${UTILITYPATH}/Prompts.sh"
-source "${UTILITYPATH}/Queries.sh"
+# shellcheck source=Utilities/Cluster.sh
+source "${UTILITYPATH}/Cluster.sh"
+# shellcheck source=Utilities/Communication.sh
+source "${UTILITYPATH}/Communication.sh"
+
+trap '__handle_err__ $LINENO "$BASH_COMMAND"' ERR
 
 ###############################################################################
 # Preliminary Checks
@@ -59,11 +67,11 @@ setup_repositories() {
     fi
 
     # Attempt to detect the codename from /etc/os-release
-    local codename="bookworm"
+    local codename="trixie"
     if [[ -f "/etc/os-release" ]]; then
         # shellcheck source=/dev/null
         . "/etc/os-release"
-        codename="${VERSION_CODENAME:-bookworm}"
+        codename="${VERSION_CODENAME:-trixie}"
     else
         echo " - /etc/os-release not found. Defaulting to \"${codename}\"."
     fi
@@ -72,15 +80,15 @@ setup_repositories() {
 
     # Check if the no-subscription repo is already in /etc/apt/sources.list
     if ! grep -q "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" "/etc/apt/sources.list"; then
-        echo "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" >> "/etc/apt/sources.list"
+        echo "deb http://download.proxmox.com/debian/pve ${codename} pve-no-subscription" >>"/etc/apt/sources.list"
         echo " - Added Proxmox no-subscription repository for \"${codename}\"."
     else
         echo " - Proxmox no-subscription repository already present."
     fi
 
     # Check if the no-subscription repo is already in /etc/apt/sources.list.d/ceph.list
-    if ! grep -q "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" "/etc/apt/sources.list.d/ceph.list"; then
-        echo "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" >> "/etc/apt/sources.list.d/ceph.list"
+    if [[ ! -f "/etc/apt/sources.list.d/ceph.list" ]] || ! grep -q "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" "/etc/apt/sources.list.d/ceph.list"; then
+        echo "deb http://download.proxmox.com/debian/${ceph_version} ${codename} no-subscription" >>"/etc/apt/sources.list.d/ceph.list"
         echo " - Added Ceph no-subscription repository for \"${codename}\"."
     else
         echo " - Ceph no-subscription repository already present."
@@ -103,7 +111,7 @@ disable_subscription_nag() {
 # Main Script Logic
 ###############################################################################
 echo "Gathering remote node IPs..."
-readarray -t REMOTE_NODES < <( __get_remote_node_ips__ )
+readarray -t REMOTE_NODES < <(__get_remote_node_ips__)
 
 if [[ "${#REMOTE_NODES[@]}" -eq 0 ]]; then
     echo " - No remote nodes detected; this might be a single-node setup."
@@ -135,3 +143,19 @@ __prompt_keep_installed_packages__
 ###############################################################################
 # Tested single-node
 # Tested multi-node
+
+###############################################################################
+# Script notes:
+###############################################################################
+# Last checked: YYYY-MM-DD
+#
+# Changes:
+# - YYYY-MM-DD: Initial creation
+#
+# Fixes:
+# -
+#
+# Known issues:
+# -
+#
+
