@@ -126,6 +126,33 @@ fi
 CHECKS_RUN=$((CHECKS_RUN + 1))
 echo ""
 
+# Check 1a: Basic shell syntax validation
+echo "1a. Validating shell syntax (bash -n)..."
+SYNTAX_ERRORS=0
+SYNTAX_FILES=()
+while IFS= read -r -d '' file; do
+    if ! bash -n "$file" 2>/dev/null; then
+        SYNTAX_ERRORS=$((SYNTAX_ERRORS + 1))
+        SYNTAX_FILES+=("$file")
+    fi
+done < <(find . -name "*.sh" -not -path "*/.git/*" -not -path "*/.check/*" -print0)
+
+if [ $SYNTAX_ERRORS -eq 0 ]; then
+    echo "- All shell scripts have valid syntax"
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
+else
+    echo "- FAILED: $SYNTAX_ERRORS file(s) with syntax errors"
+    if [ "$VERBOSE" = true ] || [ $SYNTAX_ERRORS -le 5 ]; then
+        for file in "${SYNTAX_FILES[@]}"; do
+            echo "    $file"
+            bash -n "$file" 2>&1 | head -3 | sed 's/^/      /'
+        done
+    fi
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
+fi
+CHECKS_RUN=$((CHECKS_RUN + 1))
+echo ""
+
 # Check 2: Update function indices
 echo "2. Updating function indices..."
 python3 .check/UpdateFunctionIndex.py ./ 2>&1 | tail -3

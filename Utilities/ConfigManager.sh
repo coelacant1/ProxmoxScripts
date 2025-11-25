@@ -11,6 +11,7 @@
 #   - __add_remote_target__
 #   - __clear_remote_targets__
 #   - __get_node_ip__
+#   - __get_node_username__
 #   - __node_exists__
 #   - __get_available_nodes__
 #   - __count_available_nodes__
@@ -28,9 +29,11 @@ declare -g TARGET_DISPLAY="This System"
 declare -ga REMOTE_TARGETS=()
 declare -gA NODE_PASSWORDS=()
 declare -gA AVAILABLE_NODES=()
+declare -gA NODE_USERNAMES=() # Track username for each node
 declare -gA NODE_SSH_KEYS=() # Track SSH key status
 declare -g NODES_FILE="nodes.json"
 declare -g REMOTE_TEMP_DIR="/tmp/ProxmoxScripts_gui"
+declare -g DEFAULT_USERNAME="root" # Default username for nodes
 # Only set default if not already set (e.g., from command-line flags)
 if [[ -z "${REMOTE_LOG_LEVEL:-}" ]]; then
     declare -g REMOTE_LOG_LEVEL="INFO"
@@ -48,12 +51,14 @@ __init_config__() {
 
     if [[ -f "$NODES_FILE" ]] && command -v jq &>/dev/null; then
         while IFS= read -r line; do
-            local node_name node_ip ssh_keys
+            local node_name node_ip ssh_keys node_username
             node_name=$(echo "$line" | jq -r '.name')
             node_ip=$(echo "$line" | jq -r '.ip')
             ssh_keys=$(echo "$line" | jq -r 'if has("ssh_keys") then (.ssh_keys | tostring) else "unknown" end')
+            node_username=$(echo "$line" | jq -r 'if has("username") then .username else "'"$DEFAULT_USERNAME"'" end')
             AVAILABLE_NODES["$node_name"]="$node_ip"
             NODE_SSH_KEYS["$node_name"]="$ssh_keys"
+            NODE_USERNAMES["$node_name"]="$node_username"
         done < <(jq -c '.nodes[]' "$NODES_FILE" 2>/dev/null || true)
     fi
 }
@@ -88,20 +93,23 @@ __set_execution_mode__() {
 }
 
 # Add remote target
-# Args: node_name node_ip password
+# Args: node_name node_ip password [username]
 __add_remote_target__() {
     local node_name="$1"
     local node_ip="$2"
     local password="$3"
+    local username="${4:-$DEFAULT_USERNAME}"
 
     REMOTE_TARGETS+=("$node_name:$node_ip")
     NODE_PASSWORDS["$node_name"]="$password"
+    NODE_USERNAMES["$node_name"]="$username"
 }
 
 # Clear all remote targets
 __clear_remote_targets__() {
     REMOTE_TARGETS=()
     NODE_PASSWORDS=()
+    NODE_USERNAMES=()
 }
 
 # Get node IP by name
@@ -110,6 +118,14 @@ __clear_remote_targets__() {
 __get_node_ip__() {
     local node_name="$1"
     echo "${AVAILABLE_NODES[$node_name]:-}"
+}
+
+# Get node username by name
+# Args: node_name
+# Returns: username or default username
+__get_node_username__() {
+    local node_name="$1"
+    echo "${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
 }
 
 # Check if node exists
@@ -131,11 +147,12 @@ __count_available_nodes__() {
 }
 
 # Check if node has SSH keys configured (from cache or test)
-# Args: node_ip node_name
+# Args: node_ip username node_name
 # Returns: "true" if keys work, "false" if not, "unknown" if not tested
 __has_ssh_keys__() {
     local node_ip="$1"
-    local node_name="${2:-}"
+    local username="${2:-$DEFAULT_USERNAME}"
+    local node_name="${3:-}"
 
     # Check cache first if node_name provided
     if [[ -n "$node_name" ]] && [[ "${NODE_SSH_KEYS[$node_name]:-unknown}" != "unknown" ]]; then
@@ -144,7 +161,7 @@ __has_ssh_keys__() {
     fi
 
     # Test SSH connection
-    if ssh -o BatchMode=yes -o ConnectTimeout=2 "root@${node_ip}" echo "test" &>/dev/null 2>&1; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=2 "${username}@${node_ip}" echo "test" &>/dev/null 2>&1; then
         # Update cache if node_name provided
         if [[ -n "$node_name" ]]; then
             NODE_SSH_KEYS["$node_name"]="true"
@@ -187,10 +204,11 @@ __scan_ssh_keys__() {
 
     for node_name in "${!AVAILABLE_NODES[@]}"; do
         local node_ip="${AVAILABLE_NODES[$node_name]}"
-        echo -n "  Checking $node_name ($node_ip)... "
+        local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+        echo -n "  Checking $node_name ($node_username@$node_ip)... "
 
         local has_keys
-        has_keys=$(__has_ssh_keys__ "$node_ip" "$node_name")
+        has_keys=$(__has_ssh_keys__ "$node_ip" "$node_username" "$node_name")
 
         if [[ "$has_keys" == "true" ]]; then
             echo "[SSH]"

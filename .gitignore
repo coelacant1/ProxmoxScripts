@@ -4,6 +4,7 @@
 nodes.json
 TestConnectionInfo.json
 .d/
+.nfs*
 
 # Downloaded Proxmox documentation (keep scripts, ignore generated content)
 .docs/*.html

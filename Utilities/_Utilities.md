@@ -1,13 +1,13 @@
 # ProxmoxScripts Utility Functions Reference
 
-**Auto-generated documentation** - Last updated: 2025-11-24 17:11:41
+**Auto-generated documentation** - Last updated: 2025-11-25 10:18:58
 
 ---
 
 ## Overview
 
-This reference provides comprehensive documentation for all utility functions in the ProxmoxScripts repository.
-These utilities provide reusable functions for building automation scripts,
+This reference provides comprehensive documentation for all utility functions in the ProxmoxScripts repository. 
+These utilities provide reusable functions for building automation scripts, 
 management tools, and integration solutions for Proxmox VE environments.
 
 ## Utility Files Overview
@@ -1159,6 +1159,7 @@ Shows "Selected script", top comments, and example invocations sections.
 - `__add_remote_target__`
 - `__clear_remote_targets__`
 - `__get_node_ip__`
+- `__get_node_username__`
 - `__node_exists__`
 - `__get_available_nodes__`
 - `__count_available_nodes__`
@@ -2583,7 +2584,7 @@ __require_root_and_proxmox__
 ---
 # RemoteExecutor.sh
 
-**Purpose**: !/bin/bash Handles all remote script execution logic including SSH, file transfer, and result collection. Supports both password-based (sshpass) and SSH key-based authentication. This utility is sourced by GUI.sh for remote node execution. It expects: - REMOTE_TEMP_DIR: Remote temporary directory path - REMOTE_TARGETS: Array of target nodes (name:ip format) - NODE_PASSWORDS: Associative array of node passwords - REMOTE_LOG_LEVEL: Log level for remote execution
+**Purpose**: !/bin/bash Handles all remote script execution logic including SSH, file transfer, and result collection. Supports both password-based (sshpass) and SSH key-based authentication. This utility is sourced by GUI.sh for remote node execution. It expects: - REMOTE_TEMP_DIR: Remote temporary directory path - REMOTE_TARGETS: Array of target nodes (name:ip format) - NODE_PASSWORDS: Associative array of node passwords - NODE_USERNAMES: Associative array of node usernames - REMOTE_LOG_LEVEL: Log level for remote execution
 
 **Functions**:
 - `__remote_cleanup__`
@@ -3024,5 +3025,5 @@ fi
 
 ---
 
-**Note**: This documentation is automatically generated from source code comments.
+**Note**: This documentation is automatically generated from source code comments. 
 To update, run: `python3 .check/UpdateUtilityDocumentation.py`

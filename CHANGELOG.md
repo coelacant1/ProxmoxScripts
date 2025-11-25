@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.6] - 2025-11-25
+
+Bug fixes, username support, and validation improvements
+
+### Added
+- **Username Configuration** - Support for specifying SSH usernames per node
+  - Added `username` field to nodes.json configuration
+  - Username prompts in all node configuration flows (manual entry, saved nodes, IP ranges, VMID ranges)
+  - Default username is "root" with option to specify alternatives
+  - Display format changed to `username@ip` throughout GUI
+- **Dependency Checking** - Runtime validation before remote execution
+  - `__check_remote_dependencies__()` function checks for sshpass and jq
+  - Helpful error messages with installation commands for all major distros
+  - Notes that sshpass is not required when using SSH keys
+- **Syntax Validation** - Basic shell syntax checking added to validation suite
+  - New Check 1a. in `_RunChecks.sh` runs `bash -n` on all .sh files
+  - Catches structural errors and orphaned code blocks
+  - Shows file names and line numbers for syntax errors
+- **Enhanced Source Verification** - Improved validation of shellcheck directives
+  - `VerifySourceCalls.py` now validates shellcheck comments have matching source statements
+  - Detects orphaned shellcheck directives within 5 lines
+  - Prevents mismatched documentation and code
+
+### Changed
+- **Remote Execution UI** - Scripts hidden in remote mode for better UX
+  - GUI.sh and CCPVE.sh hidden from root menu when in remote execution mode
+  - Prevents accidental execution of control scripts on remote nodes
+  - Scripts still shown in local mode and subdirectories
+- **README.md** - Clarified dependency requirements
+  - Updated installation command to include `jq` and `sshpass`
+  - Documented that sshpass is only needed for password-based authentication
+  - Separated build-time tools from runtime dependencies
+
+### Fixed
+- **Critical: Orphaned Error Handler** - Fixed syntax error in `Host/HostInfo.sh`
+  - Removed orphaned error handler code block (lines 34-36)
+  - File had error message without matching source statement
+  - Bug prevented script execution on remote nodes
+- **Username Hardcoding** - Removed hardcoded "root@" from all remote operations
+  - Updated all SSH/SCP operations in `RemoteExecutor.sh` to use configured username
+  - `__ssh_exec__`, `__scp_exec__`, `__scp_exec_recursive__`, `__scp_download__` now accept username parameter
+  - `ConfigManager.sh` tracks username per node in `NODE_USERNAMES` associative array
+- **Missing Validation** - Syntax check gap closed
+  - `_RunChecks.sh` never validated basic syntax :C
+  - Now catches structural errors that bash -n would detect
+  - Prevents orphaned code and malformed control structures from entering repository
+
+### Technical Details
+- `nodes.json.template` - Added username field with "root" default
+- `Utilities/ConfigManager.sh` - Added NODE_USERNAMES tracking and __get_node_username__() function
+- `Utilities/RemoteExecutor.sh` - All remote operations parameterized with username
+- `GUI.sh` - Dependency checking, username prompts, and script filtering
+- `.check/VerifySourceCalls.py` - Enhanced shellcheck directive validation
+- `.check/_RunChecks.sh` - Added Check 1a. for syntax validation
+
+### Developer Notes
+The orphaned error handler bug existed because:
+- `bash -n` syntax check was not being run in validation suite
+- `DeadCodeCheck.py` only checks unused functions/variables, not code structure
+- `VerifySourceCalls.py` didn't validate orphaned error handlers
+The fix adds syntax validation to prevent similar issues...
+
 ## [2.1.5] - 2025-11-24
 
 PVE documentation automation and repository cleanup
