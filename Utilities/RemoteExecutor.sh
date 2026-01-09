@@ -16,6 +16,7 @@
 # Function Index:
 #   - __remote_cleanup__
 #   - __prompt_for_params__
+#   - __test_remote_connection__
 #   - __ssh_exec__
 #   - __scp_exec__
 #   - __scp_exec_recursive__
@@ -95,89 +96,117 @@ __prompt_for_params__() {
     return 0
 }
 
+# --- __test_remote_connection__ ----------------------------------------------
+# @function __test_remote_connection__
+# @description Test SSH connection to remote node with given credentials
+# @usage __test_remote_connection__ <ip> <password> <username> <port>
+# @param 1 Node IP address
+# @param 2 Password (empty if using SSH keys)
+# @param 3 Username
+# @param 4 Port number
+# @return 0 if connection successful, 1 otherwise
+__test_remote_connection__() {
+    local node_ip="$1"
+    local node_pass="$2"
+    local username="$3"
+    local port="$4"
+
+    # Try simple echo command to test connection
+    if __ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" "echo test" &>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Helper: Execute SSH command with appropriate auth method
-# Args: node_ip node_pass username command
+# Args: node_ip node_pass username port command
 # Returns: output of ssh command
 __ssh_exec__() {
     local node_ip="$1"
     local node_pass="$2"
     local username="$3"
-    shift 3
+    local port="$4"
+    shift 4
     local command="$*"
 
     if [[ "$USE_SSH_KEYS" == "true" ]] || [[ -z "$node_pass" ]]; then
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${username}@${node_ip}" "$command"
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$port" "${username}@${node_ip}" "$command"
     else
-        sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${username}@${node_ip}" "$command"
+        sshpass -p "$node_pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$port" "${username}@${node_ip}" "$command"
     fi
 }
 
 # Helper: Execute SCP with appropriate auth method
-# Args: node_ip node_pass username source destination
+# Args: node_ip node_pass username port source destination
 # Returns: exit code of scp
 __scp_exec__() {
     local node_ip="$1"
     local node_pass="$2"
     local username="$3"
-    local source="$4"
-    local destination="$5"
+    local port="$4"
+    local source="$5"
+    local destination="$6"
 
     if [[ "$USE_SSH_KEYS" == "true" ]] || [[ -z "$node_pass" ]]; then
-        scp -q -o StrictHostKeyChecking=no "$source" "${username}@$node_ip:$destination"
+        scp -q -o StrictHostKeyChecking=no -P "$port" "$source" "${username}@$node_ip:$destination"
     else
-        sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no "$source" "${username}@$node_ip:$destination"
+        sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no -P "$port" "$source" "${username}@$node_ip:$destination"
     fi
 }
 
 # Helper: Execute SCP recursive with appropriate auth method
-# Args: node_ip node_pass username source destination
+# Args: node_ip node_pass username port source destination
 # Returns: exit code of scp
 __scp_exec_recursive__() {
     local node_ip="$1"
     local node_pass="$2"
     local username="$3"
-    local source="$4"
-    local destination="$5"
+    local port="$4"
+    local source="$5"
+    local destination="$6"
 
     if [[ "$USE_SSH_KEYS" == "true" ]] || [[ -z "$node_pass" ]]; then
-        scp -q -r -o StrictHostKeyChecking=no "$source" "${username}@$node_ip:$destination"
+        scp -q -r -o StrictHostKeyChecking=no -P "$port" "$source" "${username}@$node_ip:$destination"
     else
-        sshpass -p "$node_pass" scp -q -r -o StrictHostKeyChecking=no "$source" "${username}@$node_ip:$destination"
+        sshpass -p "$node_pass" scp -q -r -o StrictHostKeyChecking=no -P "$port" "$source" "${username}@$node_ip:$destination"
     fi
 }
 
 # Helper: Download file from remote with appropriate auth method
-# Args: node_ip node_pass username remote_path local_path
+# Args: node_ip node_pass username port remote_path local_path
 # Returns: exit code of scp
 __scp_download__() {
     local node_ip="$1"
     local node_pass="$2"
     local username="$3"
-    local remote_path="$4"
-    local local_path="$5"
+    local port="$4"
+    local remote_path="$5"
+    local local_path="$6"
 
     if [[ "$USE_SSH_KEYS" == "true" ]] || [[ -z "$node_pass" ]]; then
-        scp -q -o StrictHostKeyChecking=no "${username}@$node_ip:$remote_path" "$local_path"
+        scp -q -o StrictHostKeyChecking=no -P "$port" "${username}@$node_ip:$remote_path" "$local_path"
     else
-        sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no "${username}@$node_ip:$remote_path" "$local_path"
+        sshpass -p "$node_pass" scp -q -o StrictHostKeyChecking=no -P "$port" "${username}@$node_ip:$remote_path" "$local_path"
     fi
 }
 
 # Execute workflow on single remote node
-# Args: node_name node_ip node_pass username script_path script_relative script_dir_relative param_line
+# Args: node_name node_ip node_pass username port script_path script_relative script_dir_relative param_line
 # Returns: 0 on success, 1 on failure
 __execute_on_remote_node__() {
     local node_name="$1"
     local node_ip="$2"
     local node_pass="$3"
     local username="$4"
-    local script_path="$5"
-    local script_relative="$6"
-    local script_dir_relative="$7"
-    local param_line="$8"
+    local port="$5"
+    local script_path="$6"
+    local script_relative="$7"
+    local script_dir_relative="$8"
+    local param_line="$9"
 
     echo "----------------------------------------"
-    echo "Target: $node_name ($node_ip)"
+    echo "Target: $node_name ($node_ip:$port)"
     echo "----------------------------------------"
     echo
 
@@ -186,7 +215,7 @@ __execute_on_remote_node__() {
     __log_info__ "Cleaning and creating remote directory structure on $node_name" "REMOTE"
 
     local ssh_output
-    if ! ssh_output=$(__ssh_exec__ "$node_ip" "$node_pass" "$username" \
+    if ! ssh_output=$(__ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" \
         "rm -rf $REMOTE_TEMP_DIR && mkdir -p $REMOTE_TEMP_DIR/{Utilities,Host,LXC,Storage,VirtualMachines,Networking,Cluster,Security,HighAvailability,Firewall,Resources,RemoteManagement}" 2>&1); then
         # Check if interrupted
         if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
@@ -213,8 +242,8 @@ __execute_on_remote_node__() {
     __info__ "Transferring files..."
     __log_info__ "Transferring utilities and script to $node_name" "REMOTE"
 
-    # Create tarball for faster transfer
-    local temp_tar="/tmp/remote_exec_$$.tar.gz"
+    # Create tarball for faster transfer (use timestamp to avoid collision in same GUI session)
+    local temp_tar="/tmp/remote_exec_$$_$(date +%s%N).tar.gz"
     tar -czf "$temp_tar" -C . Utilities "$script_dir_relative/$(basename "$script_path")" 2>/dev/null || {
         # Fallback to individual transfers if tar fails
         __update__ "Tar failed, using individual transfers..."
@@ -224,7 +253,7 @@ __execute_on_remote_node__() {
             return 1
         fi
 
-        if ! __scp_exec_recursive__ "$node_ip" "$node_pass" "$username" "Utilities/*.sh" "$REMOTE_TEMP_DIR/Utilities/" 2>/dev/null; then
+        if ! __scp_exec_recursive__ "$node_ip" "$node_pass" "$username" "$port" "Utilities/*.sh" "$REMOTE_TEMP_DIR/Utilities/" 2>/dev/null; then
             # Check if interrupted or actual failure
             if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
                 return 1
@@ -239,7 +268,7 @@ __execute_on_remote_node__() {
             return 1
         fi
 
-        if ! __scp_exec__ "$node_ip" "$node_pass" "$username" "$script_path" "$REMOTE_TEMP_DIR/$script_dir_relative/" 2>/dev/null; then
+        if ! __scp_exec__ "$node_ip" "$node_pass" "$username" "$port" "$script_path" "$REMOTE_TEMP_DIR/$script_dir_relative/" 2>/dev/null; then
             # Check if interrupted or actual failure
             if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
                 return 1
@@ -260,14 +289,14 @@ __execute_on_remote_node__() {
 
     # If tar succeeded, transfer and extract
     if [[ -f "$temp_tar" ]]; then
-        if __scp_exec__ "$node_ip" "$node_pass" "$username" "$temp_tar" "/tmp/" 2>/dev/null; then
+        if __scp_exec__ "$node_ip" "$node_pass" "$username" "$port" "$temp_tar" "/tmp/" 2>/dev/null; then
             # Check if interrupted
             if [[ $REMOTE_INTERRUPTED -eq 1 ]]; then
                 rm -f "$temp_tar"
                 return 1
             fi
 
-            __ssh_exec__ "$node_ip" "$node_pass" "$username" \
+            __ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" \
                 "tar -xzf /tmp/$(basename "$temp_tar") -C $REMOTE_TEMP_DIR && rm /tmp/$(basename "$temp_tar")" 2>/dev/null
             __ok__ "Files transferred (tarball)"
             __log_info__ "Files transferred successfully (tarball)" "REMOTE"
@@ -290,80 +319,79 @@ __execute_on_remote_node__() {
         return 1
     fi
 
-    # Execute script
+    # Execute script remotely
     __info__ "Executing script..."
     __log_info__ "Executing $script_relative on remote with args: $param_line" "REMOTE"
     __log_debug__ "REMOTE_LOG_LEVEL in RemoteExecutor: $REMOTE_LOG_LEVEL" "REMOTE"
 
-    local remote_log="/tmp/proxmox_remote_execution_$$.log"
-    local remote_debug_log="/tmp/proxmox_remote_debug_$$.log"
+    # Use timestamp-based unique ID instead of PID to avoid log collision across multiple executions
+    local exec_id="$$_$(date +%s%N)"
+    local remote_log="/tmp/proxmox_remote_execution_${exec_id}.log"
+    local remote_debug_log="/tmp/proxmox_remote_debug_${exec_id}.log"
     local ssh_exit_code=0
 
+    # Execute script and capture output to log file
     if [[ -n "$param_line" ]]; then
-        __ssh_exec__ "$node_ip" "$node_pass" "$username" \
-            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && echo '=== Remote Execution Start ===' > $remote_log 2>&1 && echo 'Script: bash $script_relative' >> $remote_log 2>&1 && echo 'Arguments: $param_line' >> $remote_log 2>&1 && echo 'Working directory: '\$(pwd) >> $remote_log 2>&1 && echo 'UTILITYPATH: '\$UTILITYPATH >> $remote_log 2>&1 && echo 'LOG_FILE: '\$LOG_FILE >> $remote_log 2>&1 && echo 'LOG_LEVEL: '\$LOG_LEVEL >> $remote_log 2>&1 && echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL' >> $remote_log 2>&1 && echo '===================================' >> $remote_log 2>&1 && eval bash $script_relative $param_line >> $remote_log 2>&1; echo \$? > ${remote_log}.exit"
+        __ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" \
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && { echo '=== Remote Execution Start ==='; echo 'Script: bash $script_relative'; echo 'Arguments: $param_line'; echo 'Working directory: '\$(pwd); echo 'UTILITYPATH: '\$UTILITYPATH; echo 'LOG_FILE: '\$LOG_FILE; echo 'LOG_LEVEL: '\$LOG_LEVEL; echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL'; echo '==================================='; eval bash $script_relative $param_line; echo \$? > ${remote_log}.exit; } >> $remote_log 2>&1"
+        ssh_exit_code=$?
     else
-        __ssh_exec__ "$node_ip" "$node_pass" "$username" \
-            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && echo '=== Remote Execution Start ===' > $remote_log 2>&1 && echo 'Script: bash $script_relative' >> $remote_log 2>&1 && echo 'Working directory: '\$(pwd) >> $remote_log 2>&1 && echo 'UTILITYPATH: '\$UTILITYPATH >> $remote_log 2>&1 && echo 'LOG_FILE: '\$LOG_FILE >> $remote_log 2>&1 && echo 'LOG_LEVEL: '\$LOG_LEVEL >> $remote_log 2>&1 && echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL' >> $remote_log 2>&1 && echo '===================================' >> $remote_log 2>&1 && bash $script_relative >> $remote_log 2>&1; echo \$? > ${remote_log}.exit"
+        __ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" \
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NON_INTERACTIVE=1 DEBIAN_FRONTEND=noninteractive UTILITYPATH='$REMOTE_TEMP_DIR/Utilities' LOG_FILE='$remote_debug_log' LOG_LEVEL=$REMOTE_LOG_LEVEL LOG_CONSOLE=0 && cd $REMOTE_TEMP_DIR && { echo '=== Remote Execution Start ==='; echo 'Script: bash $script_relative'; echo 'Working directory: '\$(pwd); echo 'UTILITYPATH: '\$UTILITYPATH; echo 'LOG_FILE: '\$LOG_FILE; echo 'LOG_LEVEL: '\$LOG_LEVEL; echo 'LOG_LEVEL (actual): $REMOTE_LOG_LEVEL'; echo '==================================='; bash $script_relative; echo \$? > ${remote_log}.exit; } >> $remote_log 2>&1"
+        ssh_exit_code=$?
+    fi
+
+    # Get final exit code from file if available
+    local temp_exit_file="/tmp/remote_exit_${exec_id}"
+    if __scp_download__ "$node_ip" "$node_pass" "$username" "$port" "${remote_log}.exit" "$temp_exit_file" 2>/dev/null; then
+        local script_exit_code=$(cat "$temp_exit_file" 2>/dev/null)
+        if [[ -n "$script_exit_code" ]] && [[ "$script_exit_code" =~ ^[0-9]+$ ]]; then
+            ssh_exit_code=$script_exit_code
+        fi
+        rm -f "$temp_exit_file"
     fi
 
     __ok__ "Script execution complete"
 
-    # Retrieve exit code
-    local temp_exit_file="/tmp/remote_exit_$$"
-    if __scp_download__ "$node_ip" "$node_pass" "$username" "${remote_log}.exit" "$temp_exit_file" 2>/dev/null; then
-        ssh_exit_code=$(cat "$temp_exit_file")
-        rm -f "$temp_exit_file"
-    else
-        ssh_exit_code=1
-    fi
-
     __log_info__ "Script execution completed with exit code: $ssh_exit_code" "REMOTE"
 
-    # Retrieve and display both log files
-    local local_remote_log="/tmp/remote_${node_name}_$$.log"
-    local local_debug_log="/tmp/remote_${node_name}_$$.debug.log"
+    # Download final log file and debug logs
+    local local_remote_log="/tmp/remote_${node_name}_${exec_id}.log"
+    local local_debug_log="/tmp/remote_${node_name}_${exec_id}.debug.log"
 
-    # Retrieve stdout/stderr log
-    if __scp_download__ "$node_ip" "$node_pass" "$username" "$remote_log" "$local_remote_log" 2>/dev/null; then
-        __log_info__ "Retrieved remote execution log from $node_name" "REMOTE"
-        echo
-        echo "--- Output from $node_name ---"
-        cat "$local_remote_log"
-        echo "--- End output ---"
-        echo
+    # Ensure we have the final version of the log
+    __scp_download__ "$node_ip" "$node_pass" "$username" "$port" "$remote_log" "$local_remote_log" 2>/dev/null || true
+    
+    # Retrieve debug log if it exists
+    if __scp_download__ "$node_ip" "$node_pass" "$username" "$port" "$remote_debug_log" "$local_debug_log" 2>/dev/null; then
+        __log_info__ "Retrieved debug log from $node_name" "REMOTE"
 
-        # Retrieve debug log if it exists
-        if __scp_download__ "$node_ip" "$node_pass" "$username" "$remote_debug_log" "$local_debug_log" 2>/dev/null; then
-            __log_info__ "Retrieved debug log from $node_name" "REMOTE"
-
-            # Only show debug log if it has content
-            if [[ -s "$local_debug_log" ]]; then
-                echo
-                echo "--- Debug Log from $node_name (LOG_LEVEL=$REMOTE_LOG_LEVEL) ---"
-                cat "$local_debug_log"
-                echo "--- End debug log ---"
-                echo
-            fi
-
-            # Append debug log to main log file
-            cat "$local_debug_log" >>"$LOG_FILE" 2>/dev/null || true
-            echo "Debug log saved to: $local_debug_log"
-        else
-            __log_debug__ "No debug log available from $node_name" "REMOTE"
+        # Show debug log if it has content (not shown live)
+        if [[ -s "$local_debug_log" ]]; then
+            echo
+            echo "--- Debug Log from $node_name (LOG_LEVEL=$REMOTE_LOG_LEVEL) ---"
+            cat "$local_debug_log"
+            echo "--- End debug log ---"
+            echo
         fi
 
-        echo "Output log saved to: $local_remote_log"
-        cat "$local_remote_log" >>"$LOG_FILE"
+        # Append debug log to main log file
+        cat "$local_debug_log" >>"$LOG_FILE" 2>/dev/null || true
+        echo "Debug log saved to: $local_debug_log"
     else
-        __log_warn__ "Could not retrieve remote log from $node_name" "REMOTE"
+        __log_debug__ "No debug log available from $node_name" "REMOTE"
+    fi
+
+    echo "Output log saved to: $local_remote_log"
+    if [[ -f "$local_remote_log" ]]; then
+        cat "$local_remote_log" >>"$LOG_FILE"
     fi
 
     # Cleanup
     CURRENT_MESSAGE="Cleaning up..."
     __update__ "$CURRENT_MESSAGE"
     __log_info__ "Cleaning up remote directory: $REMOTE_TEMP_DIR" "REMOTE"
-    __ssh_exec__ "$node_ip" "$node_pass" "$username" \
+    __ssh_exec__ "$node_ip" "$node_pass" "$username" "$port" \
         "rm -rf $REMOTE_TEMP_DIR $remote_log $remote_debug_log ${remote_log}.exit" 2>/dev/null || __log_warn__ "Cleanup failed (non-critical)" "REMOTE"
     __ok__ "Cleanup complete"
 
@@ -376,7 +404,13 @@ __execute_on_remote_node__() {
         __log_error__ "$node_name execution failed with exit code: $ssh_exit_code" "REMOTE"
     fi
 
-    return "$ssh_exit_code"
+    # Ensure exit code is numeric before returning
+    if [[ "$ssh_exit_code" =~ ^[0-9]+$ ]]; then
+        return "$ssh_exit_code"
+    else
+        __log_error__ "Invalid exit code: '$ssh_exit_code', returning 1" "REMOTE"
+        return 1
+    fi
 }
 
 # Execute script on remote target(s)
@@ -433,8 +467,11 @@ __execute_remote_script__() {
         # Get username safely
         local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
 
+        # Get port safely
+        local node_port="${NODE_PORTS[$node_name]:-$DEFAULT_PORT}"
+
         # Execute on this node (always continue to next node regardless of result)
-        if __execute_on_remote_node__ "$node_name" "$node_ip" "$node_pass" "$node_username" "$script_path" "$script_relative" "$script_dir_relative" "$param_line"; then
+        if __execute_on_remote_node__ "$node_name" "$node_ip" "$node_pass" "$node_username" "$node_port" "$script_path" "$script_relative" "$script_dir_relative" "$param_line"; then
             ((success_count += 1))
         else
             ((fail_count += 1))
@@ -470,9 +507,12 @@ __execute_remote_script__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Fixed log filename collision issue when GUI.sh runs multiple executions
+# - 2026-01-08: Added __test_remote_connection__ for password validation
+# - 2025-12-18: Added SSH port configuration support for proxy/jump host setups
 # - 2025-11-24: Validated against CONTRIBUTING.md and fixed ShellCheck issues
 # - 2025-11-24: Added conditional sourcing of utility dependencies
 # - 2025-11-24: Fixed variable quoting issues (SC2086)

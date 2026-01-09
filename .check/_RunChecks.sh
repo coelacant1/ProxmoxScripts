@@ -192,7 +192,7 @@ if [ "$NO_FIX" = true ]; then
         cat "$TEMP_OUTPUT"
     else
         # Show summary only
-        sed -n '/^====/p; /^Scripts found:/p; /^Summary/,/^====/p' "$TEMP_OUTPUT"
+        sed -n '/^Scripts found:/p; /^Summary/,/^  ✓/p' "$TEMP_OUTPUT"
     fi
 
     if [ $EXIT_CODE -eq 0 ]; then
@@ -216,7 +216,7 @@ else
         cat "$TEMP_OUTPUT"
     else
         # Show fixed files and summary
-        grep -E "^✓|^===|^Scripts found:|^Summary|^  ✓|^  ✗" "$TEMP_OUTPUT" || true
+        grep -E "^✓|^Scripts found:|^Summary|^  ✓|^  ✗" "$TEMP_OUTPUT" || true
     fi
 
     echo "- Script notes validated and fixed"

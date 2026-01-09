@@ -1,0 +1,278 @@
+===============================================================================
+SSH PROXY CONFIGURATION GUIDE
+===============================================================================
+
+OVERVIEW
+--------
+This guide explains how to configure SSH connections through a proxy server
+with custom port forwarding. This is useful when all your Proxmox nodes are
+accessed through a single proxy/jump host but on different SSH ports.
+
+COMMON USE CASES
+----------------
+1. Nginx Stream Proxy (Nginx Proxy Manager)
+   - All nodes accessible via same IP (e.g., 192.168.1.100)
+   - Different ports mapped to different backend nodes
+   - Example: 192.168.1.100:2201 -> node1:22, 192.168.1.100:2202 -> node2:22
+
+2. SSH Jump Host / Bastion Server
+   - Central gateway to internal network
+   - Port forwarding configured for each node
+
+3. Network Address Translation (NAT)
+   - Public IP with port forwarding rules
+   - Each node accessible on unique port
+
+
+CONFIGURATION
+-------------
+
+The SSH proxy configuration is managed through the nodes.json file in the
+repository root directory.
+
+nodes.json Structure:
+{
+  "nodes": [
+    {
+      "name": "node1",
+      "ip": "192.168.1.100",
+      "port": 2201,
+      "username": "root",
+      "ssh_keys": true
+    },
+    {
+      "name": "node2",
+      "ip": "192.168.1.100",
+      "port": 2202,
+      "username": "root",
+      "ssh_keys": false
+    }
+  ]
+}
+
+FIELD DESCRIPTIONS
+------------------
+- name:      Unique identifier for the node (required)
+- ip:        IP address or hostname of the proxy/jump host (required)
+- port:      SSH port number to connect to (optional, default: 22)
+- username:  SSH username for authentication (optional, default: root)
+- ssh_keys:  Whether SSH key authentication is available (optional, default: unknown)
+
+
+NGINX PROXY MANAGER EXAMPLE
+----------------------------
+
+If you're using Nginx Proxy Manager with stream forwarding:
+
+1. Configure Streams in Nginx Proxy Manager:
+   
+   Stream 1:
+   - Incoming Port: 2201
+   - Forward Hostname: 192.168.1.11
+   - Forward Port: 22
+   
+   Stream 2:
+   - Incoming Port: 2202
+   - Forward Hostname: 192.168.1.12
+   - Forward Port: 22
+
+2. Update nodes.json:
+   
+   {
+     "nodes": [
+       {
+         "name": "pve-node1",
+         "ip": "proxy.example.com",
+         "port": 2201,
+         "username": "root",
+         "ssh_keys": true
+       },
+       {
+         "name": "pve-node2",
+         "ip": "proxy.example.com",
+         "port": 2202,
+         "username": "root",
+         "ssh_keys": true
+       }
+     ]
+   }
+
+3. Test the configuration:
+   
+   ssh -p 2201 root@proxy.example.com
+   ssh -p 2202 root@proxy.example.com
+
+
+AUTHENTICATION
+--------------
+
+The scripts support two authentication methods:
+
+1. SSH Key Authentication (Recommended)
+   - More secure and convenient
+   - No password prompts needed
+   - Set "ssh_keys": true in nodes.json
+   - Ensure your SSH keys are added to the target nodes
+
+2. Password Authentication
+   - Uses sshpass for non-interactive authentication
+   - Set "ssh_keys": false in nodes.json
+   - You'll be prompted for passwords when needed
+
+
+SSH KEY SETUP
+-------------
+
+To set up SSH key authentication through a proxy:
+
+1. Generate SSH key (if you don't have one):
+   
+   ssh-keygen -t ed25519 -C "your_email@example.com"
+
+2. Copy key to each node through the proxy:
+   
+   ssh-copy-id -p 2201 root@proxy.example.com
+   ssh-copy-id -p 2202 root@proxy.example.com
+
+3. Test the connection:
+   
+   ssh -p 2201 root@proxy.example.com echo "Connection successful"
+
+4. Update nodes.json to reflect SSH key availability:
+   
+   Set "ssh_keys": true for nodes with working key authentication
+
+5. Or run the automated SSH key scanner:
+   
+   From the GUI: Settings -> Scan Nodes for SSH Keys
+
+
+TESTING YOUR CONFIGURATION
+---------------------------
+
+1. Manual SSH test:
+   
+   ssh -p <port> <username>@<ip>
+
+2. Using the GUI:
+   
+   - Launch: bash GUI.sh
+   - Navigate to: Settings -> Scan Nodes for SSH Keys
+   - The scanner will test each node and update ssh_keys status
+
+3. Verify in the GUI:
+   
+   - Go to: Execution Mode -> Configure Single Remote
+   - You should see all your nodes with correct ports
+
+
+TROUBLESHOOTING
+---------------
+
+Connection Issues:
+- Verify proxy/firewall rules allow traffic on specified ports
+- Test connection manually: ssh -vvv -p <port> <user>@<ip>
+- Check if the proxy service is running (e.g., Nginx)
+
+Port Conflicts:
+- Ensure each node has a unique port number
+- Common port ranges: 2200-2299 for SSH forwarding
+
+SSH Key Issues:
+- Verify key is in ~/.ssh/authorized_keys on target node
+- Check file permissions: chmod 600 ~/.ssh/authorized_keys
+- Ensure home directory: chmod 700 ~/.ssh
+
+Wrong Node Connected:
+- Verify port mapping in proxy configuration
+- Check logs on proxy server for connection routing
+
+
+ADVANCED CONFIGURATION
+----------------------
+
+Multiple Proxy Servers:
+You can have different nodes on different proxies:
+
+{
+  "nodes": [
+    {
+      "name": "cluster1-node1",
+      "ip": "proxy1.example.com",
+      "port": 2201,
+      "username": "root"
+    },
+    {
+      "name": "cluster2-node1",
+      "ip": "proxy2.example.com",
+      "port": 2201,
+      "username": "admin"
+    }
+  ]
+}
+
+Custom Usernames:
+Different nodes can have different usernames:
+
+{
+  "nodes": [
+    {
+      "name": "prod-node",
+      "ip": "proxy.example.com",
+      "port": 2201,
+      "username": "root"
+    },
+    {
+      "name": "test-node",
+      "ip": "proxy.example.com",
+      "port": 2202,
+      "username": "testuser"
+    }
+  ]
+}
+
+
+SECURITY CONSIDERATIONS
+-----------------------
+
+1. Use SSH keys instead of passwords whenever possible
+2. Limit SSH access to specific IP ranges in proxy/firewall
+3. Use non-standard ports to reduce automated attacks
+4. Enable fail2ban on both proxy and target nodes
+5. Regularly rotate SSH keys and audit authorized_keys
+6. Consider using SSH certificates for larger deployments
+7. Monitor SSH logs for suspicious activity
+
+
+MIGRATION FROM DIRECT CONNECTIONS
+----------------------------------
+
+If you're migrating from direct node connections to proxy-based:
+
+1. Backup current nodes.json:
+   
+   cp nodes.json nodes.json.backup
+
+2. Update IP addresses to proxy IP
+3. Add port field for each node
+4. Test connections one node at a time
+5. Update ssh_keys status after verifying key auth works
+
+
+RELATED DOCUMENTATION
+---------------------
+
+- Getting Started: getting-started.txt
+- Node Management: node-management.txt
+- Execution Modes: execution-modes.txt
+- Troubleshooting: troubleshooting.txt
+
+
+SUPPORT
+-------
+
+For issues or questions:
+- GitHub Issues: https://github.com/coelacant1/ProxmoxScripts/issues
+- Documentation: https://coelacant1.github.io/ProxmoxScripts/
+
+===============================================================================

@@ -486,6 +486,18 @@ configure_single_remote() {
             echo "SSH keys not detected, password required."
             read -rsp "Enter password: " manual_pass
             echo
+            
+            # Test connection before proceeding
+            echo "Testing connection..."
+            if ! __test_remote_connection__ "$manual_ip" "$manual_pass" "$manual_user" "22"; then
+                echo
+                __line_rgb__ "✗ Connection failed! Please check IP, username, and password." 255 0 0
+                echo "Press Enter to try again..."
+                read -r
+                continue
+            fi
+            echo "✓ Connection successful!"
+            sleep 1
 
             __clear_remote_targets__
             __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass" "$manual_user"
@@ -571,6 +583,18 @@ configure_single_remote() {
             echo "SSH keys not detected, password required."
             read -rsp "Enter password: " manual_pass
             echo
+            
+            # Test connection before proceeding
+            echo "Testing connection..."
+            if ! __test_remote_connection__ "$manual_ip" "$manual_pass" "$manual_user" "22"; then
+                echo
+                __line_rgb__ "✗ Connection failed! Please check IP, username, and password." 255 0 0
+                echo "Press Enter to try again..."
+                read -r
+                continue
+            fi
+            echo "✓ Connection successful!"
+            sleep 1
 
             __clear_remote_targets__
             __add_remote_target__ "$manual_name" "$manual_ip" "$manual_pass" "$manual_user"
@@ -599,6 +623,22 @@ configure_single_remote() {
             echo "SSH keys not detected, password required."
             read -rsp "Enter password for $selected_name: " node_pass
             echo
+            
+            # Get port for this node
+            local selected_port
+            selected_port=$(__get_node_port__ "$selected_name")
+            
+            # Test connection before proceeding
+            echo "Testing connection to $selected_name..."
+            if ! __test_remote_connection__ "$selected_ip" "$node_pass" "$selected_username" "$selected_port"; then
+                echo
+                __line_rgb__ "✗ Connection failed! Please check password." 255 0 0
+                echo "Press Enter to try again..."
+                read -r
+                continue
+            fi
+            echo "✓ Connection successful!"
+            sleep 1
 
             __clear_remote_targets__
             __add_remote_target__ "$selected_name" "$selected_ip" "$node_pass" "$selected_username"
@@ -806,6 +846,18 @@ configure_multi_saved() {
                         if ! ssh -o BatchMode=yes -o ConnectTimeout=2 "${node_username}@$node_ip" echo "test" &>/dev/null 2>&1; then
                             read -rsp "Enter password for $node_name: " node_pass
                             echo
+                            
+                            # Test connection
+                            local node_port
+                            node_port=$(__get_node_port__ "$node_name")
+                            echo "Testing connection to $node_name..."
+                            if ! __test_remote_connection__ "$node_ip" "$node_pass" "$node_username" "$node_port"; then
+                                echo
+                                __line_rgb__ "✗ Connection to $node_name failed! Skipping this node." 255 0 0
+                                continue
+                            fi
+                            echo "✓ Connection to $node_name successful!"
+                            
                             NODE_PASSWORDS["$node_name"]="$node_pass"
                         else
                             NODE_PASSWORDS["$node_name"]="" # Empty = use SSH keys
@@ -823,6 +875,25 @@ configure_multi_saved() {
         if [[ "$same_pass" =~ ^[Yy]$ ]]; then
             read -rsp "Enter password for all nodes: " shared_pass
             echo
+            
+            # Test password on first node
+            local first_target="${REMOTE_TARGETS[0]}"
+            IFS=':' read -r first_name first_ip <<<"$first_target"
+            local first_username="${NODE_USERNAMES[$first_name]:-$DEFAULT_USERNAME}"
+            local first_port
+            first_port=$(__get_node_port__ "$first_name")
+            
+            echo "Testing password on first node ($first_name)..."
+            if ! __test_remote_connection__ "$first_ip" "$shared_pass" "$first_username" "$first_port"; then
+                echo
+                __line_rgb__ "✗ Password test failed on $first_name!" 255 0 0
+                echo "Please try again..."
+                sleep 2
+                continue
+            fi
+            echo "✓ Password works on $first_name"
+            sleep 1
+            
             for target in "${REMOTE_TARGETS[@]}"; do
                 IFS=':' read -r node_name node_ip <<<"$target"
                 NODE_PASSWORDS["$node_name"]="$shared_pass"
@@ -830,8 +901,30 @@ configure_multi_saved() {
         else
             for target in "${REMOTE_TARGETS[@]}"; do
                 IFS=':' read -r node_name node_ip <<<"$target"
+                local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
+                local node_port
+                node_port=$(__get_node_port__ "$node_name")
+                
                 read -rsp "Enter password for $node_name ($node_ip): " node_pass
                 echo
+                
+                # Test connection
+                echo "Testing connection to $node_name..."
+                if ! __test_remote_connection__ "$node_ip" "$node_pass" "$node_username" "$node_port"; then
+                    echo
+                    __line_rgb__ "✗ Connection to $node_name failed! Please try again." 255 0 0
+                    # Loop back to retry this specific node
+                    read -rsp "Enter password for $node_name ($node_ip): " node_pass
+                    echo
+                    echo "Testing connection to $node_name..."
+                    if ! __test_remote_connection__ "$node_ip" "$node_pass" "$node_username" "$node_port"; then
+                        echo
+                        __line_rgb__ "✗ Still failed! Skipping $node_name." 255 0 0
+                        continue
+                    fi
+                fi
+                echo "✓ Connection to $node_name successful!"
+                
                 NODE_PASSWORDS["$node_name"]="$node_pass"
             done
         fi

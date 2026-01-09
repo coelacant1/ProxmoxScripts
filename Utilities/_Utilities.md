@@ -1,6 +1,6 @@
 # ProxmoxScripts Utility Functions Reference
 
-**Auto-generated documentation** - Last updated: 2025-11-25 10:18:58
+**Auto-generated documentation** - Last updated: 2026-01-09 14:42:42
 
 ---
 
@@ -252,7 +252,7 @@ __validate_ip__ "192.168.1.1" "IP Address"
 | `__get_server_lxc__` | Cluster | Retrieves the VMIDs for all LXC containers on a specific server |
 | `__get_server_vms__` | Cluster | Retrieves the VMIDs for all VMs (QEMU) on a specific server |
 | `__get_vm_info__` | Operations | Get comprehensive VM information |
-| `__get_vm_node__` | Cluster | Gets the node name where a specific VM is located in the cluster |
+| `__get_vm_node__` | Cluster | Get the node name where a VM is located |
 | `__gradient_print__` | Colors | Prints multi-line text with a vertical color gradient |
 | `__handle_err__` | Communication | Handles errors by stopping the spinner and printing error details including the line number, exit code, and failing command |
 | `__info__` | Communication | Prints an informational message in bold yellow and starts the rainbow spinner |
@@ -273,6 +273,7 @@ __validate_ip__ "192.168.1.1" "IP Address"
 | `__log_function_exit__` | Logger | Log function exit with return code |
 | `__log_info__` | Logger | Log info message |
 | `__log_section__` | Logger | Log section separator |
+| `__log_trace__` | Logger | Log trace message |
 | `__log_var__` | Logger | Log variable value |
 | `__log_warn__` | Logger | Log warning message |
 | `__net_bulk_set_bridge__` | Network | Change bridge for multiple VMs |
@@ -336,6 +337,7 @@ __validate_ip__ "192.168.1.1" "IP Address"
 | `__state_validate__` | StateManager | Validate a state file |
 | `__stop_spin__` | Communication | Stops the running spinner process (if any) and restores the cursor |
 | `__success__` | Communication | Alias for __ok__ for backward compatibility |
+| `__test_remote_connection__` | RemoteExecutor | Test SSH connection to remote node with given credentials |
 | `__update__` | Communication | Updates the text displayed next to the spinner without stopping it |
 | `__validate_ctid__` | Cluster | Validates that a CTID exists and is a container (lxc), not a VM |
 | `__validate_vm_id_range__` | Cluster | Validates that VM IDs are numeric and in correct order |
@@ -734,17 +736,18 @@ For __get_server_vms__ "local", the output might be: 401 402
 ```
 ---
 ### `__get_vm_node__`
-**Description**: Gets the node name where a specific VM is located in the cluster. Returns empty string if VM is not found.
+**Description**: Get the node name where a VM is located
 **Usage**:
 ```bash
-local node=$(__get_vm_node__ 400)
+local node=$(__get_vm_node__ <vmid>)
 ```
 **Parameters**:
 - 1 The VMID to locate.
-**Returns**: Prints the node name to stdout, or empty string if not found.
+- 1 VM ID
+**Returns**: Prints node name to stdout
 **Example Output**:
 ```
-For __get_vm_node__ 400, the output might be: pve01
+For __get_vm_node__ 400, the output might be: pve01 --- __get_vm_node__ ---------------------------------------------------------
 ```
 ---
 ### `__get_ct_node__`
@@ -1160,6 +1163,7 @@ Shows "Selected script", top comments, and example invocations sections.
 - `__clear_remote_targets__`
 - `__get_node_ip__`
 - `__get_node_username__`
+- `__get_node_port__`
 - `__node_exists__`
 - `__get_available_nodes__`
 - `__count_available_nodes__`
@@ -1338,7 +1342,7 @@ For __get_name_from_ip__ "192.168.1.23", the output is: pve03
 
 # Logger.sh
 
-**Purpose**: !/bin/bash Centralized logging utility for ProxmoxScripts Provides consistent, structured logging across all scripts __log__ "INFO" "Message here" __log__ "ERROR" "Something failed" __log__ "DEBUG" "Debug information" Environment Variables: LOG_LEVEL - Minimum level to log (DEBUG, INFO, WARN, ERROR) - default: INFO
+**Purpose**: !/bin/bash Centralized logging utility for ProxmoxScripts Provides consistent, structured logging across all scripts __log__ "INFO" "Message here" __log__ "ERROR" "Something failed" __log__ "DEBUG" "Debug information" Environment Variables: LOG_LEVEL - Minimum level to log (TRACE, DEBUG, INFO, WARN, ERROR) - default: INFO
 
 **Usage**:
 ```bash
@@ -1348,6 +1352,7 @@ source "${UTILITYPATH}/Logger.sh"
 **Functions**:
 - `__get_log_priority__`
 - `__log__`
+- `__log_trace__`
 - `__log_debug__`
 - `__log_info__`
 - `__log_warn__`
@@ -1369,9 +1374,12 @@ source "${UTILITYPATH}/Logger.sh"
 __log__ <level> <message> [category]
 ```
 **Parameters**:
-- level Log level (DEBUG, INFO, WARN, ERROR)
+- level Log level (TRACE, DEBUG, INFO, WARN, ERROR)
 - message Message to log
 - category Optional category/component name
+---
+### `__log_trace__`
+**Description**: Log trace message
 ---
 ### `__log_debug__`
 **Description**: Log debug message
@@ -1791,6 +1799,7 @@ __net_migrate_network__ <start_vmid> <end_vmid> <net_id> [options]
 - Consistent return codes and error messages
 - Testable and mockable functions
 - State management helpers
+- Optimized to minimize redundant API queries
 
 **Usage**:
 ```bash
@@ -1860,14 +1869,19 @@ source "${UTILITYPATH}/Operations.sh"
 #### Functions in Operations.sh
 
 ### `__vm_exists__`
-**Description**: Check if a VM exists (cluster-wide).
+**Description**: Check if a VM exists (cluster-wide). Optionally returns node via stdout.
 **Usage**:
 ```bash
-__vm_exists__ <vmid>
+if __vm_exists__ "$vmid"; then ...; fi  OR  node=$(__vm_exists__ "$vmid" --get-node)
 ```
 **Parameters**:
 - 1 VM ID
-**Returns**: 0 if exists, 1 if not
+- 2 Optional: --get-node to output node name to stdout
+**Returns**: 0 if exists (with node on stdout if --get-node), 1 if not
+**Example Output**:
+```
+node=$(__vm_exists__ "$vmid" --get-node) && echo "VM on $node"
+```
 ---
 ### `__vm_get_status__`
 **Description**: Get VM status (running, stopped, paused, etc).
@@ -1901,16 +1915,18 @@ __vm_start__ <vmid> [options]
 **Returns**: 0 on success, 1 on error
 ---
 ### `__vm_stop__`
-**Description**: Stop a VM (cluster-aware).
+**Description**: Stop a VM (cluster-aware). Sends SIGTERM then SIGKILL.
 **Usage**:
 ```bash
 __vm_stop__ <vmid> [--timeout <seconds>] [--force]
 ```
 **Parameters**:
 - 1 VM ID
-- --timeout Timeout in seconds before force stop
-- --force Force stop immediately
+- --timeout Timeout in seconds (optional)
+- --force Ignored for compatibility (qm stop is forceful by default)
 **Returns**: 0 on success, 1 on error
+**Notes**:
+- The --force flag is accepted but ignored for Proxmox version compatibility
 ---
 ### `__vm_set_config__`
 **Description**: Set VM configuration parameter.
@@ -1935,14 +1951,15 @@ __vm_get_config__ <vmid> <param>
 **Returns**: Prints value to stdout, returns 1 on error
 ---
 ### `__ct_exists__`
-**Description**: Check if a CT exists.
+**Description**: Check if a CT exists. Optionally returns node via stdout.
 **Usage**:
 ```bash
-__ct_exists__ <ctid>
+if __ct_exists__ "$ctid"; then ...; fi  OR  node=$(__ct_exists__ "$ctid" --get-node)
 ```
 **Parameters**:
 - 1 CT ID
-**Returns**: 0 if exists, 1 if not
+- 2 Optional: --get-node to output node name to stdout
+**Returns**: 0 if exists (with node on stdout if --get-node), 1 if not
 ---
 ### `__ct_get_status__`
 **Description**: Get CT status.
@@ -2589,6 +2606,7 @@ __require_root_and_proxmox__
 **Functions**:
 - `__remote_cleanup__`
 - `__prompt_for_params__`
+- `__test_remote_connection__`
 - `__ssh_exec__`
 - `__scp_exec__`
 - `__scp_exec_recursive__`
@@ -2598,6 +2616,21 @@ __require_root_and_proxmox__
 
 ---
 
+#### Functions in RemoteExecutor.sh
+
+### `__test_remote_connection__`
+**Description**: Test SSH connection to remote node with given credentials
+**Usage**:
+```bash
+__test_remote_connection__ <ip> <password> <username> <port>
+```
+**Parameters**:
+- 1 Node IP address
+- 2 Password (empty if using SSH keys)
+- 3 Username
+- 4 Port number
+**Returns**: 0 if connection successful, 1 otherwise
+---
 # RemoteRunAllTests.sh
 
 **Purpose**: !/bin/bash Run all test suites on remote Proxmox nodes using RemoteExecutor.sh (same as GUI.sh). Copies entire repository and executes RunAllTests.sh on remote nodes. RemoteRunAllTests.sh --node pt01 RemoteRunAllTests.sh --node 192.168.1.81 RemoteRunAllTests.sh --all-nodes RemoteRunAllTests.sh --node pt01 --verbose RemoteRunAllTests.sh --all-nodes --debug Options:

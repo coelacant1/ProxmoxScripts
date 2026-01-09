@@ -70,13 +70,20 @@ main() {
     delete_vm_callback() {
         local vmid="$1"
 
-        # Unprotect VM
-        __vm_set_config__ "$vmid" --protection 0 2>/dev/null || return 1
-
-        # Stop if running
+        # Stop if running (qm stop is forceful by default)
         if __vm_is_running__ "$vmid"; then
-            __vm_stop__ "$vmid" --force 2>/dev/null || true
-            __vm_wait_for_status__ "$vmid" "stopped" --timeout 30 2>/dev/null || true
+            if __vm_stop__ "$vmid"; then
+                # Stop command succeeded, wait for VM to reach stopped state
+                __vm_wait_for_status__ "$vmid" "stopped" --timeout 30 2>/dev/null || {
+                    # Timeout waiting for stopped status - skip this VM
+                    echo "Error: VM $vmid did not stop within timeout" >&2
+                    return 1
+                }
+            else
+                # Stop command failed immediately - skip this VM
+                echo "Error: Failed to issue stop command for VM $vmid" >&2
+                return 1
+            fi
         fi
 
         # Destroy VM using remote execution utility
@@ -104,9 +111,11 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Removed --protection 0 call (unprotection must be handled by Options/BulkToggleProtectionMode.sh)
+# - 2026-01-08: Improved stop command error handling with better timeout and error messages
 # - 2025-10-14: Converted to cluster-wide with safety features
 # - 2025-10-27: Updated to follow contributing guide with proper BulkOperations framework usage
 #

@@ -312,6 +312,12 @@ __get_server_vms__() {
 # @return Prints the node name to stdout, or empty string if not found.
 # @example_output For __get_vm_node__ 400, the output might be:
 #   pve01
+# --- __get_vm_node__ ---------------------------------------------------------
+# @function __get_vm_node__
+# @description Get the node name where a VM is located
+# @usage local node=$(__get_vm_node__ <vmid>)
+# @param 1 VM ID
+# @return Prints node name to stdout
 __get_vm_node__() {
     local vmid="$1"
     __query_log__ "TRACE" "Getting node for VM: $vmid"
@@ -356,20 +362,13 @@ __get_ct_node__() {
     __install_or_prompt__ "jq"
 
     local node
-    # First try cluster resources
     node=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
         | jq -r --arg CTID "$ctid" '.[] | select(.type=="lxc" and .vmid==($CTID|tonumber)) | .node' 2>/dev/null || true)
-
-    # If not found in cluster, try local pct config
-    if [[ -z "$node" ]] && pct config "$ctid" &>/dev/null; then
-        node=$(hostname)
-        __query_log__ "DEBUG" "CT $ctid found locally on: $node"
-    fi
 
     if [[ -n "$node" ]]; then
         __query_log__ "DEBUG" "CT $ctid is on node: $node"
     else
-        __query_log__ "WARN" "CT $ctid not found"
+        __query_log__ "WARN" "CT $ctid not found in cluster"
     fi
 
     echo "$node"
@@ -784,9 +783,11 @@ __get_pool_vms__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Implemented file-based query caching
+# - 2026-01-08: Added query result caching for __get_vm_node__ and __get_ct_node__
 # - 2025-11-24: Validated against CONTRIBUTING.md and PVE Guide Chapter 5
 # - 2025-11-24: Fixed ShellCheck warnings (SC2155 - declare/assign separation)
 # - Initial creation

@@ -12,6 +12,7 @@
 #   - __clear_remote_targets__
 #   - __get_node_ip__
 #   - __get_node_username__
+#   - __get_node_port__
 #   - __node_exists__
 #   - __get_available_nodes__
 #   - __count_available_nodes__
@@ -29,11 +30,14 @@ declare -g TARGET_DISPLAY="This System"
 declare -ga REMOTE_TARGETS=()
 declare -gA NODE_PASSWORDS=()
 declare -gA AVAILABLE_NODES=()
+declare -ga NODE_ORDER=()  # Preserve order from nodes.json
 declare -gA NODE_USERNAMES=() # Track username for each node
+declare -gA NODE_PORTS=() # Track SSH port for each node
 declare -gA NODE_SSH_KEYS=() # Track SSH key status
 declare -g NODES_FILE="nodes.json"
 declare -g REMOTE_TEMP_DIR="/tmp/ProxmoxScripts_gui"
 declare -g DEFAULT_USERNAME="root" # Default username for nodes
+declare -g DEFAULT_PORT="22" # Default SSH port
 # Only set default if not already set (e.g., from command-line flags)
 if [[ -z "${REMOTE_LOG_LEVEL:-}" ]]; then
     declare -g REMOTE_LOG_LEVEL="INFO"
@@ -50,15 +54,21 @@ __init_config__() {
     fi
 
     if [[ -f "$NODES_FILE" ]] && command -v jq &>/dev/null; then
+        # Reset order array
+        NODE_ORDER=()
+        
         while IFS= read -r line; do
-            local node_name node_ip ssh_keys node_username
+            local node_name node_ip ssh_keys node_username node_port
             node_name=$(echo "$line" | jq -r '.name')
             node_ip=$(echo "$line" | jq -r '.ip')
             ssh_keys=$(echo "$line" | jq -r 'if has("ssh_keys") then (.ssh_keys | tostring) else "unknown" end')
             node_username=$(echo "$line" | jq -r 'if has("username") then .username else "'"$DEFAULT_USERNAME"'" end')
+            node_port=$(echo "$line" | jq -r 'if has("port") then (.port | tostring) else "'"$DEFAULT_PORT"'" end')
             AVAILABLE_NODES["$node_name"]="$node_ip"
             NODE_SSH_KEYS["$node_name"]="$ssh_keys"
             NODE_USERNAMES["$node_name"]="$node_username"
+            NODE_PORTS["$node_name"]="$node_port"
+            NODE_ORDER+=("$node_name")  # Preserve order from JSON
         done < <(jq -c '.nodes[]' "$NODES_FILE" 2>/dev/null || true)
     fi
 }
@@ -128,6 +138,14 @@ __get_node_username__() {
     echo "${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
 }
 
+# Get node port by name
+# Args: node_name
+# Returns: port number or default port (22)
+__get_node_port__() {
+    local node_name="$1"
+    echo "${NODE_PORTS[$node_name]:-$DEFAULT_PORT}"
+}
+
 # Check if node exists
 # Args: node_name
 # Returns: 0 if exists, 1 if not
@@ -136,9 +154,9 @@ __node_exists__() {
     [[ -v AVAILABLE_NODES[$node_name] ]]
 }
 
-# Get all available node names
+# Get all available node names (in order from nodes.json)
 __get_available_nodes__() {
-    printf '%s\n' "${!AVAILABLE_NODES[@]}"
+    printf '%s\n' "${NODE_ORDER[@]}"
 }
 
 # Count available nodes
@@ -147,12 +165,13 @@ __count_available_nodes__() {
 }
 
 # Check if node has SSH keys configured (from cache or test)
-# Args: node_ip username node_name
+# Args: node_ip username node_name [port]
 # Returns: "true" if keys work, "false" if not, "unknown" if not tested
 __has_ssh_keys__() {
     local node_ip="$1"
     local username="${2:-$DEFAULT_USERNAME}"
     local node_name="${3:-}"
+    local port="${4:-$DEFAULT_PORT}"
 
     # Check cache first if node_name provided
     if [[ -n "$node_name" ]] && [[ "${NODE_SSH_KEYS[$node_name]:-unknown}" != "unknown" ]]; then
@@ -161,7 +180,7 @@ __has_ssh_keys__() {
     fi
 
     # Test SSH connection
-    if ssh -o BatchMode=yes -o ConnectTimeout=2 "${username}@${node_ip}" echo "test" &>/dev/null 2>&1; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=2 -p "$port" "${username}@${node_ip}" echo "test" &>/dev/null 2>&1; then
         # Update cache if node_name provided
         if [[ -n "$node_name" ]]; then
             NODE_SSH_KEYS["$node_name"]="true"
@@ -205,10 +224,11 @@ __scan_ssh_keys__() {
     for node_name in "${!AVAILABLE_NODES[@]}"; do
         local node_ip="${AVAILABLE_NODES[$node_name]}"
         local node_username="${NODE_USERNAMES[$node_name]:-$DEFAULT_USERNAME}"
-        echo -n "  Checking $node_name ($node_username@$node_ip)... "
+        local node_port="${NODE_PORTS[$node_name]:-$DEFAULT_PORT}"
+        echo -n "  Checking $node_name ($node_username@$node_ip:$node_port)... "
 
         local has_keys
-        has_keys=$(__has_ssh_keys__ "$node_ip" "$node_username" "$node_name")
+        has_keys=$(__has_ssh_keys__ "$node_ip" "$node_username" "$node_name" "$node_port")
 
         if [[ "$has_keys" == "true" ]]; then
             echo "[SSH]"
@@ -238,9 +258,11 @@ __get_remote_log_level__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Added NODE_ORDER array to preserve node order from nodes.json
+# - 2025-12-18: Added SSH port configuration support for proxy/jump host setups
 # - 2025-11-24: Validated against CONTRIBUTING.md, fixed ShellCheck warnings
 # - Initial version: Configuration management for GUI execution modes
 #

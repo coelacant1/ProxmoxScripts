@@ -54,8 +54,9 @@ netmask="$(__cidr_to_netmask__ "$startMask")"
 
 ###############################################################################
 # Create a temporary .bat file with netsh commands for Windows IP reconfiguration
+# Use timestamp to avoid collision when running multiple instances in same session
 ###############################################################################
-tempBat="/tmp/ChangeIP.bat.$$"
+tempBat="/tmp/ChangeIP.bat.$$_$(date +%s%N)"
 cat <<'EOF' >"$tempBat"
 @echo off
 :: ChangeIP.bat
@@ -140,9 +141,10 @@ main
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Fixed temp file collision when running multiple instances in same session
 # - 2025-11-24: Fixed script name in header to match filename
 # - 2025-11-24: Refactored main logic into main() function
 # - 2025-11-24: Fixed variable name mismatches (COUNT, BASE_VM_ID)

@@ -340,26 +340,49 @@ def fix_script(
             lines_to_insert.append(shellcheck_line)
             lines_to_insert.append(source_line)
 
-    # 3) Rebuild lines, skipping the ones to remove (including their shellcheck lines)
+    # 3) Rebuild lines, skipping the ones to remove (including their shellcheck lines and error handlers)
     new_lines = []
-    skip_next = False
+    skip_mode = None  # Can be None, 'source', or 'error_handler'
+    brace_depth = 0
+    
     for i, line in enumerate(lines):
-        # Check if we should skip this line because it's a shellcheck directive for a removed source
-        if skip_next:
-            skip_next = False
-            continue
-            
-        # Check if this is a shellcheck directive for a source we're removing
         stripped = line.strip()
+        
+        # Handle skip modes
+        if skip_mode == 'source':
+            # We're skipping a source line - check if it has error handler
+            if '||' in line and '{' in line:
+                # Multi-line source with error handler - enter error handler skip mode
+                skip_mode = 'error_handler'
+                brace_depth = line.count('{') - line.count('}')
+                continue
+            else:
+                # Single-line source - done skipping
+                skip_mode = None
+                continue
+                
+        elif skip_mode == 'error_handler':
+            # Count braces to find end of error handler block
+            brace_depth += line.count('{') - line.count('}')
+            if brace_depth <= 0:
+                # Error handler block complete
+                skip_mode = None
+            continue
+        
+        # Check if this is a shellcheck directive for a source we're removing
         if stripped in remove_shellcheck:
-            skip_next = True  # Skip the next line (the actual source statement)
+            skip_mode = 'source'  # Skip the next line (and possibly error handler)
             continue
             
-        # Check if line is a source to remove
+        # Check if line is a source to remove (fallback for sources without shellcheck directive)
         if should_remove_source_line(line, remove_lines, remove_lines_dot):
-            # Also check if previous line was a shellcheck directive
+            # Check if it has error handler
+            if '||' in line and '{' in line:
+                skip_mode = 'error_handler'
+                brace_depth = line.count('{') - line.count('}')
+            # Also remove previous shellcheck directive if present
             if i > 0 and new_lines and new_lines[-1].strip().startswith('# shellcheck source='):
-                new_lines.pop()  # Remove the shellcheck directive too
+                new_lines.pop()
             continue
             
         # We'll insert new sources at the insertion index
