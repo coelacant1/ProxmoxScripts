@@ -60,7 +60,7 @@ parse_config_files() {
                 local cpu_cores
                 cpu_cores="$(grep -Po '^cores: \K.*' "$config_file" || echo "0")"
                 local memory_mb
-                memory_mb="$(grep -Po '^memory: \K.*' "$config_file" || echo "0")"
+                memory_mb="$(grep -Po '^memory: \K.*' "$config_file" | head -1 || echo "0")"
 
                 local disk_gb
                 disk_gb="$(grep -Po 'size=\K[0-9]+[A-Z]?' "$config_file" | awk '
@@ -75,7 +75,7 @@ parse_config_files() {
                   END { print sum }
                 ' || echo "0")"
 
-                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
+                echo "$node_name,$vmid,$vm_name,$cpu_cores,$memory_mb,$disk_gb" >>"$output_file"
             done
         fi
     fi
@@ -95,7 +95,7 @@ parse_config_files() {
                 local cpu_cores
                 cpu_cores="$(grep -Po '^cores: \K.*' "$config_file" || echo "0")"
                 local memory_mb
-                memory_mb="$(grep -Po '^memory: \K.*' "$config_file" || echo "0")"
+                memory_mb="$(grep -Po '^memory: \K.*' "$config_file" | head -1 || echo "0")"
 
                 local disk_gb
                 disk_gb="$(grep -Po 'size=\K[0-9]+[A-Z]?' "$config_file" | awk '
@@ -110,7 +110,7 @@ parse_config_files() {
                   END { print sum }
                 ' || echo "0")"
 
-                echo "$node_name,$vmid,$vm_name,$cpu_cores,$((memory_mb)),$disk_gb" >>"$output_file"
+                echo "$node_name,$vmid,$vm_name,$cpu_cores,$memory_mb,$disk_gb" >>"$output_file"
             done
         fi
     fi

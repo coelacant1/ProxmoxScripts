@@ -12,7 +12,7 @@
 #   __log__ "DEBUG" "Debug information"
 #
 # Environment Variables:
-#   LOG_LEVEL - Minimum level to log (DEBUG, INFO, WARN, ERROR) - default: INFO
+#   LOG_LEVEL - Minimum level to log (TRACE, DEBUG, INFO, WARN, ERROR) - default: INFO
 #   LOG_FILE - Path to log file - default: /tmp/proxmox_scripts.log
 #   LOG_CONSOLE - Whether to also log to console (1=yes, 0=no) - default: 1
 #   LOG_TIMESTAMP - Whether to include timestamps (1=yes, 0=no) - default: 1
@@ -20,6 +20,7 @@
 # Function Index:
 #   - __get_log_priority__
 #   - __log__
+#   - __log_trace__
 #   - __log_debug__
 #   - __log_info__
 #   - __log_warn__
@@ -39,10 +40,11 @@
 
 # Log level priorities
 declare -A LOG_LEVELS=(
-    [DEBUG]=0
-    [INFO]=1
-    [WARN]=2
-    [ERROR]=3
+    [TRACE]=0
+    [DEBUG]=1
+    [INFO]=2
+    [WARN]=3
+    [ERROR]=4
 )
 
 # Get current log level priority
@@ -54,7 +56,7 @@ __get_log_priority__() {
 # @function __log__
 # @description Core logging function with level-based filtering and formatting
 # @usage __log__ <level> <message> [category]
-# @param level Log level (DEBUG, INFO, WARN, ERROR)
+# @param level Log level (TRACE, DEBUG, INFO, WARN, ERROR)
 # @param message Message to log
 # @param category Optional category/component name
 __log__() {
@@ -121,11 +123,21 @@ __log__() {
             DEBUG)
                 echo -e "\033[0;36m$log_entry\033[0m"
                 ;;
+            TRACE)
+                echo -e "\033[0;90m$log_entry\033[0m"
+                ;;
             *)
                 echo "$log_entry"
                 ;;
         esac
     fi
+}
+
+# --- __log_trace__ -------------------------------------------------------------
+# @function __log_trace__
+# @description Log trace message
+__log_trace__() {
+    __log__ "TRACE" "$1" "${2:-}"
 }
 
 # --- __log_debug__ -------------------------------------------------------------
@@ -224,14 +236,16 @@ fi
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2025-01-26
 #
 # Changes:
+# - 2025-01-26: Added TRACE log level support (priority 0, below DEBUG)
 # - 2025-11-24: Validated against CONTRIBUTING.md
 # - 2025-11-24: Fixed unnecessary backslash escaping in date command paths (SC1001)
 # - Initial creation: Centralized logging utility with level-based filtering
 #
 # Fixes:
+# - 2025-01-26: Fixed TRACE logs appearing at INFO level - added TRACE to LOG_LEVELS array
 # - 2025-11-24: Removed unnecessary backslash escaping in /bin/date and /usr/bin/date paths
 #
 # Known issues:

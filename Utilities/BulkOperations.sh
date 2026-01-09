@@ -108,7 +108,15 @@ __bulk_operation__() {
     __update__ "Processing IDs ${start_id} to ${end_id} (${BULK_TOTAL} total)"
 
     # Process each ID
+    local id
     for ((id = start_id; id <= end_id; id++)); do
+        #  Defensive check: ensure id is numeric and in range
+        if ! [[ "$id" =~ ^[0-9]+$ ]] || ((id < start_id)) || ((id > end_id)); then
+            __bulk_log__ "ERROR" "Loop corruption detected: id=$id (expected $start_id-$end_id)"
+            echo "Error: Internal loop corruption detected" >&2
+            return 1
+        fi
+        
         local current=$((id - start_id + 1))
         __bulk_log__ "TRACE" "Processing ID $id ($current/$BULK_TOTAL)"
         __update__ "Processing ID ${id} (${current}/${BULK_TOTAL})..."
@@ -122,6 +130,7 @@ __bulk_operation__() {
             BULK_FAILED_IDS[$id]=1
             __bulk_log__ "WARN" "Failed: ID $id"
         fi
+        __bulk_log__ "TRACE" "Completed processing ID $id, next will be $((id + 1))"
     done
 
     __bulk_log__ "INFO" "Bulk operation complete: success=$BULK_SUCCESS, failed=$BULK_FAILED, skipped=$BULK_SKIPPED"
@@ -189,9 +198,18 @@ __bulk_vm_operation__() {
     __bulk_log__ "INFO" "Starting VM bulk operation: $operation_name (range: $start_id-$end_id, skip_stopped: $skip_stopped, skip_running: $skip_running)"
 
     # Wrapper function that checks VM existence and state
+    # First parameter is vmid, second is the actual callback to execute
     vm_wrapper() {
         local vmid="$1"
-        shift
+        local actual_callback="$2"
+        shift 2
+
+        # Defensive check: ensure callback is set
+        if [[ -z "$actual_callback" ]]; then
+            __bulk_log__ "ERROR" "vm_wrapper: callback parameter is not set"
+            ((BULK_FAILED += 1))
+            return 1
+        fi
 
         # Check existence
         if ! __vm_exists__ "$vmid"; then
@@ -217,12 +235,15 @@ __bulk_vm_operation__() {
         fi
 
         # Execute callback
-        __bulk_log__ "TRACE" "Executing callback for VM $vmid"
-        "$callback" "$vmid" "$@"
+        __bulk_log__ "TRACE" "Executing callback '$actual_callback' for VM $vmid"
+        "$actual_callback" "$vmid" "$@"
+        local result=$?
+        __bulk_log__ "TRACE" "Callback '$actual_callback' returned $result for VM $vmid"
+        return $result
     }
 
-    # Run bulk operation
-    __bulk_operation__ "$start_id" "$end_id" vm_wrapper "$@"
+    # Run bulk operation - pass the callback as an extra parameter
+    __bulk_operation__ "$start_id" "$end_id" vm_wrapper "$callback" "$@"
     local result=$?
 
     # Show detailed report if requested
@@ -292,9 +313,18 @@ __bulk_ct_operation__() {
     __bulk_log__ "INFO" "Bulk CT operation: $operation_name (range: $start_id-$end_id, callback: $callback)"
 
     # Wrapper function that checks CT existence and state
+    # First parameter is ctid, second is the actual callback to execute
     ct_wrapper() {
         local ctid="$1"
-        shift
+        local actual_callback="$2"
+        shift 2
+
+        # Defensive check: ensure callback is set
+        if [[ -z "$actual_callback" ]]; then
+            __bulk_log__ "ERROR" "ct_wrapper: callback parameter is not set"
+            ((BULK_FAILED += 1))
+            return 1
+        fi
 
         # Check existence
         if ! __ct_exists__ "$ctid"; then
@@ -317,11 +347,11 @@ __bulk_ct_operation__() {
         fi
 
         # Execute callback
-        "$callback" "$ctid" "$@"
+        "$actual_callback" "$ctid" "$@"
     }
 
-    # Run bulk operation
-    __bulk_operation__ "$start_id" "$end_id" ct_wrapper "$@"
+    # Run bulk operation - pass the callback as an extra parameter
+    __bulk_operation__ "$start_id" "$end_id" ct_wrapper "$callback" "$@"
     local result=$?
 
     # Show detailed report if requested
@@ -558,8 +588,8 @@ __bulk_parallel__() {
     BULK_FAILED=0
     BULK_START_TIME=$(date +%s)
 
-    # Create temporary directory for results
-    local tmpdir="/tmp/bulk_parallel_$$"
+    # Create temporary directory for results (use timestamp to avoid collision in same GUI session)
+    local tmpdir="/tmp/bulk_parallel_$$_$(date +%s%N)"
     mkdir -p "$tmpdir"
 
     local running=0
@@ -732,9 +762,12 @@ __bulk_validate_range__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: Integrated cluster cache for bulk operations
+# - 2026-01-08: Fixed temp directory collision in parallel bulk operations
+# - 2026-01-08: CRITICAL FIX - Fixed infinite recursion bug in wrapper functions
 # - 2025-11-24: Fixed ShellCheck warnings (SC2155, SC2145, SC1090)
 # - Initial creation
 #

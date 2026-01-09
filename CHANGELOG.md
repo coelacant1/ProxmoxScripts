@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.8] - 2026-01-08
+
+Critical bug fixes for bulk operations and performance optimizations
+
+### Fixed
+- **CRITICAL** - Fixed Bash dynamic scoping bug causing infinite recursion in bulk operations 
+- **CRITICAL** - Fixed potential infinite polling in status wait functions
+- Fixed wasteful waiting when VM stop fails
+- Fixed temp file naming conflict in GUI.sh sessions
+- Added support for custom SSH ports
+- Fixed random node ordering in GUI
+- Cleaned up error handling in RemoteExecutor
+- Fixed TRACE logs appearing when LOG_LEVEL=INFO
+
+### Changed
+- Reduced redundant queries in bulk operations
+- Added comprehensive logging to bulk operations framework
+
+### Added
+- Added connection testing before script execution
+
+### Known Issues
+- **Script Cancellation** - Cannot cancel scripts when connection is dropped
+  - Possibly add method to automatically stop scripts when the SSH connection breaks
+
+### Technical Details
+- Added TRACE log level support with priority 0
+- Modified `__vm_exists__`/`__ct_exists__` to accept `--get-node` flag, refactored 13 operation functions, hardened `__vm_wait_for_status__` and `__ct_wait_for_status__` with timeout protection
+- Fixed callback parameter passing, added trace logging, updated tmpdir naming
+- Added `__test_remote_connection__` function, port parameter to SSH/SCP functions, updated log file naming
+- Added `NODE_ORDER` array and `__get_node_port__` function
+- Added password validation in all remote configuration flows
+- Added port field in `nodes.json.template`
+
 ## [2.1.7] - 2025-11-25
 
 Bug fix for VerifySourceCalls.py validation tool, 

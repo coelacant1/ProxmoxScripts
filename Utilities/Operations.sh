@@ -15,6 +15,7 @@
 #   - Consistent return codes and error messages
 #   - Testable and mockable functions
 #   - State management helpers
+#   - Optimized to minimize redundant API queries
 #
 # Function Index:
 #   - __api_log__
@@ -100,12 +101,15 @@ source "${UTILITYPATH}/Cluster.sh"
 
 # --- __vm_exists__ -----------------------------------------------------------
 # @function __vm_exists__
-# @description Check if a VM exists (cluster-wide).
-# @usage __vm_exists__ <vmid>
+# @description Check if a VM exists (cluster-wide). Optionally returns node via stdout.
+# @usage if __vm_exists__ "$vmid"; then ...; fi  OR  node=$(__vm_exists__ "$vmid" --get-node)
 # @param 1 VM ID
-# @return 0 if exists, 1 if not
+# @param 2 Optional: --get-node to output node name to stdout
+# @return 0 if exists (with node on stdout if --get-node), 1 if not
+# @example node=$(__vm_exists__ "$vmid" --get-node) && echo "VM on $node"
 __vm_exists__() {
     local vmid="$1"
+    local get_node="${2:-}"
 
     __api_log__ "DEBUG" "Checking if VM $vmid exists"
 
@@ -120,6 +124,12 @@ __vm_exists__() {
 
     if [[ -n "$node" ]]; then
         __api_log__ "DEBUG" "VM $vmid exists on node $node"
+        
+        # If caller wants node via stdout
+        if [[ "$get_node" == "--get-node" ]]; then
+            echo "$node"
+        fi
+        
         return 0
     else
         __api_log__ "DEBUG" "VM $vmid does not exist"
@@ -143,17 +153,15 @@ __vm_get_status__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         echo "Error: VM $vmid does not exist" >&2
         __api_log__ "ERROR" "VM $vmid does not exist"
         return 1
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
-
-    # Get status from qm status
-    qm status "$vmid" --node "$node" 2>/dev/null | awk '/^status:/ {print $2}'
+    # Get status from qm status - execute on the node where VM resides
+    __node_exec__ "$node" "qm status $vmid" 2>/dev/null | awk '/^status:/ {print $2}'
 }
 
 # --- __vm_is_running__ -------------------------------------------------------
@@ -200,7 +208,8 @@ __vm_start__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         echo "Error: VM $vmid does not exist" >&2
         __api_log__ "ERROR" "VM $vmid does not exist"
         return 1
@@ -213,12 +222,15 @@ __vm_start__() {
         return 0
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
+    # Build command with any additional arguments
+    local cmd="qm start $vmid"
+    if [[ $# -gt 0 ]]; then
+        cmd+=" $*"
+    fi
 
-    __api_log__ "DEBUG" "Executing: qm start $vmid --node $node $*"
+    __api_log__ "DEBUG" "Executing on node $node: $cmd"
 
-    if qm start "$vmid" --node "$node" "$@" 2>/dev/null; then
+    if __node_exec__ "$node" "$cmd" 2>/dev/null; then
         __api_log__ "INFO" "VM $vmid started successfully on node $node"
         return 0
     else
@@ -230,12 +242,13 @@ __vm_start__() {
 
 # --- __vm_stop__ -------------------------------------------------------------
 # @function __vm_stop__
-# @description Stop a VM (cluster-aware).
+# @description Stop a VM (cluster-aware). Sends SIGTERM then SIGKILL.
 # @usage __vm_stop__ <vmid> [--timeout <seconds>] [--force]
 # @param 1 VM ID
-# @param --timeout Timeout in seconds before force stop
-# @param --force Force stop immediately
+# @param --timeout Timeout in seconds (optional)
+# @param --force Ignored for compatibility (qm stop is forceful by default)
 # @return 0 on success, 1 on error
+# @note The --force flag is accepted but ignored for Proxmox version compatibility
 __vm_stop__() {
     local vmid="$1"
     shift
@@ -269,7 +282,8 @@ __vm_stop__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
@@ -282,22 +296,37 @@ __vm_stop__() {
         return 0
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
     __api_log__ "DEBUG" "VM $vmid is on node: $node"
 
-    local cmd="qm stop \"$vmid\" --node \"$node\""
-    [[ -n "$timeout" ]] && cmd+=" --timeout \"$timeout\""
-    [[ "$force" == true ]] && cmd+=" --force"
+    # Build command - note: older Proxmox versions don't support --force flag
+    # In older versions, qm stop is already forceful (immediate kill)
+    # In newer versions (PVE 7+), --force is supported but optional
+    local cmd="qm stop $vmid"
+    if [[ -n "$timeout" ]]; then
+        cmd+=" --timeout $timeout"
+    fi
+    # Don't add --force flag as it's not supported in all Proxmox versions
+    # qm stop is already forceful by default (sends SIGTERM then SIGKILL)
 
-    __api_log__ "DEBUG" "Executing: $cmd"
+    __api_log__ "DEBUG" "Executing on node $node: $cmd"
 
-    if eval "$cmd" 2>/dev/null; then
+    local stop_output
+    local stop_exit_code
+    stop_output=$(__node_exec__ "$node" "$cmd" 2>&1)
+    stop_exit_code=$?
+    
+    __api_log__ "DEBUG" "Stop command exit code: $stop_exit_code"
+    if [[ -n "$stop_output" ]]; then
+        __api_log__ "DEBUG" "Stop command output: $stop_output"
+        echo "$stop_output"
+    fi
+
+    if [[ $stop_exit_code -eq 0 ]]; then
         __api_log__ "INFO" "Successfully stopped VM $vmid"
         return 0
     else
-        __api_log__ "ERROR" "Failed to stop VM $vmid on node $node"
-        echo "Error: Failed to stop VM $vmid on node $node" >&2
+        __api_log__ "ERROR" "Failed to stop VM $vmid on node $node (exit code: $stop_exit_code)"
+        echo "Error: Failed to stop VM $vmid on node $node (exit code: $stop_exit_code)" >&2
         return 1
     fi
 }
@@ -320,17 +349,21 @@ __vm_set_config__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    # Get node and check existence in one call
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
     __api_log__ "DEBUG" "Setting config for VM $vmid on node: $node"
 
-    if qm set "$vmid" --node "$node" "$@" 2>/dev/null; then
+    # Build command with arguments
+    local cmd="qm set $vmid $*"
+    __api_log__ "DEBUG" "Executing on node $node: $cmd"
+
+    if __node_exec__ "$node" "$cmd" 2>/dev/null; then
         __api_log__ "INFO" "Successfully set configuration for VM $vmid"
         return 0
     else
@@ -358,17 +391,15 @@ __vm_get_config__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
-
     local value
-    value=$(qm config "$vmid" --node "$node" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-)
+    value=$(__node_exec__ "$node" "qm config $vmid" 2>/dev/null | grep "^${param}:" | cut -d' ' -f2-)
     __api_log__ "DEBUG" "VM $vmid config $param: ${value:-<not set>}"
     echo "$value"
 }
@@ -379,12 +410,14 @@ __vm_get_config__() {
 
 # --- __ct_exists__ -----------------------------------------------------------
 # @function __ct_exists__
-# @description Check if a CT exists.
-# @usage __ct_exists__ <ctid>
+# @description Check if a CT exists. Optionally returns node via stdout.
+# @usage if __ct_exists__ "$ctid"; then ...; fi  OR  node=$(__ct_exists__ "$ctid" --get-node)
 # @param 1 CT ID
-# @return 0 if exists, 1 if not
+# @param 2 Optional: --get-node to output node name to stdout
+# @return 0 if exists (with node on stdout if --get-node), 1 if not
 __ct_exists__() {
     local ctid="$1"
+    local get_node="${2:-}"
 
     __api_log__ "DEBUG" "Checking if CT $ctid exists"
 
@@ -395,6 +428,16 @@ __ct_exists__() {
 
     if pct config "$ctid" &>/dev/null; then
         __api_log__ "DEBUG" "CT $ctid exists"
+        
+        # If caller wants node via stdout
+        if [[ "$get_node" == "--get-node" ]]; then
+            local node
+            node=$(__get_ct_node__ "$ctid" 2>/dev/null)
+            if [[ -n "$node" ]]; then
+                echo "$node"
+            fi
+        fi
+        
         return 0
     else
         __api_log__ "DEBUG" "CT $ctid does not exist"
@@ -767,7 +810,7 @@ __vm_shutdown__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
@@ -779,11 +822,9 @@ __vm_shutdown__() {
         return 0
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
     __api_log__ "DEBUG" "Shutting down VM $vmid on node: $node"
 
-    if qm shutdown "$vmid" --node "$node" --timeout "$timeout" 2>/dev/null; then
+    if __node_exec__ "$node" "qm shutdown $vmid --timeout $timeout" 2>/dev/null; then
         __api_log__ "INFO" "Successfully shut down VM $vmid"
         return 0
     else
@@ -834,16 +875,14 @@ __vm_suspend__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
-
-    if qm suspend "$vmid" --node "$node" 2>/dev/null; then
+    if __node_exec__ "$node" "qm suspend $vmid" 2>/dev/null; then
         __api_log__ "INFO" "VM $vmid suspended successfully"
         return 0
     else
@@ -869,16 +908,14 @@ __vm_resume__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
 
-    local node
-    node=$(__get_vm_node__ "$vmid")
-
-    if qm resume "$vmid" --node "$node" 2>/dev/null; then
+    if __node_exec__ "$node" "qm resume $vmid" 2>/dev/null; then
         __api_log__ "INFO" "VM $vmid resumed successfully"
         return 0
     else
@@ -971,20 +1008,30 @@ __vm_wait_for_status__() {
     fi
 
     local elapsed=0
-    while ((elapsed < timeout)); do
+    local max_iterations=$((timeout / interval + 1))
+    local iteration=0
+    
+    while ((elapsed < timeout)) && ((iteration < max_iterations)); do
         local current_status
-        current_status=$(__vm_get_status__ "$vmid" 2>/dev/null)
+        current_status=$(__vm_get_status__ "$vmid" 2>/dev/null) || current_status=""
 
-        if [[ "$current_status" == "$desired_status" ]]; then
+        if [[ -n "$current_status" && "$current_status" == "$desired_status" ]]; then
             __api_log__ "INFO" "VM $vmid reached status: $desired_status (elapsed: ${elapsed}s)"
             return 0
         fi
 
+        if [[ -z "$current_status" ]]; then
+            __api_log__ "WARN" "Failed to get status for VM $vmid (iteration $iteration, elapsed ${elapsed}s)"
+        else
+            __api_log__ "TRACE" "VM $vmid current status: $current_status (waiting for $desired_status, elapsed ${elapsed}s)"
+        fi
+
         sleep "$interval"
-        ((elapsed += interval))
+        ((elapsed += interval)) || true
+        ((iteration++)) || true
     done
 
-    __api_log__ "ERROR" "Timeout waiting for VM $vmid to reach status $desired_status after ${timeout}s"
+    __api_log__ "ERROR" "Timeout waiting for VM $vmid to reach status $desired_status after ${elapsed}s (max: ${timeout}s)"
     echo "Error: Timeout waiting for VM $vmid to reach status $desired_status" >&2
     return 1
 }
@@ -1152,20 +1199,30 @@ __ct_wait_for_status__() {
     fi
 
     local elapsed=0
-    while ((elapsed < timeout)); do
+    local max_iterations=$((timeout / interval + 1))
+    local iteration=0
+    
+    while ((elapsed < timeout)) && ((iteration < max_iterations)); do
         local current_status
-        current_status=$(__ct_get_status__ "$ctid" 2>/dev/null)
+        current_status=$(__ct_get_status__ "$ctid" 2>/dev/null) || current_status=""
 
-        if [[ "$current_status" == "$desired_status" ]]; then
+        if [[ -n "$current_status" && "$current_status" == "$desired_status" ]]; then
             __api_log__ "INFO" "CT $ctid reached status: $desired_status (elapsed: ${elapsed}s)"
             return 0
         fi
 
+        if [[ -z "$current_status" ]]; then
+            __api_log__ "WARN" "Failed to get status for CT $ctid (iteration $iteration, elapsed ${elapsed}s)"
+        else
+            __api_log__ "TRACE" "CT $ctid current status: $current_status (waiting for $desired_status, elapsed ${elapsed}s)"
+        fi
+
         sleep "$interval"
-        ((elapsed += interval))
+        ((elapsed += interval)) || true
+        ((iteration++)) || true
     done
 
-    __api_log__ "ERROR" "Timeout waiting for CT $ctid to reach status $desired_status after ${timeout}s"
+    __api_log__ "ERROR" "Timeout waiting for CT $ctid to reach status $desired_status after ${elapsed}s (max: ${timeout}s)"
     echo "Error: Timeout waiting for CT $ctid to reach status $desired_status" >&2
     return 1
 }
@@ -1226,14 +1283,12 @@ __get_vm_info__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
-
-    local node
-    node=$(__get_vm_node__ "$vmid")
 
     local status
     status=$(__vm_get_status__ "$vmid")
@@ -1314,8 +1369,14 @@ __node_exec__() {
     # If target node is local, execute directly
     if [[ "$node" == "$local_hostname" ]]; then
         __api_log__ "DEBUG" "Executing locally on $node"
-        eval "$command"
-        return $?
+        local output
+        local exit_code
+        output=$(eval "$command" 2>&1)
+        exit_code=$?
+        if [[ -n "$output" ]]; then
+            echo "$output"
+        fi
+        return $exit_code
     fi
 
     # Remote execution via SSH
@@ -1345,14 +1406,13 @@ __vm_node_exec__() {
         return 1
     fi
 
-    if ! __vm_exists__ "$vmid"; then
+    # Get node and check existence in one call
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
         __api_log__ "ERROR" "VM $vmid does not exist"
         echo "Error: VM $vmid does not exist" >&2
         return 1
     fi
-
-    local node
-    node=$(__get_vm_node__ "$vmid")
 
     if [[ -z "$node" ]]; then
         __api_log__ "ERROR" "Could not determine node for VM $vmid"
@@ -1389,14 +1449,12 @@ __ct_node_exec__() {
         return 1
     fi
 
-    if ! __ct_exists__ "$ctid"; then
+    local node
+    if ! node=$(__ct_exists__ "$ctid" --get-node); then
         __api_log__ "ERROR" "CT $ctid does not exist"
         echo "Error: CT $ctid does not exist" >&2
         return 1
     fi
-
-    local node
-    node=$(__get_vm_node__ "$ctid") # Works for CTs too
 
     if [[ -z "$node" ]]; then
         __api_log__ "ERROR" "Could not determine node for CT $ctid"
@@ -1680,9 +1738,12 @@ __vm_set_protection__() {
     fi
 
     local node
-    node=$(__get_vm_node__ "$vmid")
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
+        __api_log__ "ERROR" "VM $vmid does not exist"
+        return 1
+    fi
 
-    if qm set "$vmid" --node "$node" --protection "$value" 2>/dev/null; then
+    if __node_exec__ "$node" "qm set $vmid --protection $value" 2>/dev/null; then
         __api_log__ "INFO" "Successfully set protection for VM $vmid"
         return 0
     else
@@ -2062,6 +2123,13 @@ __vm_add_ip_to_note__() {
         return 1
     fi
 
+    # Validate VM exists and get node for later operations
+    local node
+    if ! node=$(__vm_exists__ "$vmid" --get-node); then
+        __api_log__ "ERROR" "VM $vmid does not exist"
+        return 1
+    fi
+
     local ip
     ip=$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | jq -r '.[].["ip-addresses"][]? | select(.["ip-address-type"] == "ipv4") | .["ip-address"]' | grep -v "^127\." | head -1 || echo "")
 
@@ -2069,9 +2137,6 @@ __vm_add_ip_to_note__() {
         __api_log__ "WARN" "No IP found for VM $vmid (guest agent may not be running)"
         return 1
     fi
-
-    local node
-    node=$(__get_vm_node__ "$vmid")
 
     local current_note
     current_note=$(__vm_get_config__ "$vmid" "description" 2>/dev/null || echo "")
@@ -2081,7 +2146,7 @@ __vm_add_ip_to_note__() {
         new_note="$current_note\n$new_note"
     fi
 
-    if qm set "$vmid" --node "$node" --description "$new_note" 2>/dev/null; then
+    if __node_exec__ "$node" "qm set $vmid --description '$new_note'" 2>/dev/null; then
         __api_log__ "INFO" "Successfully added IP to note for VM $vmid"
         return 0
     else
@@ -2093,17 +2158,31 @@ __vm_add_ip_to_note__() {
 ###############################################################################
 # Script notes:
 ###############################################################################
-# Last checked: 2025-11-24
+# Last checked: 2026-01-08
 #
 # Changes:
+# - 2026-01-08: PERFORMANCE: Optimized to reduce redundant API queries by passing
+#   node information from __vm_exists__/__ct_exists__ to operation functions using
+#   command substitution pattern: node=$(__vm_exists__ "$vmid" --get-node)
+# - 2026-01-06: CRITICAL FIX: Removed invalid --node flag from all qm commands and migrated to __node_exec__
 # - 2025-11-24: Fixed ShellCheck warnings (SC2155) - separated variable declaration and assignment
 # - YYYY-MM-DD: Initial creation
 #
 # Fixes:
+# - 2026-01-06: FIXED CRITICAL BUG: qm commands were using --node flag which doesn't exist,
+#   causing ALL bulk VM operations to fail. Changed to use __node_exec__ to execute commands
+#   on correct node via SSH/local execution. Affected:
+#   - __vm_get_status__ (line 156): qm status
+#   - __vm_start__ (line 221): qm start
+#   - __vm_stop__ (line 295): qm stop
+#   - __vm_set_config__ (line 333): qm set
+#   - __vm_get_config__ (line 371): qm config
+#   - __vm_shutdown__ (line 786): qm shutdown
+#   - __vm_suspend__ (line 846): qm suspend
+#   - __vm_resume__ (line 881): qm resume
+#   - __vm_set_protection__ (line 1695): qm set --protection
+#   - __vm_add_ip_to_note__ (line 2094): qm set --description
 # - 2025-11-24: FIXED: Variable declaration/assignment separation for proper error handling
-#   - Line 926: __vm_list_all__ - Separated 'count' variable declaration from assignment
-#   - Line 1106: __ct_list_all__ - Separated 'count' variable declaration from assignment
-#   - Impact: Allows detection of grep command failures instead of masking return values
 #
 # Known issues:
 # -
